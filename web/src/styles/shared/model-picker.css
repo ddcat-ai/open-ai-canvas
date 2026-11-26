@@ -623,6 +623,12 @@ html:not(.dark) .creation-home .creation-chat-composer .creation-model-picker.ca
     gap: 4px;
     width: 100%;
 }
+/* 浅色应用里，画布可能仍是深色主题；模型菜单是挂在 body 上的浮层，
+   不能继承画布的白色 currentColor，否则白底白字。 */
+html:not(.dark) .canvas-model-picker-menu {
+    color: #111827;
+    background: #ffffff;
+}
 /* 一级目录（品牌）行：一套几何、一种状态。所有颜色取 currentColor，自动跟随画布或工作台主题；
    当前所在的目录只换一层浅底，不加描边、不改字重、不改文字颜色。 */
 .canvas-model-picker-brand {

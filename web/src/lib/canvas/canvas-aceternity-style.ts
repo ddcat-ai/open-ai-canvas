@@ -4,10 +4,12 @@ import type { CanvasTheme } from "@/lib/canvas-theme";
 
 export function canvasDockStyle(theme: CanvasTheme, color: string = theme.toolbar.item): CSSProperties {
     return {
-        background: "var(--dock-surface)",
-        borderColor: "var(--dock-border)",
+        // 画布浮层必须跟当前画布主题走：浅色应用 + 深色画布时，不能用全局白色底
+        // 配画布白色文字，否则就是一块白底白字。
+        background: theme.node.panel,
+        borderColor: theme.toolbar.border,
         color,
-        boxShadow: "var(--dock-shadow, var(--elevation-overlay))",
+        boxShadow: theme.node.shadow,
         "--dock-command-bg": theme.spatial.surface,
         "--dock-command-hover": theme.toolbar.itemHover,
         "--dock-command-active": theme.toolbar.activeBg,

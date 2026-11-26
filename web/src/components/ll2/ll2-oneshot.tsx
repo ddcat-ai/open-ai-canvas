@@ -27,6 +27,13 @@ const TABS: { id: Tab; label: string; action?: boolean }[] = [{ id: "video", lab
 
 type QuickIdea = { title: string; hint: string; prompt: string; mode: "video" | "text" };
 
+function ratioOptionsFor(model: LL2ConnectedVideoModel): string[] {
+    if (model === "MiniMax-H3") return ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"];
+    if (model.startsWith("wan3.")) return ["adaptive", "16:9", "9:16", "1:1", "4:3", "3:4"];
+    if (model.startsWith("doubao-seedance-2-")) return ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9", "adaptive"];
+    return ["16:9", "9:16", "1:1", "4:3", "3:4"];
+}
+
 /** 四张起步卡片：每张带一行白话说明，点一下把示例「填进去」，不删用户已写的内容。 */
 const QUICK_IDEAS: QuickIdea[] = [
     { title: "生成第一个镜头", hint: "描述画面、镜头怎么动、光线什么样", mode: "video", prompt: "黄昏的海面，镜头缓缓向前推进，云在移动，远处有一艘小船，金色反光从画面右下角扫过" },
@@ -57,7 +64,10 @@ export function LL2OneShot() {
     const [model, setModel] = useState<LL2ConnectedVideoModel>(settings.videoModel);
     const [resolution, setResolution] = useState(settings.resolution);
     const [seconds, setSeconds] = useState(settings.seconds);
-    const [ratio, setRatio] = useState(settings.ratio);
+    const [ratio, setRatio] = useState(() => {
+        const options = ratioOptionsFor(settings.videoModel);
+        return options.includes(settings.ratio) ? settings.ratio : options[0];
+    });
     const [prompt, setPrompt] = useState("");
     const [running, setRunning] = useState(false);
     const [polishing, setPolishing] = useState(false);
@@ -681,8 +691,11 @@ export function LL2OneShot() {
                                                 const next = nextValue as LL2ConnectedVideoModel;
                                                 setModel(next);
                                                 const nextTiers = ll2TiersFor(next);
+                                                const nextRatios = ratioOptionsFor(next);
+                                                const nextRatio = nextRatios.includes(ratio) ? ratio : nextRatios[0];
                                                 setResolution(nextTiers[0]?.resolution || "768P");
-                                                syncSettings({ videoModel: next, resolution: nextTiers[0]?.resolution || "768P" });
+                                                setRatio(nextRatio);
+                                                syncSettings({ videoModel: next, resolution: nextTiers[0]?.resolution || "768P", ratio: nextRatio });
                                             }}
                                         />
                                         <small>{spec?.resolutions || "—"}</small>
@@ -701,6 +714,20 @@ export function LL2OneShot() {
                                             }}
                                         />
                                         <small>{spec?.duration || "按成片秒数"}</small>
+                                    </div>
+                                    <div className="ll2-price-cell">
+                                        <span>比例</span>
+                                        <LL2Select
+                                            variant="plain"
+                                            value={ratio}
+                                            ariaLabel="画面比例"
+                                            options={ratioOptionsFor(model).map((value) => ({ value, label: value === "adaptive" ? "自适应" : value }))}
+                                            onChange={(nextValue) => {
+                                                setRatio(nextValue);
+                                                syncSettings({ ratio: nextValue });
+                                            }}
+                                        />
+                                        <small>{ratio === "adaptive" ? "跟随参考" : "画面比例"}</small>
                                     </div>
                                     <div className="ll2-price-cell">
                                         <span>单价</span>

@@ -246,7 +246,12 @@ function OptionPill({ selected, disabled = false, theme, onClick, children }: { 
             disabled={disabled}
             aria-pressed={selected}
             className="h-8 cursor-pointer whitespace-nowrap rounded-md px-1 text-[var(--fs-label)] font-medium leading-none transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:opacity-35"
-            style={{ background: selected ? theme.toolbar.activeBg : "transparent", color: theme.node.text, outlineColor: theme.node.muted }}
+            style={{
+                background: selected ? "#5b21b6" : "transparent",
+                border: `1px solid ${selected ? "#8d54ff" : "transparent"}`,
+                color: selected ? "#ffffff" : theme.node.text,
+                outlineColor: theme.node.muted,
+            }}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={onClick}
         >
@@ -558,7 +563,12 @@ function LL2Pill({ selected, theme, onClick, children }: { selected: boolean; th
             type="button"
             aria-pressed={selected}
             className="flex h-8 items-center justify-center rounded-md px-1 text-[var(--fs-label)] font-medium transition-colors hover:brightness-110"
-            style={{ background: selected ? theme.toolbar.activeBg : theme.toolbar.itemHover, color: theme.node.text }}
+            style={{
+                background: selected ? "#5b21b6" : theme.toolbar.itemHover,
+                border: `1px solid ${selected ? "#8d54ff" : "transparent"}`,
+                color: selected ? "#ffffff" : theme.node.text,
+                boxShadow: selected ? "inset 0 0 0 1px rgba(255,255,255,.08)" : "none",
+            }}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={onClick}
         >

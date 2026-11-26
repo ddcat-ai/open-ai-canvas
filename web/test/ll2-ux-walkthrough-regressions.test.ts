@@ -79,6 +79,16 @@ test("LL2 品牌与注册入口都指向推广链接", async () => {
     }
 });
 
+test("首页视频参数包含比例，分辨率选中态有深色反馈", async () => {
+    const oneshot = await read("../src/components/ll2/ll2-oneshot.tsx");
+    expect(oneshot).toContain("ratioOptionsFor");
+    expect(oneshot).toContain("画面比例");
+    const panel = await read("../src/components/video-settings-panel.tsx");
+    expect(panel).toContain('selected ? "#5b21b6"');
+    const dock = await read("../src/lib/canvas/canvas-aceternity-style.ts");
+    expect(dock).toContain("theme.node.panel");
+});
+
 test("首页提供多版本提示词与 Agent 直接下单入口", async () => {
     const oneShot = await read("../src/components/ll2/ll2-oneshot.tsx");
     expect(oneShot).toContain("generateVariants");

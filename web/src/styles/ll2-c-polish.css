@@ -2249,6 +2249,97 @@ button.ll2-sidebar-guide {
     color: #d3c2ff;
 }
 
+/* 浅色主题：输入框旁的工具按钮和展开面板不能再用深色模式的白字。 */
+html:not(.dark) .ll2-oneshot-polish-btn {
+    border-color: rgba(103, 32, 255, 0.22);
+    background: rgba(103, 32, 255, 0.07);
+    color: #5b21b6;
+}
+
+html:not(.dark) .ll2-oneshot-polish-btn:hover:not(:disabled) {
+    border-color: rgba(103, 32, 255, 0.42);
+    background: rgba(103, 32, 255, 0.12);
+    color: #4c1d95;
+}
+
+html:not(.dark) .ll2-oneshot-lock {
+    border-color: rgba(17, 24, 39, 0.14);
+    background: #ffffff;
+    color: rgba(17, 24, 39, 0.7);
+}
+
+html:not(.dark) .ll2-oneshot-lock:hover,
+html:not(.dark) .ll2-oneshot-lock.is-on {
+    border-color: rgba(103, 32, 255, 0.42);
+    background: rgba(103, 32, 255, 0.08);
+    color: #5b21b6;
+}
+
+html:not(.dark) .ll2-oneshot-polish-note {
+    color: rgba(17, 24, 39, 0.46);
+}
+
+html:not(.dark) .ll2-lock-panel,
+html:not(.dark) .ll2-variants {
+    border-color: rgba(17, 24, 39, 0.1);
+    background: #fbfaff;
+    color: #111827;
+}
+
+html:not(.dark) .ll2-lock-panel label > span,
+html:not(.dark) .ll2-lock-panel > small {
+    color: rgba(17, 24, 39, 0.55);
+}
+
+html:not(.dark) .ll2-lock-panel textarea {
+    border-color: rgba(17, 24, 39, 0.14);
+    background: #ffffff;
+    color: #111827;
+}
+
+html:not(.dark) .ll2-lock-actions button,
+html:not(.dark) .ll2-variants-head button {
+    border-color: rgba(17, 24, 39, 0.14);
+    color: rgba(17, 24, 39, 0.7);
+}
+
+html:not(.dark) .ll2-variants-head strong {
+    color: #111827;
+}
+
+html:not(.dark) .ll2-variant-card {
+    border-color: rgba(17, 24, 39, 0.1);
+    background: #ffffff;
+    color: #1f2937;
+}
+
+html:not(.dark) .ll2-variant-card:hover {
+    border-color: rgba(103, 32, 255, 0.4);
+    background: rgba(103, 32, 255, 0.06);
+}
+
+/* 浅色画布：白节点叠在白画布上，必须有可见描边；否则整块像没渲染出来。 */
+html:not(.dark) .canvas-node-shell {
+    border-color: rgba(17, 24, 39, 0.18) !important;
+    box-shadow:
+        0 0 0 1px rgba(17, 24, 39, 0.05),
+        0 10px 28px rgba(15, 23, 42, 0.12) !important;
+}
+
+html:not(.dark) .canvas-node-composer {
+    border-color: rgba(17, 24, 39, 0.16) !important;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12) !important;
+}
+
+html:not(.dark) .canvas-workspace-rail-button {
+    color: rgba(17, 24, 39, 0.72);
+}
+
+html:not(.dark) .canvas-workspace-rail-button:hover {
+    background: rgba(17, 24, 39, 0.06);
+    color: #111827;
+}
+
 .ll2-lock-panel,
 .ll2-variants {
     display: grid;
