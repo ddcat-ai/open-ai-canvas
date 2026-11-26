@@ -326,6 +326,18 @@
     ]
   },
   {
+    "method": "AdminCheckRequestProtocol",
+    "module": "request-protocols",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "check"
+    ],
+    "routes": [
+      "POST /admin/request-protocols/check"
+    ]
+  },
+  {
     "method": "AdminCheckUpdate",
     "module": "system-update",
     "write": true,
@@ -345,19 +357,6 @@
     ],
     "routes": [
       "DELETE /admin/users/:id/agent-history"
-    ]
-  },
-  {
-    "method": "AdminClientFailures",
-    "module": "agent",
-    "write": false,
-    "highRisk": false,
-    "parameters": [
-      "userID",
-      "runID"
-    ],
-    "routes": [
-      "GET /admin/agent/client-failures"
     ]
   },
   {
@@ -879,6 +878,18 @@
     ]
   },
   {
+    "method": "AdminPublishRequestProtocol",
+    "module": "request-protocols",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "request"
+    ],
+    "routes": [
+      "POST /admin/request-protocols"
+    ]
+  },
+  {
     "method": "AdminQueryFailedVideoTask",
     "module": "api-logs",
     "write": true,
@@ -1011,6 +1022,16 @@
     ],
     "routes": [
       "POST /admin/ark-portraits/reviews/reject"
+    ]
+  },
+  {
+    "method": "AdminRequestProtocols",
+    "module": "request-protocols",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/request-protocols"
     ]
   },
   {

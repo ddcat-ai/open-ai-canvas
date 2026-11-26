@@ -84,7 +84,7 @@ Skill REST 发现与描述路径为 `/api/admin-assistant/operations` 和 `/oper
 
 ## 数据与验证
 
-Schema 110 添加专用认证、授权码、刷新重放、调用记录和临时附件表，并纳入 SQLite→PostgreSQL 迁移清单。PostgreSQL 新表启用 RLS，普通 PostgREST 角色无策略，不可读取管理凭据或记录；后端使用数据库 owner/service role。Token 和授权码只保存哈希，预览及结果中的认证字段脱敏，调用审计保留来源、操作、耗时、结果及关联 ID。
+Schema 111 添加专用认证、授权码、刷新重放、调用记录和临时附件表，并纳入 SQLite→PostgreSQL 迁移清单。PostgreSQL 新表启用 RLS，普通 PostgREST 角色无策略，不可读取管理凭据或记录；后端使用数据库 owner/service role。Token 和授权码只保存哈希，预览及结果中的认证字段脱敏，调用审计保留来源、操作、耗时、结果及关联 ID。
 
 专项验证：`go test ./internal/app ./internal/handler ./internal/database -run 'Assistant|CurrentSchemaVersionMatchesMigrationPlan'`。PostgreSQL 集成测试使用专用测试库的 `CANVAS_TEST_POSTGRES_DSN`，自动创建并清理隔离 schema，禁止填生产 DSN。
 
