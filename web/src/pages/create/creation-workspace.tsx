@@ -221,6 +221,7 @@ function clampCreationPromptHeight(height: number) {
 export function CreationComposer(props: ComposerProps) {
     const [referenceDragOver, setReferenceDragOver] = useState(false);
     const [previewUrl, setPreviewUrl] = useState("");
+    const [previewStorageKey, setPreviewStorageKey] = useState<string | undefined>(undefined);
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
     const [promptOptimizerOpen, setPromptOptimizerOpen] = useState(false);
     const [promptHeight, setPromptHeight] = useState(CREATION_PROMPT_MIN_HEIGHT);
@@ -364,9 +365,10 @@ export function CreationComposer(props: ComposerProps) {
         drag.moved = true;
         setTrackState((current) => ({ ...current, isDragging: true, isExpanded: true }));
     };
-    const previewAttachment = (type: "image" | "video", url: string) => {
+    const previewAttachment = (type: "image" | "video", url: string, storageKey?: string) => {
         if (suppressAttachmentClickRef.current || cardDragRef.current?.moved) return;
         setPreviewType(type);
+        setPreviewStorageKey(storageKey);
         setPreviewUrl(url);
     };
     const reorderVisibleAttachments = useCallback(
@@ -675,7 +677,15 @@ export function CreationComposer(props: ComposerProps) {
                     }}
                 />
             ) : null}
-            <CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} />
+            <CreationMediaPreviewModal
+                url={previewUrl}
+                storageKey={previewStorageKey}
+                type={previewType}
+                onClose={() => {
+                    setPreviewUrl("");
+                    setPreviewStorageKey(undefined);
+                }}
+            />
         </SpotlightSurface>
     );
     const composer = embedded ? (

@@ -614,13 +614,15 @@ export async function getResourceBlob(storageKey: string, purpose: ResourceAcces
     const id = resourceIdFromStorageKey(storageKey);
     if (!id) return null;
     const access = await getResourceAccess(storageKey, purpose);
-    // CDN/origin URLs carry their own authorization and must not receive the
-    // application session cookie. Local/proxy delivery is intentionally
-    // session-bound, so a Blob read must include it even when the URL is
-    // relative to the platform origin.
-    const credentials = access.delivery === "platform-local" || access.delivery === "platform-proxy" ? "include" : "omit";
-    // 同一签名地址可能已被 <img> 缓存为无 CORS 头的响应，读取原图时跳过 HTTP 缓存。
-    const response = await fetch(resolveResourceAccessURL(access.url), { credentials, mode: "cors", cache: "no-store", signal: AbortSignal.timeout(60_000) });
+    const resolvedUrl = resolveResourceAccessURL(access.url);
+    const isPublicSigned = access.url.includes("/public/resources/");
+    // CDN/origin/public-signed URLs carry their own authorization and must not
+    // receive the application session cookie. Only session-bound private URLs
+    // require include + no-store; public signed URLs return ACAO:* with no Vary:Origin
+    // so both browsers and edge caches can reuse them safely.
+    const credentials = !isPublicSigned && (access.delivery === "platform-local" || access.delivery === "platform-proxy") ? "include" : "omit";
+    const cacheMode: RequestCache = isPublicSigned || credentials === "omit" ? "default" : "no-store";
+    const response = await fetch(resolvedUrl, { credentials, mode: "cors", cache: cacheMode, signal: AbortSignal.timeout(60_000) });
     if (!response.ok) throw new Error(`资源读取失败（${response.status}）`);
     return response.blob();
 }
