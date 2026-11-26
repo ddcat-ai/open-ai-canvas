@@ -191,8 +191,8 @@ func TestOfficialRuncrateChatProfile(t *testing.T) {
 	}
 }
 
-func TestOfficialUberLLMChatProfile(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "uberllm-chat.yingce-plugin"))
+func TestOfficialMartLLMChatProfile(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "martllm-chat.yingce-plugin"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,11 +201,11 @@ func TestOfficialUberLLMChatProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	provider := pkg.Manifest.Contributes.Providers[0]
-	if provider.ID != "uberllm-chat" || provider.BaseURL != "https://api.uberllm.dev" || provider.Auth.Type != "bearer" {
-		t.Fatalf("UberLLM provider metadata = %#v", provider)
+	if provider.ID != "martllm-chat" || provider.BaseURL != "https://api.martllm.com" || provider.Auth.Type != "bearer" {
+		t.Fatalf("MartLLM provider metadata = %#v", provider)
 	}
 
-	adapter := officialPackageAdapter(t, "uberllm-chat.yingce-plugin", "uberllm-chat")
+	adapter := officialPackageAdapter(t, "martllm-chat.yingce-plugin", "martllm-chat")
 	spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
 		Model:    "deepseek/deepseek-v4-flash",
 		Messages: []Message{{Role: "user", Content: "hello"}},
@@ -215,14 +215,14 @@ func TestOfficialUberLLMChatProfile(t *testing.T) {
 	}
 	body := manifestTestBody(t, spec)
 	if spec.Method != "POST" || spec.Path != "/v1/chat/completions" || body["model"] != "deepseek/deepseek-v4-flash" {
-		t.Fatalf("UberLLM request = %#v, body = %#v", spec, body)
+		t.Fatalf("MartLLM request = %#v, body = %#v", spec, body)
 	}
-	result, err := adapter.ParseCreate(context.Background(), []byte(`{"choices":[{"message":{"content":"uberllm ok"}}],"usage":{"total_tokens":3}}`))
+	result, err := adapter.ParseCreate(context.Background(), []byte(`{"choices":[{"message":{"content":"martllm ok"}}],"usage":{"total_tokens":3}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Status != StatusSucceeded || result.Result == nil || result.Result.Text != "uberllm ok" {
-		t.Fatalf("UberLLM response = %#v", result)
+	if result.Status != StatusSucceeded || result.Result == nil || result.Result.Text != "martllm ok" {
+		t.Fatalf("MartLLM response = %#v", result)
 	}
 }
 

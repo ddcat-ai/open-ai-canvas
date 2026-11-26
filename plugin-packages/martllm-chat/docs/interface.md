@@ -1,11 +1,11 @@
-# UberLLM Chat 接口字段
+# MartLLM Chat 接口字段
 
 ## 协议身份
 
-- 插件 ID：`uberllm-chat`。
-- Provider ID：`uberllm-chat`。
+- 插件 ID：`martllm-chat`。
+- Provider ID：`martllm-chat`。
 - 能力：`text`。
-- 默认 Base URL：`https://api.uberllm.dev`。
+- 默认 Base URL：`https://api.martllm.com`。
 - 鉴权驱动：`bearer`。
 - 创建：`POST /v1/chat/completions`。
 - Agent：`POST /v1/chat/completions`。
@@ -43,16 +43,16 @@
 | `create.contentType` | `"application/json"` |
 | `create.body.model` | `{"$ref":"request.model"}` |
 | `create.body.messages` | `{"$ref":"request.messages"}` |
-| `create.body.temperature` | `{"$omitEmpty":{"$ref":"request.providerOptions.uberllm-chat.temperature"}}` |
-| `create.body.top_p` | `{"$omitEmpty":{"$ref":"request.providerOptions.uberllm-chat.top_p"}}` |
-| `create.body.max_tokens` | `{"$omitEmpty":{"$coalesce":[{"$ref":"request.extra.max_tokens"},{"$ref":"request.providerOptions.uberllm-chat.max_tokens"}]}}` |
-| `create.body.tools` | `{"$omitEmpty":{"$ref":"request.providerOptions.uberllm-chat.tools"}}` |
-| `create.body.tool_choice` | `{"$omitEmpty":{"$ref":"request.providerOptions.uberllm-chat.tool_choice"}}` |
-| `create.body.response_format` | `{"$omitEmpty":{"$ref":"request.providerOptions.uberllm-chat.response_format"}}` |
-| `create.body.stream` | `{"$omitEmpty":{"$ref":"request.providerOptions.uberllm-chat.stream"}}` |
-| `create.body.provider` | `{"$omitEmpty":{"$ref":"request.providerOptions.uberllm-chat.provider"}}` |
-| `create.body.transforms` | `{"$omitEmpty":{"$ref":"request.providerOptions.uberllm-chat.transforms"}}` |
-| `create.body.extra_body` | `{"$omitEmpty":{"$ref":"request.providerOptions.uberllm-chat.extra_body"}}` |
+| `create.body.temperature` | `{"$omitEmpty":{"$ref":"request.providerOptions.martllm-chat.temperature"}}` |
+| `create.body.top_p` | `{"$omitEmpty":{"$ref":"request.providerOptions.martllm-chat.top_p"}}` |
+| `create.body.max_tokens` | `{"$omitEmpty":{"$coalesce":[{"$ref":"request.extra.max_tokens"},{"$ref":"request.providerOptions.martllm-chat.max_tokens"}]}}` |
+| `create.body.tools` | `{"$omitEmpty":{"$ref":"request.providerOptions.martllm-chat.tools"}}` |
+| `create.body.tool_choice` | `{"$omitEmpty":{"$ref":"request.providerOptions.martllm-chat.tool_choice"}}` |
+| `create.body.response_format` | `{"$omitEmpty":{"$ref":"request.providerOptions.martllm-chat.response_format"}}` |
+| `create.body.stream` | `{"$omitEmpty":{"$ref":"request.providerOptions.martllm-chat.stream"}}` |
+| `create.body.provider` | `{"$omitEmpty":{"$ref":"request.providerOptions.martllm-chat.provider"}}` |
+| `create.body.transforms` | `{"$omitEmpty":{"$ref":"request.providerOptions.martllm-chat.transforms"}}` |
+| `create.body.extra_body` | `{"$omitEmpty":{"$ref":"request.providerOptions.martllm-chat.extra_body"}}` |
 | `agent.method` | `"POST"` |
 | `agent.path` | `"/v1/chat/completions"` |
 | `agent.contentType` | `"application/json"` |
@@ -60,16 +60,16 @@
 
 ## Provider 扩展键
 
-- `providerOptions.uberllm-chat.extra_body`
-- `providerOptions.uberllm-chat.max_tokens`
-- `providerOptions.uberllm-chat.provider`
-- `providerOptions.uberllm-chat.response_format`
-- `providerOptions.uberllm-chat.stream`
-- `providerOptions.uberllm-chat.temperature`
-- `providerOptions.uberllm-chat.tool_choice`
-- `providerOptions.uberllm-chat.tools`
-- `providerOptions.uberllm-chat.top_p`
-- `providerOptions.uberllm-chat.transforms`
+- `providerOptions.martllm-chat.extra_body`
+- `providerOptions.martllm-chat.max_tokens`
+- `providerOptions.martllm-chat.provider`
+- `providerOptions.martllm-chat.response_format`
+- `providerOptions.martllm-chat.stream`
+- `providerOptions.martllm-chat.temperature`
+- `providerOptions.martllm-chat.tool_choice`
+- `providerOptions.martllm-chat.tools`
+- `providerOptions.martllm-chat.top_p`
+- `providerOptions.martllm-chat.transforms`
 
 动态模型或工作流允许使用文档声明的完整 `parameters/input/extra_body` 对象；该对象是协议本身的开放 schema，不会被宿主裁剪。
 
@@ -108,11 +108,11 @@
 ```json
 {
   "apiVersion": "yingce.plugin/v2",
-  "id": "uberllm-chat",
-  "name": "UberLLM Chat",
+  "id": "martllm-chat",
+  "name": "MartLLM Chat",
   "version": "2.0.0",
-  "author": "UberLLM / 影策",
-  "description": "UberLLM Chat 独立请求协议插件。",
+  "author": "MartLLM / 影策",
+  "description": "MartLLM Chat 独立请求协议插件。",
   "documentation": "<当前插件的完整 documentation，由 README.md 与 docs/interface.md 拼接而成；为避免 JSON 递归，此处不重复展开正文。>",
   "permissions": [
     "generation.run",
@@ -131,8 +131,8 @@
   "contributes": {
     "providers": [
       {
-        "id": "uberllm-chat",
-        "label": "UberLLM Chat",
+        "id": "martllm-chat",
+        "label": "MartLLM Chat",
         "capabilities": [
           "text"
         ],
@@ -143,7 +143,7 @@
           "creation",
           "agent"
         ],
-        "baseUrl": "https://api.uberllm.dev",
+        "baseUrl": "https://api.martllm.com",
         "requiresPublicMediaUrls": false,
         "auth": {
           "type": "bearer",
@@ -234,12 +234,12 @@
             },
             "temperature": {
               "$omitEmpty": {
-                "$ref": "request.providerOptions.uberllm-chat.temperature"
+                "$ref": "request.providerOptions.martllm-chat.temperature"
               }
             },
             "top_p": {
               "$omitEmpty": {
-                "$ref": "request.providerOptions.uberllm-chat.top_p"
+                "$ref": "request.providerOptions.martllm-chat.top_p"
               }
             },
             "max_tokens": {
@@ -249,44 +249,44 @@
                     "$ref": "request.extra.max_tokens"
                   },
                   {
-                    "$ref": "request.providerOptions.uberllm-chat.max_tokens"
+                    "$ref": "request.providerOptions.martllm-chat.max_tokens"
                   }
                 ]
               }
             },
             "tools": {
               "$omitEmpty": {
-                "$ref": "request.providerOptions.uberllm-chat.tools"
+                "$ref": "request.providerOptions.martllm-chat.tools"
               }
             },
             "tool_choice": {
               "$omitEmpty": {
-                "$ref": "request.providerOptions.uberllm-chat.tool_choice"
+                "$ref": "request.providerOptions.martllm-chat.tool_choice"
               }
             },
             "response_format": {
               "$omitEmpty": {
-                "$ref": "request.providerOptions.uberllm-chat.response_format"
+                "$ref": "request.providerOptions.martllm-chat.response_format"
               }
             },
             "stream": {
               "$omitEmpty": {
-                "$ref": "request.providerOptions.uberllm-chat.stream"
+                "$ref": "request.providerOptions.martllm-chat.stream"
               }
             },
             "provider": {
               "$omitEmpty": {
-                "$ref": "request.providerOptions.uberllm-chat.provider"
+                "$ref": "request.providerOptions.martllm-chat.provider"
               }
             },
             "transforms": {
               "$omitEmpty": {
-                "$ref": "request.providerOptions.uberllm-chat.transforms"
+                "$ref": "request.providerOptions.martllm-chat.transforms"
               }
             },
             "extra_body": {
               "$omitEmpty": {
-                "$ref": "request.providerOptions.uberllm-chat.extra_body"
+                "$ref": "request.providerOptions.martllm-chat.extra_body"
               }
             }
           }
