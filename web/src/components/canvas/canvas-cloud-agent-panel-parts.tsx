@@ -128,12 +128,15 @@ export const AgentLauncher = memo(function AgentLauncher({
     const showBuiltinPoster = appearanceResolved && !collapsed && appearance.avatarType === "bundle" && !appearance.avatarBundleResourceId && (bundleManifestLoading || media);
     const aspectRatio = live ? 0.75 : bundleManifest ? bundleManifest.width / bundleManifest.height : appearance.avatarType === "bundle" ? 480 / 432 : 1;
     const largeAvatar = live || media || bundleManifestLoading;
-    const inCanvasEditor = Boolean(matchPath("/canvas/:id", workspacePagePath(useLocation().pathname)));
+    const pathname = workspacePagePath(useLocation().pathname);
+    const inCanvasEditor = Boolean(matchPath("/canvas/:id", pathname));
+    // 正文距右边缘 20px，额外留出滚动条和拖动热区。
+    const minRight = matchPath("/admin/channels", pathname) ? 44 : 0;
     // 收起后只留小圆球入口：不加载 Live2D / 动画，也不挡画布。位置以右下角为锚点，收起展开不跳位。
     const keepsAvatarSize = largeAvatar && !collapsed;
     const height = collapsed ? AGENT_LAUNCHER_COLLAPSED_SIZE : keepsAvatarSize ? resolveAgentLauncherAvatarHeight(appearance.avatarHeight, aspectRatio, viewport, inCanvasEditor) : 76;
     const width = collapsed ? AGENT_LAUNCHER_COLLAPSED_SIZE : keepsAvatarSize ? Math.round(height * aspectRatio) : 76;
-    const { position, dragging, handlers } = useAgentLauncherPosition(onOpen, width, height, inCanvasEditor);
+    const { position, dragging, handlers } = useAgentLauncherPosition(onOpen, width, height, inCanvasEditor, minRight);
     const { onClick, onKeyDown, onDoubleClick, ...pointerHandlers } = handlers;
     // 大形象的外框大多是透明像素：外框不接收指针，只有身体热区可点、可拖，透明处的点击落到下面的页面。
     // 键盘聚焦与激活仍在按钮上；小圆球和默认 76px 入口整块可点。

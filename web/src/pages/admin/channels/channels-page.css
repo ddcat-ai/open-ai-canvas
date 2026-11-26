@@ -216,6 +216,21 @@
     padding: 0 12px 12px;
 }
 
+/* Key 分组负责纵向滚动，Ant Design 表格负责横向滚动。 */
+.admin-channel-key-groups :is(.admin-table-frame, .admin-table-surface, .admin-table-scroll) {
+    overflow: clip;
+}
+
+.admin-channel-key-groups .admin-table-scroll {
+    height: auto;
+}
+
+/* 固定列阴影默认向下多伸 1px，可能把刚好容纳的表格变成可纵向滚动。 */
+:is(.admin-channel-key-groups, .admin-all-models) .ant-table-wrapper .ant-table-container::before,
+:is(.admin-channel-key-groups, .admin-all-models) .ant-table-wrapper .ant-table-container::after {
+    bottom: 0;
+}
+
 .admin-channel-key-group {
     min-width: 0;
     padding-block: 12px;
@@ -581,12 +596,25 @@
 
 @media (max-width: 900px) {
     .admin-channel-workspace {
-        grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: auto minmax(480px, 1fr);
+        display: flex;
+        flex-direction: column;
         overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
+    .admin-channel-detail {
+        flex: 1 0 auto;
+        min-height: 480px;
+        overflow: clip;
+    }
+
+    .admin-channel-key-groups {
+        flex: 1 0 auto;
+        overflow: visible;
     }
 
     .admin-channel-sidebar {
+        flex: none;
         max-height: 360px;
     }
 
