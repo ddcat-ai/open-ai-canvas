@@ -4,6 +4,7 @@ import { ll2CleanVideoPrompt } from "../src/lib/ll2-video-prompt";
 import { ll2PromptWithLocks, type LL2WorkspaceSettings } from "../src/lib/ll2-workspace";
 import { LL2_SIGNUP_URL } from "../src/lib/ll2-referral";
 import { ll2ForbiddenMessage } from "../src/lib/ll2-account-error";
+import { isVideoResolutionMatch } from "../src/lib/video-generation-options";
 
 /**
  * 2026-11-19 真实浏览器走查抓到的 4 个回归点。
@@ -77,6 +78,13 @@ test("LL2 品牌与注册入口都指向推广链接", async () => {
         const source = await read(file);
         expect(source).toContain("LL2_SIGNUP_URL");
     }
+});
+
+test("wan3 的 720P 档位能和归一化后的 720 匹配", () => {
+    expect(isVideoResolutionMatch("480P", "480")).toBe(true);
+    expect(isVideoResolutionMatch("720P", "720")).toBe(true);
+    expect(isVideoResolutionMatch("1080P", "1080")).toBe(true);
+    expect(isVideoResolutionMatch("720P", "480")).toBe(false);
 });
 
 test("首页视频参数包含比例，分辨率选中态有深色反馈", async () => {

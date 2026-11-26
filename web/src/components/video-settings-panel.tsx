@@ -476,7 +476,9 @@ function LL2VideoSettingsPanel({ config, onConfigChange, theme, showTitle = true
     const range = LL2_VIDEO_DURATION[model] || { min: 4, max: 15, default: 5 };
     const resolutions = tiers.map((tier) => tier.label);
     const ratios = ll2RatioOptions(model);
-    const resolution = resolutions.includes(config.vquality) ? config.vquality : resolutions[0] || "768P";
+    // 画布配置把 vquality 归一化成数字（720），而 LL2 档位是 720P；
+    // 用项目统一的 isVideoResolutionMatch 忽略 p 后缀，否则 wan3 永远回退第一档。
+    const resolution = resolutions.find((label) => isVideoResolutionMatch(label, config.vquality)) || resolutions[0] || "768P";
     const ratio = ratios.includes(config.size) ? config.size : "16:9";
     const rawSeconds = Number(config.videoSeconds) || range.default;
     const seconds = Math.min(range.max, Math.max(range.min, Math.round(rawSeconds)));

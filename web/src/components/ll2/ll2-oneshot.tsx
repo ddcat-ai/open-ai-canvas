@@ -4,7 +4,8 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 
 import { LL2AssetLibrary } from "./ll2-asset-library";
 
-import { LL2_CONNECTED_VIDEO_MODELS, LL2_VIDEO_DURATION, ll2FormatCNY, ll2FriendlyCNY, ll2PreciseCNY, ll2SpecFor, ll2TiersFor, type LL2ConnectedVideoModel } from "@/lib/ll2-models";
+import { LL2_CONNECTED_VIDEO_MODELS, LL2_VIDEO_DURATION, ll2FormatCNY, ll2FriendlyCNY, ll2IsTokenBilled, ll2PreciseCNY, ll2SpecFor, ll2TiersFor, type LL2ConnectedVideoModel } from "@/lib/ll2-models";
+import { isVideoResolutionMatch } from "@/lib/video-generation-options";
 import { ll2PromptWithLocks, ll2ReadSettings, ll2WriteSettings } from "@/lib/ll2-workspace";
 import { LL2_SIGNUP_URL } from "@/lib/ll2-referral";
 import { ll2AddFilm, ll2DownloadFilm, type LL2Film } from "@/services/ll2/ll2-films";
@@ -177,8 +178,10 @@ export function LL2OneShot() {
     }, [upscaleTargets]);
     const hdEstimate = upscale ? ll2UpscaleEstimate(seconds, upscale) : null;
     // 合计只用于展示：生成 + 超分是两笔账单，明细里分开写。
-    const totalLabel = hdEstimate ? `约 ${ll2FriendlyCNY(estimate.amount + hdEstimate.amount)}` : estimate.label;
-    const totalBasis = hdEstimate ? `生成 ${estimate.label} + 超分 ${hdEstimate.label} · 按 LL2 官网单价估算` : estimate.basis;
+    const tokenBilled = ll2IsTokenBilled(model);
+    const tokenRate = tokenBilled ? ll2SpecFor(model)?.tiers.find((tier) => isVideoResolutionMatch(tier.label, resolution))?.perMillionTokens : undefined;
+    const totalLabel = tokenBilled ? (tokenRate ? `¥${ll2FormatCNY(tokenRate)} / 1M Token` : "按 Token 计费") : hdEstimate ? `约 ${ll2FriendlyCNY(estimate.amount + hdEstimate.amount)}` : estimate.label;
+    const totalBasis = tokenBilled ? "Seedance 按输出 Token 用量计费，生成前无法确定总金额；实际账单以 LL2 控制台为准" : hdEstimate ? `生成 ${estimate.label} + 超分 ${hdEstimate.label} · 按 LL2 官网单价估算` : estimate.basis;
     // 等待态只留一句「正在生成」，不写解释文字。
     const waiting = !running ? null : hdProgress ? { title: hdProgress.stage === "downloading" ? "正在取回高清版" : "正在超分" } : { title: "正在生成" };
     const spec = ll2SpecFor(model);
@@ -731,8 +734,8 @@ export function LL2OneShot() {
                                     </div>
                                     <div className="ll2-price-cell">
                                         <span>单价</span>
-                                        <strong>¥{ll2FormatCNY(estimate.perSecond)} / 秒</strong>
-                                        <small>{spec?.unit || "按成片秒数"}</small>
+                                        <strong>{tokenBilled ? (tokenRate ? `¥${ll2FormatCNY(tokenRate)} / 1M Token` : "按 Token 计费") : `¥${ll2FormatCNY(estimate.perSecond)} / 秒`}</strong>
+                                        <small>{tokenBilled ? "Seedance 按 Token 用量，提交前算不出固定金额" : spec?.unit || "按成片秒数"}</small>
                                     </div>
                                     <div className="ll2-price-cell">
                                         <span>时长</span>

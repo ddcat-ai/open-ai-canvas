@@ -2331,6 +2331,14 @@ html:not(.dark) .canvas-node-composer {
     box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12) !important;
 }
 
+/* 底部「模型 / 参数摘要」必须跟画布主题，而不是全局浅色文字；
+   否则深色画布上会出现黑底深灰字，看起来像不能点。 */
+.canvas-node-composer-footer .canvas-node-composer-model-trigger,
+.canvas-node-composer-footer .canvas-node-composer-settings-trigger,
+.canvas-node-composer-footer .canvas-node-composer-settings-trigger * {
+    color: var(--cn-text) !important;
+}
+
 html:not(.dark) .canvas-workspace-rail-button {
     color: rgba(17, 24, 39, 0.72);
 }
