@@ -118,19 +118,27 @@ type BillingOrder struct {
 	UpdatedAt            time.Time     `json:"updatedAt"`
 }
 
+const (
+	RedeemBatchKindCredits = "credits"
+	RedeemBatchKindStorage = "storage"
+)
+
 type RedeemBatch struct {
-	ID                 string     `json:"id" gorm:"primaryKey;size:36"`
-	AmountMicrocredits int64      `json:"amountMicrocredits"`
-	Count              int        `json:"count"`
-	Note               string     `json:"note" gorm:"size:500"`
-	CreatedBy          string     `json:"createdBy" gorm:"index;size:36"`
-	CodesCipher        string     `json:"-" gorm:"type:text"`
-	ExpiresAt          *time.Time `json:"expiresAt" gorm:"index"`
-	CreatedAt          time.Time  `json:"createdAt" gorm:"index"`
-	AvailableCount     int64      `json:"availableCount" gorm:"->;-:migration"`
-	RedeemedCount      int64      `json:"redeemedCount" gorm:"->;-:migration"`
-	DisabledCount      int64      `json:"disabledCount" gorm:"->;-:migration"`
-	ExpiredCount       int64      `json:"expiredCount" gorm:"->;-:migration"`
+	ID                  string     `json:"id" gorm:"primaryKey;size:36"`
+	Kind                string     `json:"kind" gorm:"size:24;not null;default:'credits'"`
+	AmountMicrocredits  int64      `json:"amountMicrocredits"`
+	StorageBytes        int64      `json:"storageBytes" gorm:"not null;default:0"`
+	StorageDurationDays int        `json:"storageDurationDays" gorm:"not null;default:0"`
+	Count               int        `json:"count"`
+	Note                string     `json:"note" gorm:"size:500"`
+	CreatedBy           string     `json:"createdBy" gorm:"index;size:36"`
+	CodesCipher         string     `json:"-" gorm:"type:text"`
+	ExpiresAt           *time.Time `json:"expiresAt" gorm:"index"`
+	CreatedAt           time.Time  `json:"createdAt" gorm:"index"`
+	AvailableCount      int64      `json:"availableCount" gorm:"->;-:migration"`
+	RedeemedCount       int64      `json:"redeemedCount" gorm:"->;-:migration"`
+	DisabledCount       int64      `json:"disabledCount" gorm:"->;-:migration"`
+	ExpiredCount        int64      `json:"expiredCount" gorm:"->;-:migration"`
 }
 
 type RedeemCode struct {

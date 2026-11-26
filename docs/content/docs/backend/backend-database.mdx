@@ -5,6 +5,10 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 存储空间卡密（Schema 111）
+
+版本 111 `redeem_batch_storage_grants` 为 `redeem_batches` 增加 `kind`（`'credits'` 积分卡密，默认；`'storage'` 存储空间卡密）、`storage_bytes`（非空默认 0，整 GB）与 `storage_duration_days`（非空默认 0，0 表示永久有效），并将历史批次回填为 `kind = 'credits'`。兑换存储空间卡密时直接向 `user_storage_grants` 写入 `source = 'redeem'`、`reference_key = 'redeem:<codeId>'` 的扩容记录；关闭积分功能时仅拦截积分卡密，存储空间卡密仍可正常兑换。
+
 ## 模型请求插件发行版（Schema 109）
 
 `model_protocol_releases` 增加 `channel_models.protocol_release` 及索引，保存模型绑定的请求包 SHA-256。`tasks.protocol_binding_json` 和 `route_attempts.protocol_binding_json` 在新任务入队、路由尝试时记录版本、上游型号、能力与报价修订，以及渠道连接的 HMAC。快照仅在服务端使用。历史记录的新增列保持空值。
@@ -371,7 +375,7 @@ SQLite 写事务与 PostgreSQL 行锁串行化同一对话的修订检查；读�
 | 字段 | 说明 |
 | --- | --- |
 | `user_id`、`expires_at` | 联合索引 `idx_user_storage_grant_active`；`expires_at` 为空表示永久 |
-| `source` | `payment` 或 `admin` |
+| `source` | `payment`、`admin` 或 `redeem` |
 | `payment_order_id`、`product_id`、`product_name` | 支付来源快照 |
 | `bytes`、`duration_days`、`starts_at` | 容量与有效期，从发放时刻起算 |
 | `revoked_at`、`revoked_by`、`revoke_reason` | 管理员撤销；撤销后不再计入容量 |

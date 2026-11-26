@@ -2,7 +2,7 @@ import { App, Button, Form, Input, InputNumber, Progress, Skeleton } from "antd"
 import { useEffect, useState } from "react";
 
 import { accountStorageMeter, accountStorageStateMessage, formatStorageCapacity, formatStorageDate, formatStorageDuration } from "@/lib/account-storage-usage";
-import { getAdminUserStorage, grantAdminUserStorage, revokeAdminStorageGrant, storageGrantActive, type AdminUserStorage, type UserStorageGrant } from "@/services/api/storage-grants";
+import { getAdminUserStorage, grantAdminUserStorage, revokeAdminStorageGrant, storageGrantActive, storageGrantSourceLabel, type AdminUserStorage, type UserStorageGrant } from "@/services/api/storage-grants";
 
 import { AdminDataTable, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
 
@@ -116,7 +116,7 @@ export function AdminUserStoragePanel({ userId }: { userId: string }) {
                     pagination: false,
                     columns: [
                         { title: "生效时间", dataIndex: "startsAt", width: 150, render: (value) => formatStorageDate(value) },
-                        { title: "来源", key: "source", width: 160, ellipsis: true, render: (_, item) => item.productName || (item.source === "admin" ? "管理员赠送" : item.source) },
+                        { title: "来源", key: "source", width: 160, ellipsis: true, render: (_, item) => storageGrantSourceLabel(item) },
                         { title: "容量", dataIndex: "bytes", width: 100, align: "right", render: (value) => `+${formatStorageCapacity(value)}` },
                         { title: "有效期", key: "duration", width: 170, render: (_, item) => (item.expiresAt ? `${formatStorageDuration(item.durationDays)} · ${formatStorageDate(item.expiresAt)} 到期` : "永久有效") },
                         {

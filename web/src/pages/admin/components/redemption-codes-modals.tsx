@@ -1,16 +1,18 @@
 // 兑换码批次的创建抽屉、生成结果与批次明细弹窗。
 
-import { App, Button, Form, Input, InputNumber, Popconfirm, Space } from "antd";
+import { App, Button, Form, Input, InputNumber, Popconfirm, Segmented, Space } from "antd";
 import { AdminDrawer, AdminModal } from "@/pages/admin/ui/overlays";
 import { Ban, Copy, KeyRound, TicketCheck } from "lucide-react";
 import { formatCredits } from "@/constant/credits";
-import { type AdminRedeemCode, disableAdminRedeemCode, listAdminRedeemBatchCodes, type RedeemBatch } from "@/services/api/wallet";
+import { formatStorageCapacity } from "@/lib/account-storage-usage";
+import { type AdminRedeemCode, disableAdminRedeemCode, listAdminRedeemBatchCodes, type RedeemBatch, type RedeemBatchKind } from "@/services/api/wallet";
 import { AdminDataTable, AdminExportButton, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
 import { useEffect, useRef, useState } from "react";
 import { type ColumnsType } from "antd/es/table";
 import { Select } from "@/components/ui/base/select";
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import {
+    BYTES_PER_GB,
     DEFAULT_CREATE_VALUES,
     DETAIL_STATUS_LABELS,
     type DetailStatus,
@@ -19,19 +21,31 @@ import {
     type PendingRedeemBatch,
     type RedeemFormValues,
     emptyBatchSummary,
+    formatStorageDurationShort,
     formatTime,
     isMutationResultUncertain,
     renderCodeStatus,
 } from "./redemption-codes-panel";
+
+const STORAGE_CAPACITY_PRESETS = [5, 10, 20] as const;
+const STORAGE_DURATION_PRESETS = [
+    { label: "1 个月", value: 30 },
+    { label: "半年", value: 180 },
+    { label: "1 年", value: 365 },
+    { label: "永久", value: 0 },
+] as const;
 
 export function CreateRedeemBatchDrawer({
     open,
     creating,
     pending,
     form,
+    watchedKind,
     watchedAmount,
+    watchedStorageGB,
     watchedCount,
     draftTotal,
+    draftTotalStorageBytes,
     onClose,
     onPreview,
     onPendingChange,
@@ -41,14 +55,32 @@ export function CreateRedeemBatchDrawer({
     creating: boolean;
     pending: PendingRedeemBatch | null;
     form: ReturnType<typeof Form.useForm<RedeemFormValues>>[0];
+    watchedKind: RedeemBatchKind;
     watchedAmount?: number | null;
+    watchedStorageGB?: number | null;
     watchedCount?: number | null;
     draftTotal: number | null;
+    draftTotalStorageBytes: number | null;
     onClose: () => void;
     onPreview: (values: RedeemFormValues) => void;
     onPendingChange: (values: PendingRedeemBatch | null) => void;
     onConfirm: () => void;
 }) {
+    const watchedStorageDurationDays = Form.useWatch("storageDurationDays", form) as number | null | undefined;
+    const watchedExpiresAt = Form.useWatch("expiresAt", form) as string | undefined;
+    const [customCapacityMode, setCustomCapacityMode] = useState(false);
+    const [customDurationMode, setCustomDurationMode] = useState(false);
+
+    useEffect(() => {
+        if (!open) {
+            setCustomCapacityMode(false);
+            setCustomDurationMode(false);
+        }
+    }, [open]);
+
+    const capacitySelectorValue = customCapacityMode || (watchedStorageGB != null && !STORAGE_CAPACITY_PRESETS.includes(Number(watchedStorageGB) as 5 | 10 | 20)) ? "custom" : Number(watchedStorageGB ?? 10);
+    const durationSelectorValue = customDurationMode || (watchedStorageDurationDays != null && !STORAGE_DURATION_PRESETS.some((item) => item.value === Number(watchedStorageDurationDays))) ? "custom" : Number(watchedStorageDurationDays ?? 30);
+
     return (
         <>
             <AdminDrawer
@@ -85,42 +117,137 @@ export function CreateRedeemBatchDrawer({
                     <section className="admin-redemption-drawer-section">
                         <div className="admin-redemption-drawer-section-heading">
                             <h3>批次参数</h3>
-                            <p>积分最多保留 6 位小数；单批最多生成 5,000 个兑换码。</p>
+                            <p>{watchedKind === "storage" ? "存储空间卡密支持 5G/10G/20G 与自定义容量，有效期按兑换日起算；单批最多 5,000 个。" : "积分最多保留 6 位小数；单批最多生成 5,000 个兑换码。"}</p>
                         </div>
-                        <div className="admin-redemption-form-grid">
-                            <Form.Item
-                                name="amount"
-                                label="每个兑换码的积分"
-                                rules={[
-                                    { required: true, message: "请填写积分面额" },
-                                    {
-                                        validator: (_, value) => {
-                                            const numberValue = Number(value);
-                                            const microcredits = Math.round(numberValue * MICRO_CREDITS_PER_CREDIT);
-                                            return Number.isFinite(numberValue) && numberValue > 0 && Number.isSafeInteger(microcredits) && microcredits > 0 ? Promise.resolve() : Promise.reject(new Error("请输入可安全处理且大于 0 的积分"));
+                        <Form.Item name="kind" label="卡密类型">
+                            <Segmented
+                                block
+                                options={[
+                                    { label: "积分卡密", value: "credits" },
+                                    { label: "存储空间卡密", value: "storage" },
+                                ]}
+                            />
+                        </Form.Item>
+                        {watchedKind === "storage" ? (
+                            <>
+                                <Form.Item label="单码存储空间" extra="快捷选择常用容量或切换到自定义填写整数 GB（1–100000 GB）。">
+                                    <div className="space-y-2">
+                                        <Segmented
+                                            block
+                                            value={capacitySelectorValue}
+                                            options={[...STORAGE_CAPACITY_PRESETS.map((gb) => ({ label: `${gb} GB`, value: gb })), { label: "自定义", value: "custom" }]}
+                                            onChange={(value) => {
+                                                if (value === "custom") {
+                                                    setCustomCapacityMode(true);
+                                                    return;
+                                                }
+                                                setCustomCapacityMode(false);
+                                                form.setFieldValue("storageGB", Number(value));
+                                            }}
+                                        />
+                                        <Form.Item
+                                            name="storageGB"
+                                            noStyle={!customCapacityMode}
+                                            hidden={!customCapacityMode}
+                                            rules={[
+                                                {
+                                                    validator: (_, value) => {
+                                                        if (form.getFieldValue("kind") !== "storage") return Promise.resolve();
+                                                        const num = Number(value);
+                                                        return Number.isInteger(num) && num >= 1 && num <= 100_000 ? Promise.resolve() : Promise.reject(new Error("请输入 1–100000 之间的整数 GB"));
+                                                    },
+                                                },
+                                            ]}
+                                        >
+                                            <InputNumber className="w-full" min={1} max={100_000} precision={0} suffix="GB" placeholder="例如 50" />
+                                        </Form.Item>
+                                    </div>
+                                </Form.Item>
+                                <Form.Item label="空间有效期" extra="从用户兑换成功时刻起算，可叠加快捷项或自定义天数。">
+                                    <div className="space-y-2">
+                                        <Segmented
+                                            block
+                                            value={durationSelectorValue}
+                                            options={[...STORAGE_DURATION_PRESETS.map((item) => ({ label: item.label, value: item.value })), { label: "自定义", value: "custom" }]}
+                                            onChange={(value) => {
+                                                if (value === "custom") {
+                                                    setCustomDurationMode(true);
+                                                    if (!Number(form.getFieldValue("storageDurationDays"))) {
+                                                        form.setFieldValue("storageDurationDays", 90);
+                                                    }
+                                                    return;
+                                                }
+                                                setCustomDurationMode(false);
+                                                form.setFieldValue("storageDurationDays", Number(value));
+                                            }}
+                                        />
+                                        <Form.Item
+                                            name="storageDurationDays"
+                                            noStyle={!customDurationMode}
+                                            hidden={!customDurationMode}
+                                            rules={[
+                                                {
+                                                    validator: (_, value) => {
+                                                        if (form.getFieldValue("kind") !== "storage") return Promise.resolve();
+                                                        const num = Number(value);
+                                                        return Number.isInteger(num) && num >= 0 && num <= 3650 ? Promise.resolve() : Promise.reject(new Error("请输入 0–3650 之间的整数天（0 表示永久）"));
+                                                    },
+                                                },
+                                            ]}
+                                        >
+                                            <InputNumber className="w-full" min={1} max={3650} precision={0} suffix="天" placeholder="例如 90" />
+                                        </Form.Item>
+                                    </div>
+                                </Form.Item>
+                                <Form.Item
+                                    name="count"
+                                    label="生成数量"
+                                    rules={[
+                                        { required: true, message: "请填写生成数量" },
+                                        {
+                                            validator: (_, value) => (Number.isInteger(Number(value)) && Number(value) >= 1 && Number(value) <= 5000 ? Promise.resolve() : Promise.reject(new Error("请输入 1–5000 的整数"))),
                                         },
-                                    },
-                                ]}
-                            >
-                                <InputNumber className="w-full" min={0.000001} precision={6} placeholder="例如 10" />
-                            </Form.Item>
-                            <Form.Item
-                                name="count"
-                                label="生成数量"
-                                rules={[
-                                    { required: true, message: "请填写生成数量" },
-                                    {
-                                        validator: (_, value) => (Number.isInteger(Number(value)) && Number(value) >= 1 && Number(value) <= 5000 ? Promise.resolve() : Promise.reject(new Error("请输入 1–5000 的整数"))),
-                                    },
-                                ]}
-                            >
-                                <InputNumber className="w-full" min={1} max={5000} precision={0} placeholder="例如 100" />
-                            </Form.Item>
-                        </div>
+                                    ]}
+                                >
+                                    <InputNumber className="w-full" min={1} max={5000} precision={0} placeholder="例如 100" />
+                                </Form.Item>
+                            </>
+                        ) : (
+                            <div className="admin-redemption-form-grid">
+                                <Form.Item
+                                    name="amount"
+                                    label="每个兑换码的积分"
+                                    rules={[
+                                        {
+                                            validator: (_, value) => {
+                                                if (form.getFieldValue("kind") === "storage") return Promise.resolve();
+                                                const numberValue = Number(value);
+                                                const microcredits = Math.round(numberValue * MICRO_CREDITS_PER_CREDIT);
+                                                return Number.isFinite(numberValue) && numberValue > 0 && Number.isSafeInteger(microcredits) && microcredits > 0 ? Promise.resolve() : Promise.reject(new Error("请输入可安全处理且大于 0 的积分"));
+                                            },
+                                        },
+                                    ]}
+                                >
+                                    <InputNumber className="w-full" min={0.000001} precision={6} placeholder="例如 10" />
+                                </Form.Item>
+                                <Form.Item
+                                    name="count"
+                                    label="生成数量"
+                                    rules={[
+                                        { required: true, message: "请填写生成数量" },
+                                        {
+                                            validator: (_, value) => (Number.isInteger(Number(value)) && Number(value) >= 1 && Number(value) <= 5000 ? Promise.resolve() : Promise.reject(new Error("请输入 1–5000 的整数"))),
+                                        },
+                                    ]}
+                                >
+                                    <InputNumber className="w-full" min={1} max={5000} precision={0} placeholder="例如 100" />
+                                </Form.Item>
+                            </div>
+                        )}
                         <Form.Item
                             name="expiresAt"
-                            label="过期时间"
-                            extra="留空表示永久有效；最终以服务器时间为准。"
+                            label={watchedKind === "storage" ? "卡密过期时间" : "过期时间"}
+                            extra={watchedKind === "storage" ? "最晚必须在此时间前完成兑换，留空表示兑换码本身永久可兑。" : "留空表示永久有效；最终以服务器时间为准。"}
                             rules={[
                                 {
                                     validator: (_, value) => {
@@ -134,20 +261,47 @@ export function CreateRedeemBatchDrawer({
                             <Input type="datetime-local" aria-label="批次过期时间" />
                         </Form.Item>
                         <Form.Item name="note" label="批次备注" extra="用于列表检索和后续追溯，不会展示给兑换用户。">
-                            <Input.TextArea rows={3} maxLength={500} showCount placeholder="例如：2026 年秋季活动发放" />
+                            <Input.TextArea rows={3} maxLength={500} showCount placeholder={watchedKind === "storage" ? "例如：内测用户 10G 空间月卡" : "例如：2026 年秋季活动发放"} />
                         </Form.Item>
                         <dl className="admin-redemption-live-summary" aria-label="待生成批次摘要">
+                            {watchedKind === "storage" ? (
+                                <>
+                                    <div>
+                                        <dt>单码空间</dt>
+                                        <dd>{Number.isInteger(Number(watchedStorageGB)) && Number(watchedStorageGB) > 0 ? `+${formatStorageCapacity(Number(watchedStorageGB) * BYTES_PER_GB)}` : "--"}</dd>
+                                    </div>
+                                    <div>
+                                        <dt>空间有效期</dt>
+                                        <dd>{formatStorageDurationShort(Number(watchedStorageDurationDays ?? 0))}</dd>
+                                    </div>
+                                    <div>
+                                        <dt>生成数量</dt>
+                                        <dd>{Number.isInteger(Number(watchedCount)) && Number(watchedCount) > 0 ? `${Number(watchedCount)} 个` : "--"}</dd>
+                                    </div>
+                                    <div className="is-emphasis">
+                                        <dt>批次总空间</dt>
+                                        <dd>{draftTotalStorageBytes !== null ? formatStorageCapacity(draftTotalStorageBytes) : "--"}</dd>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div>
+                                        <dt>单码积分</dt>
+                                        <dd>{Number(watchedAmount) > 0 ? formatCredits(Math.round(Number(watchedAmount) * MICRO_CREDITS_PER_CREDIT)) : "--"}</dd>
+                                    </div>
+                                    <div>
+                                        <dt>生成数量</dt>
+                                        <dd>{Number.isInteger(Number(watchedCount)) && Number(watchedCount) > 0 ? `${Number(watchedCount)} 个` : "--"}</dd>
+                                    </div>
+                                    <div className="is-emphasis">
+                                        <dt>批次总面值</dt>
+                                        <dd>{draftTotal !== null ? formatCredits(draftTotal) : "--"}</dd>
+                                    </div>
+                                </>
+                            )}
                             <div>
-                                <dt>单码积分</dt>
-                                <dd>{Number(watchedAmount) > 0 ? formatCredits(Math.round(Number(watchedAmount) * MICRO_CREDITS_PER_CREDIT)) : "--"}</dd>
-                            </div>
-                            <div>
-                                <dt>生成数量</dt>
-                                <dd>{Number.isInteger(Number(watchedCount)) && Number(watchedCount) > 0 ? `${Number(watchedCount)} 个` : "--"}</dd>
-                            </div>
-                            <div className="is-emphasis">
-                                <dt>批次总面值</dt>
-                                <dd>{draftTotal !== null ? formatCredits(draftTotal) : "--"}</dd>
+                                <dt>{watchedKind === "storage" ? "卡密过期" : "有效期"}</dt>
+                                <dd>{watchedExpiresAt ? watchedExpiresAt.replace("T", " ") : "永久有效"}</dd>
                             </div>
                         </dl>
                     </section>
@@ -173,20 +327,43 @@ export function CreateRedeemBatchDrawer({
                     <div className="admin-operation-confirmation">
                         <p className="admin-operation-confirmation-copy">请核对本批次的总发放额度和有效期。确认后会立即生成，不能撤销整批记录。</p>
                         <dl className="admin-operation-confirmation-grid">
+                            {pending.kind === "storage" ? (
+                                <>
+                                    <div>
+                                        <dt>单码空间</dt>
+                                        <dd>+{formatStorageCapacity(pending.storageBytes)}</dd>
+                                    </div>
+                                    <div>
+                                        <dt>空间有效期</dt>
+                                        <dd>{formatStorageDurationShort(pending.storageDurationDays)}</dd>
+                                    </div>
+                                    <div>
+                                        <dt>生成数量</dt>
+                                        <dd>{pending.count} 个</dd>
+                                    </div>
+                                    <div>
+                                        <dt>批次总空间</dt>
+                                        <dd className="is-positive">{formatStorageCapacity(pending.totalStorageBytes)}</dd>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div>
+                                        <dt>单码积分</dt>
+                                        <dd>{formatCredits(pending.amountMicrocredits)}</dd>
+                                    </div>
+                                    <div>
+                                        <dt>生成数量</dt>
+                                        <dd>{pending.count} 个</dd>
+                                    </div>
+                                    <div>
+                                        <dt>批次总面值</dt>
+                                        <dd className="is-positive">{formatCredits(pending.totalMicrocredits)}</dd>
+                                    </div>
+                                </>
+                            )}
                             <div>
-                                <dt>单码积分</dt>
-                                <dd>{formatCredits(pending.amountMicrocredits)}</dd>
-                            </div>
-                            <div>
-                                <dt>生成数量</dt>
-                                <dd>{pending.count} 个</dd>
-                            </div>
-                            <div>
-                                <dt>批次总面值</dt>
-                                <dd className="is-positive">{formatCredits(pending.totalMicrocredits)}</dd>
-                            </div>
-                            <div>
-                                <dt>过期时间</dt>
+                                <dt>{pending.kind === "storage" ? "卡密过期" : "过期时间"}</dt>
                                 <dd>{pending.expiresAt ? formatTime(pending.expiresAt) : "永久有效"}</dd>
                             </div>
                             <div className="is-wide">
@@ -389,7 +566,11 @@ export function RedeemBatchCodesModal({ batch, onClose, onBatchChanged }: { batc
                 item.status === "unused" ? (
                     <Popconfirm
                         title={`禁用尾号 ${item.codeSuffix} 的兑换码？`}
-                        description={`该兑换码面值 ${formatCredits(item.amountMicrocredits)} 积分，禁用后无法恢复。`}
+                        description={
+                            (batchSummary?.kind ?? batch?.kind) === "storage"
+                                ? `该存储空间兑换码面值 +${formatStorageCapacity(batchSummary?.storageBytes ?? batch?.storageBytes ?? 0)} · ${formatStorageDurationShort(batchSummary?.storageDurationDays ?? batch?.storageDurationDays ?? 0)}，禁用后无法恢复。`
+                                : `该兑换码面值 ${formatCredits(item.amountMicrocredits)} 积分，禁用后无法恢复。`
+                        }
                         okText="确认禁用"
                         cancelText="取消"
                         okButtonProps={{ danger: true }}
@@ -429,7 +610,16 @@ export function RedeemBatchCodesModal({ batch, onClose, onBatchChanged }: { batc
             {!plaintextAvailable ? <div className="admin-redemption-sensitive-notice is-warning">该批次创建于加密回看功能上线前，系统当时只保存了哈希，无法恢复完整明文；核销状态和审计信息仍可查看。</div> : null}
             <div className="admin-redemption-detail-summary">
                 <BatchStatusDistribution batch={batchSummary || batch || emptyBatchSummary} />
-                <span>单码 {formatCredits(batchSummary?.amountMicrocredits ?? batch?.amountMicrocredits ?? 0)} 积分</span>
+                {(batchSummary?.kind ?? batch?.kind) === "storage" ? (
+                    <>
+                        <AdminStatusBadge label="存储空间" tone="success" />
+                        <span>
+                            单码 +{formatStorageCapacity(batchSummary?.storageBytes ?? batch?.storageBytes ?? 0)} · {formatStorageDurationShort(batchSummary?.storageDurationDays ?? batch?.storageDurationDays ?? 0)}
+                        </span>
+                    </>
+                ) : (
+                    <span>单码 {formatCredits(batchSummary?.amountMicrocredits ?? batch?.amountMicrocredits ?? 0)} 积分</span>
+                )}
                 <span>总数 {batchSummary?.count ?? batch?.count ?? 0}</span>
                 <span>{batchSummary?.expiresAt || batch?.expiresAt ? `到期 ${formatTime(batchSummary?.expiresAt || batch?.expiresAt)}` : "永久有效"}</span>
                 <span>创建 {formatTime(batchSummary?.createdAt || batch?.createdAt)}</span>

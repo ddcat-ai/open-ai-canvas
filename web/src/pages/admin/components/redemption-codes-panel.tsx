@@ -5,16 +5,29 @@ import { Ban, Eye, RefreshCw, Search, TicketCheck } from "lucide-react";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { formatCredits } from "@/constant/credits";
+import { formatStorageCapacity, formatStorageDuration } from "@/lib/account-storage-usage";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { ApiError } from "@/services/api/request";
-import { createAdminRedeemBatch, disableAdminRedeemBatch, listAdminRedeemBatches, type AdminRedeemCode, type RedeemBatch } from "@/services/api/wallet";
+import { createAdminRedeemBatch, disableAdminRedeemBatch, listAdminRedeemBatches, type AdminRedeemCode, type RedeemBatch, type RedeemBatchKind } from "@/services/api/wallet";
 import { AdminDataTable, AdminRowActions, AdminStatusBadge, AdminTableEmpty, type AdminStatusTone } from "./admin-ui";
 import { Select } from "@/components/ui/base/select";
 import { BatchStatusDistribution, CreateRedeemBatchDrawer, GeneratedCodesModal, RedeemBatchCodesModal } from "./redemption-codes-modals";
 
-export type RedeemFormValues = { amount?: number | null; count?: number | null; note?: string; expiresAt?: string };
+export type RedeemFormValues = {
+    kind?: RedeemBatchKind;
+    amount?: number | null;
+    storageGB?: number | null;
+    storageDurationDays?: number | null;
+    count?: number | null;
+    note?: string;
+    expiresAt?: string;
+};
 export type PendingRedeemBatch = {
+    kind: RedeemBatchKind;
     amountMicrocredits: number;
+    storageBytes: number;
+    storageDurationDays: number;
+    totalStorageBytes: number;
     count: number;
     totalMicrocredits: number;
     note?: string;
@@ -24,8 +37,17 @@ type BatchValidity = "all" | "active" | "expired";
 export type DetailStatus = "all" | "available" | "redeemed" | "expired" | "disabled";
 
 export const MICRO_CREDITS_PER_CREDIT = 1_000_000;
-export const DEFAULT_CREATE_VALUES: RedeemFormValues = { amount: 10, count: 10 };
+export const BYTES_PER_GB = 1024 ** 3;
+export const DEFAULT_CREATE_VALUES: RedeemFormValues = { kind: "credits", amount: 10, storageGB: 10, storageDurationDays: 30, count: 10 };
 export const GENERATED_PREVIEW_LIMIT = 200;
+
+export function formatStorageDurationShort(days: number) {
+    if (!days) return "永久";
+    if (days === 30) return "1 个月";
+    if (days === 180) return "半年";
+    if (days === 365) return "1 年";
+    return formatStorageDuration(days);
+}
 export const DETAIL_STATUS_LABELS: Record<DetailStatus, string> = {
     all: "全部状态",
     available: "可用",
@@ -56,7 +78,9 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
     const listRequestRef = useRef(0);
     const createInFlightRef = useRef(false);
     const batchMutationsRef = useRef(new Set<string>());
+    const watchedKind = Form.useWatch("kind", form) as RedeemBatchKind | undefined;
     const watchedAmount = Form.useWatch("amount", form);
+    const watchedStorageGB = Form.useWatch("storageGB", form);
     const watchedCount = Form.useWatch("count", form);
 
     const draftTotal = useMemo(() => {
@@ -67,6 +91,16 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
         const totalMicrocredits = amountMicrocredits * count;
         return Number.isSafeInteger(amountMicrocredits) && Number.isSafeInteger(totalMicrocredits) ? totalMicrocredits : null;
     }, [watchedAmount, watchedCount]);
+
+    const draftTotalStorageBytes = useMemo(() => {
+        if (watchedKind !== "storage") return null;
+        const gb = Number(watchedStorageGB);
+        const count = Number(watchedCount);
+        if (!Number.isInteger(gb) || gb < 1 || gb > 100_000 || !Number.isInteger(count) || count <= 0) return null;
+        const bytes = gb * BYTES_PER_GB;
+        const total = bytes * count;
+        return Number.isSafeInteger(total) ? total : null;
+    }, [watchedKind, watchedStorageGB, watchedCount]);
 
     const reload = async (targetPage = page, targetPageSize = pageSize, queryOverride?: { keyword?: string; validity?: BatchValidity }) => {
         const requestId = ++listRequestRef.current;
@@ -119,12 +153,10 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
     };
 
     const previewCreate = (values: RedeemFormValues) => {
-        const amount = Number(values.amount);
+        const kind: RedeemBatchKind = values.kind === "storage" ? "storage" : "credits";
         const count = Number(values.count);
-        const amountMicrocredits = Math.round(amount * MICRO_CREDITS_PER_CREDIT);
-        const totalMicrocredits = amountMicrocredits * count;
-        if (!Number.isFinite(amount) || amount <= 0 || !Number.isSafeInteger(amountMicrocredits) || amountMicrocredits <= 0 || !Number.isInteger(count) || count < 1 || count > 5000 || !Number.isSafeInteger(totalMicrocredits)) {
-            message.error("积分面额或生成数量超出可安全处理的范围");
+        if (!Number.isInteger(count) || count < 1 || count > 5000) {
+            message.error("生成数量需为 1–5000 的整数");
             return;
         }
         let expiresAt: string | undefined;
@@ -136,7 +168,50 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
             }
             expiresAt = timestamp.toISOString();
         }
-        setPendingCreate({ amountMicrocredits, count, totalMicrocredits, note: values.note?.trim() || undefined, expiresAt });
+        if (kind === "storage") {
+            const storageGB = Number(values.storageGB);
+            const storageDurationDays = Number(values.storageDurationDays ?? 0);
+            if (!Number.isInteger(storageGB) || storageGB < 1 || storageGB > 100_000) {
+                message.error("存储空间需为 1–100000 之间的整数 GB");
+                return;
+            }
+            if (!Number.isInteger(storageDurationDays) || storageDurationDays < 0 || storageDurationDays > 3650) {
+                message.error("空间有效期需为 0–3650 之间的整数天");
+                return;
+            }
+            const storageBytes = storageGB * BYTES_PER_GB;
+            const totalStorageBytes = storageBytes * count;
+            setPendingCreate({
+                kind,
+                amountMicrocredits: 0,
+                totalMicrocredits: 0,
+                storageBytes,
+                storageDurationDays,
+                totalStorageBytes: Number.isSafeInteger(totalStorageBytes) ? totalStorageBytes : storageBytes,
+                count,
+                note: values.note?.trim() || undefined,
+                expiresAt,
+            });
+            return;
+        }
+        const amount = Number(values.amount);
+        const amountMicrocredits = Math.round(amount * MICRO_CREDITS_PER_CREDIT);
+        const totalMicrocredits = amountMicrocredits * count;
+        if (!Number.isFinite(amount) || amount <= 0 || !Number.isSafeInteger(amountMicrocredits) || amountMicrocredits <= 0 || !Number.isSafeInteger(totalMicrocredits)) {
+            message.error("积分面额或生成数量超出可安全处理的范围");
+            return;
+        }
+        setPendingCreate({
+            kind,
+            amountMicrocredits,
+            totalMicrocredits,
+            storageBytes: 0,
+            storageDurationDays: 0,
+            totalStorageBytes: 0,
+            count,
+            note: values.note?.trim() || undefined,
+            expiresAt,
+        });
     };
 
     const createBatch = async () => {
@@ -145,7 +220,10 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
         setCreating(true);
         try {
             const result = await createAdminRedeemBatch({
-                amountMicrocredits: pendingCreate.amountMicrocredits,
+                kind: pendingCreate.kind,
+                amountMicrocredits: pendingCreate.kind === "credits" ? pendingCreate.amountMicrocredits : 0,
+                storageBytes: pendingCreate.kind === "storage" ? pendingCreate.storageBytes : 0,
+                storageDurationDays: pendingCreate.kind === "storage" ? pendingCreate.storageDurationDays : 0,
                 count: pendingCreate.count,
                 note: pendingCreate.note,
                 expiresAt: pendingCreate.expiresAt,
@@ -209,12 +287,27 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
             width: 240,
             render: (_, batch) => (
                 <div className="min-w-0">
-                    <div className="truncate font-medium">{batch.note || "未备注批次"}</div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="truncate font-medium">{batch.note || "未备注批次"}</span>
+                        {batch.kind === "storage" ? <AdminStatusBadge label="存储空间" tone="success" /> : null}
+                    </div>
                     <div className="mt-0.5 text-xs text-foreground/45">{formatTime(batch.createdAt)}</div>
                 </div>
             ),
         },
-        { title: "单码积分", dataIndex: "amountMicrocredits", width: 120, align: "center", render: (value) => <span className="font-medium tabular-nums">{formatCredits(value)}</span> },
+        {
+            title: "单码内容",
+            width: 165,
+            align: "center",
+            render: (_, batch) =>
+                batch.kind === "storage" ? (
+                    <span className="font-medium tabular-nums">
+                        +{formatStorageCapacity(batch.storageBytes || 0)} · {formatStorageDurationShort(batch.storageDurationDays || 0)}
+                    </span>
+                ) : (
+                    <span className="font-medium tabular-nums">{formatCredits(batch.amountMicrocredits)} 积分</span>
+                ),
+        },
         { title: "总数", dataIndex: "count", width: 80, align: "center", render: (value) => <span className="tabular-nums">{value}</span> },
         { title: "状态分布", width: 300, align: "center", render: (_, batch) => <BatchStatusDistribution batch={batch} /> },
         { title: "过期时间", dataIndex: "expiresAt", width: 180, align: "center", render: (value) => (value ? formatTime(value) : <AdminStatusBadge label="永久有效" tone="info" />) },
@@ -284,7 +377,7 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
                             className="app-list-search"
                             prefix={<Search className="size-4 text-foreground/40" />}
                             value={keyword}
-                            placeholder="搜索批次备注、积分或数量"
+                            placeholder="搜索批次备注、面额、容量或数量"
                             onChange={(event) => {
                                 setKeyword(event.target.value);
                                 setPage(1);
@@ -361,9 +454,12 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
                 creating={creating}
                 pending={pendingCreate}
                 form={form}
+                watchedKind={watchedKind || "credits"}
                 watchedAmount={watchedAmount}
+                watchedStorageGB={watchedStorageGB}
                 watchedCount={watchedCount}
                 draftTotal={draftTotal}
+                draftTotalStorageBytes={draftTotalStorageBytes}
                 onClose={closeCreateDrawer}
                 onPreview={previewCreate}
                 onPendingChange={setPendingCreate}
@@ -385,7 +481,10 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
 
 export const emptyBatchSummary: RedeemBatch = {
     id: "",
+    kind: "credits",
     amountMicrocredits: 0,
+    storageBytes: 0,
+    storageDurationDays: 0,
     count: 0,
     createdBy: "",
     createdAt: "",
@@ -413,6 +512,11 @@ export function isMutationResultUncertain(error: unknown) {
 
 function formatBatchDisableImpact(batch: RedeemBatch) {
     const availableCount = batch.availableCount ?? 0;
+    if (batch.kind === "storage") {
+        const cap = formatStorageCapacity(batch.storageBytes || 0);
+        const dur = formatStorageDurationShort(batch.storageDurationDays || 0);
+        return `将禁用当前 ${availableCount} 个可用存储空间兑换码（单码 +${cap} · ${dur}）`;
+    }
     const affectedMicrocredits = batch.amountMicrocredits * availableCount;
     const total = Number.isSafeInteger(affectedMicrocredits) ? `，面值合计 ${formatCredits(affectedMicrocredits)} 积分` : "";
     return `将禁用当前 ${availableCount} 个可用兑换码（单码 ${formatCredits(batch.amountMicrocredits)} 积分${total}）`;

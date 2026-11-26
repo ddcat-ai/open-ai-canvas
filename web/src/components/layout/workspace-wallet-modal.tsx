@@ -12,7 +12,7 @@ import { PaymentOrdersPanel, paymentOrdersQueryKey } from "@/components/payment/
 import { AppModal } from "@/components/ui/product/app-modal";
 import { formatCredits } from "@/constant/credits";
 import { useAccountFileStorageUsage } from "@/hooks/use-account-file-storage-usage";
-import { accountFileStorageUsageQueryKey, accountStorageMeter } from "@/lib/account-storage-usage";
+import { accountFileStorageUsageQueryKey, accountStorageMeter, formatStorageCapacity, formatStorageDuration } from "@/lib/account-storage-usage";
 import { estimatePaymentCharge, paymentOptionsFromProviders, type PaymentOption } from "@/lib/payment-options";
 import { getPaymentSettings, listPaymentProviders, listTopupProducts, type PaymentOrder, type TopupProduct, type TopupProductKind } from "@/services/api/payments";
 import { listMyStorageGrants } from "@/services/api/storage-grants";
@@ -118,7 +118,7 @@ export function WorkspaceWalletModal({
 
     const selectedProduct = useMemo(() => products.find((item) => item.id === selectedProductId), [products, selectedProductId]);
     const selectedOption = useMemo(() => paymentOptions.find((item) => item.key === selectedOptionKey), [paymentOptions, selectedOptionKey]);
-    const activeTab: WalletModalTab = creditsEnabled || tab === "orders" ? tab : "topup";
+    const activeTab: WalletModalTab = creditsEnabled || tab === "orders" || tab === "redeem" ? tab : "topup";
     const historyType = activeTab === "income" ? "income" : "expenses";
     const wallet = walletResult?.data;
     const historyWallet = walletResult?.type === historyType ? wallet : undefined;
@@ -221,10 +221,19 @@ export function WorkspaceWalletModal({
         }
         setRedeeming(true);
         try {
-            await redeemCredits(normalized);
+            const result = await redeemCredits(normalized);
             setCode("");
-            await announceWalletUpdated();
-            message.success(t("account.wallet.redeemSuccess"));
+            if (result.kind === "storage") {
+                await Promise.all([queryClient.invalidateQueries({ queryKey: accountFileStorageUsageQueryKey }), queryClient.invalidateQueries({ queryKey: storageGrantsQueryKey })]);
+                window.dispatchEvent(new CustomEvent("wallet:updated"));
+                const bytes = result.storageGrant?.bytes || 0;
+                const days = result.storageGrant?.durationDays || 0;
+                const capacityText = bytes > 0 ? `+${formatStorageCapacity(bytes)}` : "";
+                message.success(`兑换成功，已增加 ${capacityText} 存储空间（${formatStorageDuration(days)}）`);
+            } else {
+                await announceWalletUpdated();
+                message.success(t("account.wallet.redeemSuccess"));
+            }
         } catch (error) {
             message.error(error instanceof Error ? error.message : t("account.wallet.redeemFailed"));
         } finally {
@@ -308,12 +317,12 @@ export function WorkspaceWalletModal({
                             <CreditCard />
                             {t("account.payment.ordersTitle")}
                         </button>
+                        <button type="button" role="tab" aria-selected={activeTab === "redeem"} onClick={() => setTab("redeem")}>
+                            <TicketCheck />
+                            {t("account.wallet.tabRedeem")}
+                        </button>
                         {creditsEnabled ? (
                             <>
-                                <button type="button" role="tab" aria-selected={activeTab === "redeem"} onClick={() => setTab("redeem")}>
-                                    <TicketCheck />
-                                    {t("account.wallet.tabRedeem")}
-                                </button>
                                 <button type="button" role="tab" aria-selected={activeTab === "income"} onClick={() => openHistory("income")}>
                                     <Coins />
                                     {t("account.wallet.tabIncome")}
