@@ -297,6 +297,18 @@ const defaultImageSizes = [
 ];
 
 export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = ""): ImageCapabilityConfig {
+    if (protocol === "sensenova-image" && model === "sensenova-u1.6-lite") {
+        return {
+            references: { promptMaxChars: 32000, maxImages: 5, maxImageBytes: 30 * 1024 * 1024, maskSupported: false },
+            size: { parameter: "size", values: ["auto", "2048x2048", "2720x1536", "1536x2720", "1664x2496", "2496x1664", "4096x4096"], default: "2048x2048", allowCustom: true },
+            resolution: { supported: false, values: [], default: "auto" },
+            quality: { supported: false, values: [], default: "auto" },
+            transparentBackground: { supported: false, default: false },
+            responseFormat: { supported: true, default: "url" },
+            outputFormat: { supported: true },
+            maxOutputs: 1,
+        };
+    }
     const image: ImageCapabilityConfig = {
         references: { promptMaxChars: 32000, maxImages: 16, maxImageBytes: 30 * 1024 * 1024, maskSupported: true },
         size: { parameter: "size", values: [...defaultImageSizes], default: "1:1", allowCustom: true },
@@ -490,8 +502,55 @@ export function videoProfileForOperation(profile: VideoCapabilityConfig, operati
     };
 }
 
+function senseNovaTextCapability(model: string): TextCapabilityConfig | undefined {
+    const profile: TextCapabilityConfig = {
+        streaming: true,
+        contextWindowTokens: 1_048_576,
+        maxOutputTokens: 131_072,
+        // Local conservative limits, not advertised vendor media ceilings.
+        references: { promptMaxChars: 32000, maxImages: 16, maxImageBytes: 30 * 1024 * 1024, maxVideos: 0, maxVideoBytes: 0 },
+        thinking: { mode: "levels", default: "high", switch: { kind: "thinking-type" }, intensity: { kind: "effort", field: "reasoning_effort" } },
+    };
+    const thinking = profile.thinking!;
+    switch (model) {
+        case "sensenova-6.8-flash":
+            thinking.mode = "always";
+            // xhigh has no host ThinkingLevel; it must not be renamed to max.
+            thinking.levels = ["minimal", "low", "medium", "high", "max"];
+            break;
+        case "sensenova-6.8-flash-lite":
+            // No documented context window: preserve the conservative host fallback.
+            profile.contextWindowTokens = 128_000;
+            profile.maxOutputTokens = 65_536;
+            thinking.levels = ["off", "low", "medium", "high", "max"];
+            break;
+        case "deepseek-flash":
+            profile.maxOutputTokens = 393_216;
+            // The host contract permits at most 100, although the vendor permits 200.
+            profile.references.maxImages = 100;
+            profile.references.maxImageBytes = 50 * 1024 * 1024;
+            thinking.levels = ["off", "low", "high", "max"];
+            break;
+        case "glm-5.3":
+            profile.references.maxImages = 0;
+            profile.references.maxImageBytes = 0;
+            thinking.mode = "always";
+            thinking.default = "max";
+            thinking.levels = ["low", "high", "max"];
+            break;
+        case "kimi-k3":
+            // Use the documented 128K default, not the dynamic remaining-context ceiling.
+            thinking.default = "max";
+            thinking.levels = ["off", "low", "medium", "high", "max"];
+            break;
+        default:
+            return undefined;
+    }
+    return profile;
+}
+
 export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = ""): ModelCapabilityConfig {
-    const text: TextCapabilityConfig = {
+    const text: TextCapabilityConfig = (protocol === "sensenova-chat" ? senseNovaTextCapability(model) : undefined) ?? {
         streaming: true,
         contextWindowTokens: 128_000,
         maxOutputTokens: 16_384,

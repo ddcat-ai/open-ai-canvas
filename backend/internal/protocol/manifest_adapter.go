@@ -67,19 +67,11 @@ func (a manifestAdapter) BuildCreate(_ context.Context, c RequestContext) (Reque
 	if err != nil {
 		return RequestSpec{}, err
 	}
-	env := manifestRequestEnv(request, "", nil)
-	bindings := make(map[string]any, len(a.manifest.RequestBindings))
-	env["bindings"] = bindings
-	for _, binding := range a.manifest.RequestBindings {
-		value, err := evaluateManifestValue(binding.Value, env)
-		if err != nil {
-			return RequestSpec{}, fmt.Errorf("evaluate request binding %s: %w", binding.Name, err)
-		}
-		bindings[binding.Name] = value
-	}
-	if err := validateManifestRequest(a.manifest.Validations, env); err != nil {
+	env, err := a.validatedRequestEnv(request)
+	if err != nil {
 		return RequestSpec{}, err
 	}
+	bindings := env["bindings"].(map[string]any)
 	if modes := a.manifest.Metadata.VideoModes; len(modes) > 0 {
 		operation := defaultValue(request.Operation, manifestString(bindings["operation"]))
 		limit, ok := modes[request.Model][operation]
@@ -124,7 +116,35 @@ func (a manifestAdapter) BuildAgent(_ context.Context, c AgentRequestContext) (R
 		return RequestSpec{}, fmt.Errorf("protocol %s has no agent operation", a.manifest.Metadata.ID)
 	}
 	request := GenerationRequest{Model: c.Model, Extra: map[string]any{"agent": c.Request}}
-	return buildManifestOperation(*a.manifest.Agent, a.manifest.Auth, request, "")
+	if a.manifest.Metadata.HostTextPolicy != HostTextPolicyBeforeMapping {
+		// Legacy Agent operations have their own mapping contract; create-only
+		// validations may require fields absent from the SDK-shaped Agent input.
+		return buildManifestOperationWithEnv(*a.manifest.Agent, a.manifest.Auth, request, "", nil)
+	}
+	env, err := a.validatedRequestEnv(request)
+	if err != nil {
+		return RequestSpec{}, err
+	}
+	return renderManifestOperation(*a.manifest.Agent, a.manifest.Auth, request, "", env)
+}
+
+// Providers opting into before_mapping share bindings and strong validation
+// between generation and Agent; legacy Agent contracts remain unchanged.
+func (a manifestAdapter) validatedRequestEnv(request GenerationRequest) (map[string]any, error) {
+	env := manifestRequestEnv(request, "", nil)
+	bindings := make(map[string]any, len(a.manifest.RequestBindings))
+	env["bindings"] = bindings
+	for _, binding := range a.manifest.RequestBindings {
+		value, err := evaluateManifestValue(binding.Value, env)
+		if err != nil {
+			return nil, fmt.Errorf("evaluate request binding %s: %w", binding.Name, err)
+		}
+		bindings[binding.Name] = value
+	}
+	if err := validateManifestRequest(a.manifest.Validations, env); err != nil {
+		return nil, err
+	}
+	return env, nil
 }
 
 func (a manifestAdapter) ParseAgent(_ context.Context, body []byte) (AgentResult, error) {
@@ -135,8 +155,24 @@ func (a manifestAdapter) ParseAgent(_ context.Context, body []byte) (AgentResult
 	if err != nil {
 		return AgentResult{}, err
 	}
+	if manifestError(payload, a.manifest.Response.ErrorPaths...) {
+		env := map[string]any{"response": payload}
+		message := manifestResponseString(a.manifest.Response.Message, env)
+		if message == "" {
+			message = firstPathValue(payload, a.manifest.Response.MessagePaths...)
+		}
+		if message == "" {
+			message = "声明式 Agent 上游返回错误"
+		}
+		return AgentResult{}, fmt.Errorf("%s", message)
+	}
+	if a.manifest.Metadata.AgentWire == TextWireChatCompletion {
+		if err := ChatCompletionFinishError(firstPathValue(payload, "choices.0.finish_reason")); err != nil {
+			return AgentResult{}, err
+		}
+	}
 	response := a.manifest.AgentResponse
-	result := AgentResult{Text: firstPathValue(payload, response.TextPaths...), Reasoning: firstPathValue(payload, response.ReasoningPaths...)}
+	result := AgentResult{Text: firstPathValue(payload, response.TextPaths...), Reasoning: firstRawPathValue(payload, response.ReasoningPaths...)}
 	if response.ToolCallsPath == "" {
 		return result, nil
 	}
@@ -406,13 +442,13 @@ func (a manifestAdapter) parse(payload map[string]any, c PollContext) CreateResu
 	}
 	result := &Result{
 		Text:      manifestResponseString(response.Text, env),
-		Reasoning: manifestResponseString(response.Reasoning, env),
+		Reasoning: manifestResponseReasoning(response.Reasoning, env),
 	}
 	if result.Text == "" {
 		result.Text = firstPathValue(payload, response.TextPaths...)
 	}
 	if result.Reasoning == "" {
-		result.Reasoning = firstPathValue(payload, response.ReasoningPaths...)
+		result.Reasoning = firstRawPathValue(payload, response.ReasoningPaths...)
 	}
 	result.Images = manifestResponseMedia(response.Images, env, "image", response.ResultEphemeral)
 	result.Videos = manifestResponseMedia(response.Videos, env, "video", response.ResultEphemeral)
@@ -477,6 +513,34 @@ func manifestResponseString(template any, env map[string]any) string {
 		}
 	}
 	return strings.Join(parts, "")
+}
+
+func firstRawPathValue(payload map[string]any, paths ...string) string {
+	for _, path := range paths {
+		if text, ok := pathValue(payload, path).(string); ok && strings.TrimSpace(text) != "" {
+			return text
+		}
+	}
+	return ""
+}
+
+// Reasoning can be opaque state required by the next tool step. Preserve its
+// bytes rather than applying the display-text trimming used for normal output.
+func manifestResponseReasoning(template any, env map[string]any) string {
+	if template == nil {
+		return ""
+	}
+	value, err := evaluateManifestValue(template, env)
+	if err != nil {
+		return ""
+	}
+	var result strings.Builder
+	for _, item := range manifestArray(value) {
+		if text := manifestString(item); strings.TrimSpace(text) != "" {
+			result.WriteString(text)
+		}
+	}
+	return result.String()
 }
 
 func manifestResponseMedia(template any, env map[string]any, kind string, ephemeral bool) []MediaReference {

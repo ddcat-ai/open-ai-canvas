@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { packageDirectories } from "./package-directories.mjs";
 import { klingV4Spec } from "./kling-v4-official/protocol.mjs";
+import { sensenovaImageSpec } from "./sensenova-image/protocol.mjs";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const scopes = ["admin.system-channel", "user.custom-channel", "canvas", "creation", "agent"];
@@ -95,6 +96,7 @@ function add(spec) {
 }
 
 add(klingV4Spec({ ref, omit, coalesce, addNumbers, multiply, map, filter, eq, ne, gt, gte, lte, and, len, trim, at, conditional, first, sorted }));
+add(sensenovaImageSpec({ ref, omit, coalesce, map, filter, eq, ne, gt, gte, lt, lte, and, len, lower, trim, toFloat, toInt, split, at, divide, conditional, first, sorted }));
 
 add({
   id: "openai-images", providerId: "openai-image", name: "OpenAI Images", vendor: "OpenAI", capability: "image",

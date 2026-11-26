@@ -28,10 +28,41 @@ func runTextTask(ctx context.Context, input canvasGenerationInput) (map[string]i
 	return runLegacyTextTask(ctx, input)
 }
 
+// Supply resolved host policy before a declarative provider evaluates its
+// model-specific sampling and reasoning rules. Legacy mappings still receive
+// the same final host policy in executeProtocolCreateRequest.
+func prepareProtocolTextPolicy(ctx context.Context, input canvasGenerationInput, request *protocol.GenerationRequest) error {
+	if !protocolTextPolicyBeforeMapping(ctx, input.Config.InterfaceType) {
+		return nil
+	}
+	if request.Extra == nil {
+		request.Extra = make(map[string]any)
+	}
+	request.Extra["stream"] = input.StreamText
+	wire := textThinkingWire(ctx, input.Config.InterfaceType, false)
+	if wire == "" {
+		return nil
+	}
+	plan, err := resolveTextThinkingPlan(input, wire)
+	if err != nil {
+		return err
+	}
+	if plan.Level == "" || plan.Config == nil {
+		return nil
+	}
+	body := make(map[string]any)
+	writeTextThinking(body, plan, wire, input.MaxOutputTokens)
+	for field, value := range body {
+		request.Extra[field] = value
+	}
+	return nil
+}
+
 // Text plugins whose declared create path speaks a host-known wire keep the
 // plugin's request mapping and host transport, while sharing the thinking
 // parameters and SSE parser used by built-in text generation and Agent requests.
 func executeProtocolCreateRequest(ctx context.Context, input canvasGenerationInput, spec protocol.RequestSpec) ([]byte, *protocol.Result, error) {
+	beforeMapping := protocolTextPolicyBeforeMapping(ctx, input.Config.InterfaceType)
 	wire := ""
 	if input.Mode == "text" {
 		wire = declaredTextWire(ctx, input.Config.InterfaceType)
@@ -42,7 +73,7 @@ func executeProtocolCreateRequest(ctx context.Context, input canvasGenerationInp
 	}
 	if wire == "" {
 		// 插件自定义线格式（如 Gemini generateContent）的请求和响应仍由插件映射，宿主只补思考参数。
-		if thinkingWire != "" {
+		if !beforeMapping && thinkingWire != "" {
 			if body := protocolBodyObject(spec.Body); body != nil {
 				applyTextThinking(body, input, thinkingWire)
 				spec.Body = body
@@ -55,14 +86,18 @@ func executeProtocolCreateRequest(ctx context.Context, input canvasGenerationInp
 	if body == nil {
 		return nil, nil, errors.New("声明式文本请求体必须是 JSON 对象")
 	}
-	applyTextThinking(body, input, wire)
+	if !beforeMapping {
+		applyTextThinking(body, input, wire)
+	}
 	spec.Body = body
 	if !input.StreamText {
 		data, err := executeProtocolRequest(ctx, input.Config, spec)
 		return data, nil, err
 	}
-	body["stream"] = true
-	if wire == protocol.TextWireChatCompletion {
+	if !beforeMapping {
+		body["stream"] = true
+	}
+	if !beforeMapping && wire == protocol.TextWireChatCompletion {
 		if err := ensureChatCompletionStreamUsage(body); err != nil {
 			return nil, nil, err
 		}

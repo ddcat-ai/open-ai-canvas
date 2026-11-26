@@ -144,6 +144,13 @@ description: 从产品功能快速定位主要代码入口
 - Secret Key 与续查：`app/provider_protocol_auth.go` 的 `protocolAuthUsesSecretKey`；`app/task_worker.go` 的 `videoProviderSupportsTaskResume`。
 - 前端：`web/src/services/api/text-wire.ts`（文本请求路径）、`web/src/hooks/use-user-protocol-catalog.ts`（设置页 Secret Key 校验）。
 
+## SenseNova 文本与图片
+
+- 协议源码与分发：`plugin-packages/sensenova-chat/manifest.json`、`plugin-packages/sensenova-image/protocol.mjs` 与各自的 `docs/interface.md`、`.yingce-plugin`。图片 spec 在 `plugin-packages/generate-catalog.mjs` 注册，使用统一生成、嵌入说明和打包入口。
+- 宿主策略：`app/provider_text.go`、`provider_text_agent.go`、`provider_protocol.go` 在映射前提供实际文本预算、思考和 stream；`backend/internal/protocol/manifest_adapter.go` 为声明 `hostTextPolicy` 的 create / Agent 共享 bindings 与强校验，避免后置通用字段污染。图片继续由 `app/provider_protocol_request.go` 和 `provider_protocol_result.go` 处理媒体引用、鉴权、下载与标准图数用量。
+- 默认能力：`backend/internal/app/sensenova_model_capabilities.go`、`web/src/lib/model-capabilities.ts`；官方模型目录模态校验：`app/sensenova_model_catalog.go` 与 `channel_model_catalog.go`。目录读取不作为上下文预算导入生效的证据。
+- 专项回归：`backend/internal/protocol/sensenova_text_test.go`、`sensenova_image_test.go`，`backend/internal/app/provider_protocol_sensenova_text_test.go`、`provider_protocol_sensenova_image_test.go`、`sensenova_model_capabilities_test.go`、`sensenova_model_catalog_test.go` 及 `web/test/sensenova-model-capabilities.test.ts`。真实供应商验收清单见[SenseNova](/docs/backend/sensenova)与[待测试](/docs/progress/pending-test)；没有数据库迁移。
+
 ## SeedanceMINI1
 
 - 协议清单与接口文档：`plugin-packages/seedance-mini1/manifest.json`、`plugin-packages/seedance-mini1/docs/interface.md`；发行包：`plugin-packages/seedance-mini1.yingce-plugin`。插件无固定服务地址，连接由渠道配置管理。

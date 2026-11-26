@@ -32,7 +32,11 @@ func TestOfficialTextMultimodalCompatibleProfiles(t *testing.T) {
 			count++
 			t.Run(provider.ID, func(t *testing.T) {
 				a := officialPackageAdapter(t, filepath.Base(path), provider.ID)
-				r := GenerationRequest{Capability: CapabilityText, Model: "vision-if-declared", Prompt: "inspect", Instructions: "system", Images: []MediaReference{{DataURL: "data:image/png;base64,QUJD"}, {URL: "https://example.test/p.jpg"}}}
+				model := "vision-if-declared"
+				if provider.ID == "sensenova-chat" {
+					model = "sensenova-6.8-flash"
+				}
+				r := GenerationRequest{Capability: CapabilityText, Model: model, Prompt: "inspect", Instructions: "system", Images: []MediaReference{{DataURL: "data:image/png;base64,QUJD"}, {URL: "https://example.test/p.jpg"}}}
 				s, err := a.BuildCreate(context.Background(), RequestContext{Request: r})
 				if err != nil {
 					t.Fatal(err)
@@ -58,8 +62,8 @@ func TestOfficialTextMultimodalCompatibleProfiles(t *testing.T) {
 			})
 		}
 	}
-	if count != 24 {
-		t.Fatalf("compatible text profiles covered = %d, want 24 (Azure covered separately)", count)
+	if count != 25 {
+		t.Fatalf("compatible text profiles covered = %d, want 25 (Azure covered separately)", count)
 	}
 }
 

@@ -241,6 +241,12 @@ MediaKit 深度插件独立且默认关闭，由管理员启用并配置系统�
 
 `minimax-h3-image` 独立插件接入 MiniMax `MiniMax-H3-Image` 与 `MiniMax-H3-Image-Highspeed`，无参考图走 `/v1/images/generations`，有 1–16 张参考图时走 `/v1/images/edits` 并保持参考图顺序。支持比例或像素尺寸、1K/2K/4K（默认 2K）和 1–10 张输出；蒙版、透明背景和质量档位不支持。与旧 `minimax-image` 插件并存，结果由宿主下载持久化。配置见[MiniMax H3 图片](/docs/backend/minimax-h3-image)。
 
+## SenseNova 文本与图片
+
+`sensenova-chat` 独立协议支持 SenseNova 6.8 Flash / Lite、DeepSeek Flash、GLM 5.3 和 Kimi K3 的文本、流式与工具消息，按型号校验视觉输入、思考和输出预算；`sensenova-image` 接入 U1.6 Lite 的同步 JSON 图片生成和编辑，支持最多五张有序参考图、单张输出、官方尺寸与格式/水印/扩写/自修正参数，不支持蒙版或透明背景。
+
+两类任务复用现有渠道、任务与资源流程，没有数据库迁移。临时图片由宿主下载保存，错误或缺失结果保持失败；真实供应商调用、效果与费用尚未验收。配置和限制见[SenseNova 文本与图片](/docs/backend/sensenova)。
+
 ## MiniMax 语音合成
 
 `minimax-speech` 插件支持 MiniMax Speech 2.8、2.6、02 系列共六个 HD / Turbo 模型。画布音频节点可选择音色、格式与语速，生成结果由后端保存。渠道配置见[MiniMax 语音合成](/docs/backend/minimax-speech)；真实账号下的模型权限与生成效果待验收。

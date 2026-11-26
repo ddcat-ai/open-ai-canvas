@@ -12,6 +12,8 @@ import (
 	"math"
 	"sort"
 	"strings"
+
+	protocolcontract "yingce/backend/internal/protocol"
 )
 
 func postStreamingAgent(ctx context.Context, config providerConfig, path string, body map[string]interface{}, protocol string, onDelta func(string), onReasoning ...func(string)) (map[string]interface{}, error) {
@@ -191,8 +193,12 @@ func (p *streamingAgentParser) consumeChatCompletionEvent(payload map[string]int
 	choices, _ := payload["choices"].([]interface{})
 	for _, value := range choices {
 		choice, _ := value.(map[string]interface{})
-		if stringField(choice, "finish_reason") != "" {
+		if finishReason := stringField(choice, "finish_reason"); finishReason != "" {
 			p.terminal = true
+			if err := protocolcontract.ChatCompletionFinishError(finishReason); err != nil {
+				p.err = err
+				return
+			}
 		}
 		delta, _ := choice["delta"].(map[string]interface{})
 		p.appendText(streamContentText(delta["content"]))

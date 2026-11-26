@@ -1,6 +1,9 @@
 package protocol
 
-import "strings"
+import (
+	"errors"
+	"strings"
+)
 
 // 宿主自己能流式解析、能补思考参数/输出上限/工具选择/用量统计的文本线格式。
 // 插件声明的 create 或 agent 路径以对应端点结尾时，就按这个格式处理；
@@ -9,7 +12,23 @@ const (
 	TextWireChatCompletion = "chat-completion"
 	TextWireResponses      = "responses"
 	TextWireClaude         = "claude-api"
+	// HostTextPolicyBeforeMapping applies host policy before plugin mapping;
+	// the plugin remains the final writer of the request body.
+	HostTextPolicyBeforeMapping = "before_mapping"
 )
+
+// ChatCompletionFinishError rejects partial or filtered output even when the
+// upstream returned HTTP success and a non-empty message or tool call.
+func ChatCompletionFinishError(finishReason string) error {
+	switch strings.ToLower(strings.TrimSpace(finishReason)) {
+	case "length":
+		return errors.New("文本输出达到 Token 或上下文上限，内容已截断，请提高输出上限后重试")
+	case "content_filter":
+		return errors.New("文本输出被安全过滤拦截，请调整输入后重试")
+	default:
+		return nil
+	}
+}
 
 // TextWireForPath 按声明路径的末段端点识别文本线格式，识别不出时返回空字符串。
 // 路径里的 {{model}} 等模板变量和版本前缀不影响结果。

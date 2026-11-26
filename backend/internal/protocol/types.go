@@ -213,6 +213,8 @@ type Metadata struct {
 	// 只对文本 provider 计算；为空表示请求和响应完全按插件自己的映射处理。
 	TextWire  string `json:"-"`
 	AgentWire string `json:"-"`
+	// HostTextPolicy selects whether host policy is applied before plugin mapping.
+	HostTextPolicy string `json:"-"`
 	// Auth 是插件声明的鉴权方式，只包含字段名和请求头写法，不含任何密钥值。
 	Auth ManifestAuth `json:"-"`
 }
@@ -395,6 +397,7 @@ type ManifestProvider struct {
 	RequiresPublicMediaURLs bool                        `json:"requiresPublicMediaUrls,omitempty"`
 	DetachedPolling         bool                        `json:"detachedPolling,omitempty"`
 	IdempotentCreate        bool                        `json:"idempotentCreate,omitempty"`
+	HostTextPolicy          string                      `json:"hostTextPolicy,omitempty"`
 	Auth                    ManifestAuth                `json:"auth,omitempty"`
 	Parameters              []Parameter                 `json:"parameters,omitempty"`
 	ImageParameters         []ImageParameter            `json:"imageParameters,omitempty"`

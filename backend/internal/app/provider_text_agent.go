@@ -21,6 +21,20 @@ func runAgentToolTask(ctx context.Context, input canvasGenerationInput) (map[str
 	// 浏览器持久化的是协议中立请求；资源水合和模型路由完成后才展开上游协议，
 	// 防止供应商请求体反向污染任务记录，也避免切换模型时复用错误协议。
 	if input.AgentRequests != nil && input.AgentRequests.Canonical != nil {
+		// Policy resolution and canonical expansion may normalize nested fields.
+		// Keep task snapshots and callers' conversations immutable.
+		encoded, err := json.Marshal(input.AgentRequests.Canonical)
+		if err != nil {
+			return nil, fmt.Errorf("Agent 会话无法编码：%w", err)
+		}
+		var source canonicalAgentRequest
+		if err := json.Unmarshal(encoded, &source); err != nil {
+			return nil, fmt.Errorf("Agent 会话无法复制：%w", err)
+		}
+		source.PassReasoning = input.AgentRequests.Canonical.PassReasoning
+		requestsCopy := *input.AgentRequests
+		requestsCopy.Canonical = &source
+		input.AgentRequests = &requestsCopy
 		_, declarative := agentProtocolAdapterForContext(ctx, input.Config.InterfaceType)
 		wire := textThinkingWire(ctx, input.Config.InterfaceType, true)
 		if wire == protocol.TextWireClaude && claudeToolLoopMissingThinking(input.AgentRequests.Canonical) {
@@ -158,6 +172,7 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 	// 接口（如 Gemini generateContent）由插件自己映射，宿主不往里补思考参数。
 	wire := declaredAgentWire(ctx, input.Config.InterfaceType)
 	knownWire := wire != ""
+	beforeMapping := protocolTextPolicyBeforeMapping(ctx, input.Config.InterfaceType)
 	if input.AgentRequests == nil {
 		return nil, errors.New("画布 Agent 工具请求缺少协议参数")
 	}
@@ -166,6 +181,30 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 		"responses":      input.AgentRequests.Responses,
 		"claude":         input.AgentRequests.Claude,
 		"gemini":         input.AgentRequests.Gemini,
+	}
+	if knownWire && beforeMapping {
+		key := "chatCompletion"
+		if wire == protocol.TextWireResponses {
+			key = "responses"
+		} else if wire == protocol.TextWireClaude {
+			key = "claude"
+		}
+		// Clone the SDK-shaped input before applying host policy. The manifest
+		// remains the final writer of model-specific fields such as Kimi's
+		// max_completion_tokens and GLM's tool_stream.
+		encoded, err := json.Marshal(request[key])
+		if err != nil {
+			return nil, fmt.Errorf("Agent 请求无法编码：%w", err)
+		}
+		var body map[string]any
+		if err := json.Unmarshal(encoded, &body); err != nil || body == nil {
+			return nil, errors.New("画布 Agent 工具请求缺少协议参数")
+		}
+		applyAgentOutputLimit(body, agentStepOutputLimit(input), wire)
+		thinking := applyAgentThinking(body, input, wire)
+		normalizeAgentToolChoice(body, thinking, wire)
+		body["stream"] = input.StreamText
+		request[key] = body
 	}
 	spec, err := adapter.BuildAgent(ctx, protocol.AgentRequestContext{BaseURL: input.Config.BaseURL, Model: input.Config.Model, Request: request})
 	if err != nil {
@@ -176,13 +215,17 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 		if body == nil {
 			return nil, errors.New("声明式 Agent 请求体必须是 JSON 对象")
 		}
-		applyAgentOutputLimit(body, agentStepOutputLimit(input), wire)
-		thinking := applyAgentThinking(body, input, wire)
-		normalizeAgentToolChoice(body, thinking, wire)
+		if !beforeMapping {
+			applyAgentOutputLimit(body, agentStepOutputLimit(input), wire)
+			thinking := applyAgentThinking(body, input, wire)
+			normalizeAgentToolChoice(body, thinking, wire)
+		}
 		spec.Body = body
 		if input.StreamText {
-			body["stream"] = true
-			if wire == protocol.TextWireChatCompletion {
+			if !beforeMapping {
+				body["stream"] = true
+			}
+			if !beforeMapping && wire == protocol.TextWireChatCompletion {
 				if err := ensureChatCompletionStreamUsage(body); err != nil {
 					return nil, err
 				}
@@ -206,7 +249,7 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 			return parseAgentToolPayload(payload, wire)
 		}
 	}
-	if thinkingWire := textThinkingWire(ctx, input.Config.InterfaceType, true); thinkingWire != "" {
+	if thinkingWire := textThinkingWire(ctx, input.Config.InterfaceType, true); !beforeMapping && thinkingWire != "" {
 		// Gemini generateContent 等插件自定义线格式：请求体由插件映射，宿主只补思考参数。
 		if body := protocolBodyObject(spec.Body); body != nil {
 			applyAgentThinking(body, input, thinkingWire)
@@ -423,12 +466,12 @@ func isAutoAgentToolChoice(value interface{}) bool {
 	return ok && strings.EqualFold(strings.TrimSpace(choice), "auto")
 }
 
-func parseAgentToolPayload(payload map[string]interface{}, protocol string) (map[string]interface{}, error) {
+func parseAgentToolPayload(payload map[string]interface{}, wire string) (map[string]interface{}, error) {
 	if err := validateTextPayload(payload); err != nil {
 		return nil, err
 	}
 	result := map[string]interface{}{"mode": "text", "text": "", "toolCalls": []interface{}{}}
-	if protocol == "responses" {
+	if wire == "responses" {
 		result["text"] = firstNonEmptyString(stringField(payload, "output_text"), extractResponseText(payload))
 		if reasoning := extractResponseReasoning(payload); reasoning != "" {
 			result["reasoning"] = reasoning
@@ -447,10 +490,10 @@ func parseAgentToolPayload(payload map[string]interface{}, protocol string) (map
 			calls = append(calls, call)
 		}
 		result["toolCalls"] = calls
-		markAgentReasoningWire(result, protocol)
+		markAgentReasoningWire(result, wire)
 		return result, nil
 	}
-	if protocol == "claude-api" {
+	if wire == "claude-api" {
 		content := interfaceSlice(payload["content"])
 		calls := make([]interface{}, 0)
 		var blocks []interface{}
@@ -476,7 +519,7 @@ func parseAgentToolPayload(payload map[string]interface{}, protocol string) (map
 		if len(blocks) > 0 {
 			result["reasoningBlocks"] = blocks
 		}
-		markAgentReasoningWire(result, protocol)
+		markAgentReasoningWire(result, wire)
 		if result["text"] == "" && len(calls) == 0 {
 			return nil, agentModelFailure(agentModelFailureEmpty, errors.New("Claude Agent 接口没有返回内容"))
 		}
@@ -487,9 +530,12 @@ func parseAgentToolPayload(payload map[string]interface{}, protocol string) (map
 		return nil, errors.New("画布 Agent 接口没有返回 choices")
 	}
 	choice, _ := choices[0].(map[string]interface{})
+	if err := protocol.ChatCompletionFinishError(stringField(choice, "finish_reason")); err != nil {
+		return nil, err
+	}
 	message, _ := choice["message"].(map[string]interface{})
 	result["text"] = stringField(message, "content")
-	if reasoning := firstNonEmptyString(stringField(message, "reasoning_content"), stringField(message, "reasoning")); reasoning != "" {
+	if reasoning := firstRawString(stringField(message, "reasoning_content"), stringField(message, "reasoning"), stringField(message, "reasoning_text")); reasoning != "" {
 		result["reasoning"] = reasoning
 	}
 	calls := make([]interface{}, 0)
@@ -499,6 +545,6 @@ func parseAgentToolPayload(payload map[string]interface{}, protocol string) (map
 		calls = append(calls, map[string]interface{}{"id": stringField(item, "id"), "type": "function", "function": map[string]interface{}{"name": stringField(function, "name"), "arguments": stringField(function, "arguments")}})
 	}
 	result["toolCalls"] = calls
-	markAgentReasoningWire(result, protocol)
+	markAgentReasoningWire(result, wire)
 	return result, nil
 }

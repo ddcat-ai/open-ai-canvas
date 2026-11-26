@@ -48,6 +48,8 @@ type channelModelItem struct {
 	SupportsImages         *bool                         `json:"supports_images"`
 	MinImages              *int                          `json:"min_images"`
 	MaxImages              *int                          `json:"max_images"`
+	InputModalities        json.RawMessage               `json:"input_modalities"`
+	OutputModalities       json.RawMessage               `json:"output_modalities"`
 }
 
 type channelModelCatalogParameters struct {
@@ -229,7 +231,7 @@ func (s *Service) FetchChannelModelCatalog(ctx context.Context, actor *model.Use
 			continue
 		}
 		seen[name] = true
-		catalog = append(catalog, ChannelModelCatalogItem{
+		entry := ChannelModelCatalogItem{
 			ID:                     name,
 			DisplayName:            strings.TrimSpace(item.DisplayName),
 			ModelType:              normalizeCatalogModelType(item.ModelType),
@@ -247,7 +249,13 @@ func (s *Service) FetchChannelModelCatalog(ctx context.Context, actor *model.Use
 			SupportsImages: item.SupportsImages,
 			MinImages:      item.MinImages,
 			MaxImages:      item.MaxImages,
-		})
+		}
+		if isSenseNovaModelCatalog(baseURL, apiFormat) {
+			if err := applySenseNovaCatalogModalities(item, &entry); err != nil {
+				return nil, NewAppError(http.StatusBadGateway, "SenseNova 模型目录包含无效能力元数据，本次未更新读取结果")
+			}
+		}
+		catalog = append(catalog, entry)
 	}
 	sort.Slice(catalog, func(left int, right int) bool {
 		return catalog[left].ID < catalog[right].ID

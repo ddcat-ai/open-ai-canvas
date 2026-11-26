@@ -34,6 +34,28 @@ func TestTextWireForPath(t *testing.T) {
 	}
 }
 
+func TestChatCompletionFinishError(t *testing.T) {
+	for _, test := range []struct{ reason, message string }{
+		{"length", "截断"},
+		{"content_filter", "安全过滤"},
+		{" LENGTH ", "截断"},
+		{"", ""},
+		{"stop", ""},
+		{"tool_calls", ""},
+		{"function_call", ""},
+		{"unknown-provider-reason", ""},
+	} {
+		err := ChatCompletionFinishError(test.reason)
+		if test.message == "" {
+			if err != nil {
+				t.Fatalf("finish_reason=%q unexpectedly failed: %v", test.reason, err)
+			}
+		} else if err == nil || !strings.Contains(err.Error(), test.message) {
+			t.Fatalf("finish_reason=%q error=%v, want %q", test.reason, err, test.message)
+		}
+	}
+}
+
 // 官方文本插件的 ID 大多不是 chat-completion；宿主必须按声明路径识别线格式，
 // 而不是按协议 ID。识别不出的非标准路径保持空值，继续完全按插件映射执行。
 func TestOfficialTextProvidersDeclareTextWireByPath(t *testing.T) {
