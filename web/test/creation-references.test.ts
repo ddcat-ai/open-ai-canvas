@@ -5,6 +5,7 @@ import { creationAttachmentKind, creationFileAccepted, creationMediaAspectRatio,
 import {
     buildCreationMentionReferences,
     displayCreationPrompt,
+    expandCreationPrompt,
     reconcileCreationAttachmentLimit,
     reconcileCreationAttachmentLimits,
     removeCreationReferenceTokens,
@@ -144,5 +145,24 @@ describe("creation references", () => {
 
     test("目标附件不存在时拒绝替换", () => {
         expect(() => replaceCreationAttachmentReference("", [imageAttachment("first")], "missing", imageAttachment("next"))).toThrow("要替换的参考内容不存在");
+    });
+
+    test("附件引用展示文件名并保留稳定编号令牌与模型展开协议", () => {
+        const named: CreationAttachment = { ...imageAttachment("liman"), name: "  李蔓.jpg  " };
+        const unnamed: CreationAttachment = { ...imageAttachment("blank"), name: "   " };
+        const references = buildCreationMentionReferences([], [named, unnamed]);
+
+        expect(references[0].label).toBe("图片1");
+        expect(references[0].title).toBe("李蔓.jpg");
+        expect(references[0].displayLabel).toBe("李蔓.jpg");
+
+        expect(references[1].label).toBe("图片2");
+        expect(references[1].title).toBe("图片2");
+        expect(references[1].displayLabel).toBe("图片2");
+
+        const prompt = `让 ${canvasResourceMentionToken(references[0])} 与 ${canvasResourceMentionToken(references[1])} 同框`;
+        expect(displayCreationPrompt(prompt, references)).toBe("让 @图片1 与 @图片2 同框");
+        expect(expandCreationPrompt(prompt, references, [named, unnamed])).toContain("- @图片1：参考图片 1");
+        expect(expandCreationPrompt(prompt, references, [named, unnamed])).toContain("让 @图片1 与 @图片2 同框");
     });
 });

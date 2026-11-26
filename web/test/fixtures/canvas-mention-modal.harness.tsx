@@ -237,3 +237,52 @@ for (const inModal of [true, false]) {
         }
     });
 }
+
+test("画廊详情面板不重复渲染同名标题并保留槽位编号", async () => {
+    const host = document.createElement("div");
+    const anchor = document.createElement("textarea");
+    document.body.append(host, anchor);
+    const root = createRoot(host);
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    const reference: CanvasResourceReference = {
+        id: "img-1",
+        nodeId: "img-1",
+        kind: "image",
+        label: "图片1",
+        title: "李蔓.jpg",
+        displayLabel: "李蔓.jpg",
+        active: true,
+    };
+    const keyboardRef: { current: { handleKeyDown: (event: { key: string; shiftKey: boolean; altKey: boolean; ctrlKey: boolean; metaKey: boolean }) => boolean } | null } = { current: null };
+    try {
+        await act(async () =>
+            root.render(
+                <MentionMenu
+                    anchor={anchor}
+                    connectedReferences={[reference]}
+                    assetReferences={[]}
+                    filteredReferences={[reference]}
+                    query=""
+                    cursorOffset={0}
+                    preferredWidth={720}
+                    keyboardRef={keyboardRef}
+                    onQueryChange={() => {}}
+                    onClose={() => {}}
+                    onSelect={() => {}}
+                />,
+            ),
+        );
+        await act(async () => {
+            keyboardRef.current!.handleKeyDown({ key: "ArrowDown", shiftKey: false, altKey: false, ctrlKey: false, metaKey: false });
+        });
+        const caption = document.querySelector(".canvas-resource-mention-detail-caption")!;
+        expect(caption.querySelector("strong")?.textContent).toBe("李蔓.jpg");
+        expect(caption.querySelector("span")?.textContent).toBe("图片1");
+    } finally {
+        Object.defineProperty(window, "innerWidth", { configurable: true, value: originalWidth });
+        await act(async () => root.unmount());
+        anchor.remove();
+        host.remove();
+    }
+});

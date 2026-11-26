@@ -27,6 +27,7 @@ for (const [key, value] of Object.entries({
 const { act } = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { CreationComposer } = await import("../../src/pages/create/creation-workspace");
+const { CreationMessageReferences } = await import("../../src/pages/create/creation-workspace-messages");
 const { defaultConfig } = await import("../../src/stores/use-config-store");
 const { defaultModelCapabilityConfig } = await import("../../src/lib/model-capabilities");
 const { CREATION_IMAGE_DRAG_TYPE } = await import("../../src/pages/create/creation-reference-drop");
@@ -116,12 +117,58 @@ test("文件与生成图片拖到编辑区均追加；标签替换只消费一�
         await act(async () => root.render(<CreationComposer {...props} attachments={[attachment]} references={references} prompt={canvasResourceMentionToken(references[0])} />));
         const chip = host.querySelector("[data-mention-reference-id]")!;
         expect(chip).not.toBeNull();
+        expect(chip.querySelector(".canvas-resource-inline-label")?.textContent).toBe("old.png");
+        expect(host.querySelector(".creation-reference-card-preview")?.getAttribute("title")).toBe("old.png");
         await fire(chip, "drop", transfer);
         expect(replacements).toHaveLength(1);
         expect(drops).toHaveLength(2);
+        await act(async () => root.render(<CreationComposer {...props} attachments={[attachment]} references={references} prompt="@" />));
+        const mentionEditor = host.querySelector<HTMLElement>('[role="textbox"]')!;
+        await act(async () => {
+            mentionEditor.focus();
+            const range = document.createRange();
+            range.selectNodeContents(mentionEditor);
+            range.collapse(false);
+            const selection = window.getSelection();
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+            mentionEditor.dispatchEvent(new dom.InputEvent("input", { bubbles: true }));
+        });
+        const menu = document.querySelector<HTMLElement>("[data-canvas-resource-mention-menu]");
+        expect(menu).not.toBeNull();
+        expect(menu?.querySelector("h4")?.textContent).toContain("当前参考内容");
+        expect(menu?.querySelector(".canvas-resource-mention-item strong")?.textContent).toBe("old.png");
         await act(async () => root.render(<CreationComposer {...props} referenceDropBusy />));
         await fire(host.querySelector(".creation-chat-composer")!, "drop", transfer);
         expect(drops).toHaveLength(2);
+    } finally {
+        await act(async () => root.unmount());
+        host.remove();
+    }
+});
+
+test("已发送消息的引用标签优先显示附件名，历史消息缺少展示名时回退编号", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const named = buildCreationMentionReferences([], [{ id: "liman", name: "李蔓.jpg", type: "image/png", dataUrl: "/liman.jpg", previewUrl: "/liman.jpg" }])[0];
+    const legacy = {
+        id: "upload:legacy",
+        nodeId: "upload:legacy",
+        kind: "image" as const,
+        label: "图片2",
+        title: "当前参考内容",
+        active: true,
+        attachmentId: "legacy",
+        mentionToken: "@[attachment:legacy]",
+    };
+    try {
+        await act(async () => root.render(<CreationMessageReferences references={[named, legacy]} />));
+        const pills = Array.from(host.querySelectorAll<HTMLElement>(".creation-user-message-reference"));
+        expect(pills).toHaveLength(2);
+        expect(pills[0].textContent).toBe("李蔓.jpg");
+        expect(pills[0].getAttribute("title")).toBe("李蔓.jpg");
+        expect(pills[1].textContent).toBe("图片2");
     } finally {
         await act(async () => root.unmount());
         host.remove();
