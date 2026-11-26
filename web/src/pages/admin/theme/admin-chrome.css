@@ -362,6 +362,8 @@
 
 [data-admin-root] .admin-page-frame-scrollable {
     overflow: auto;
+    /* 滚动容器的顶部内边距会留在吸顶栏上方，让正文从缝隙穿过；首屏留白交给随内容滚走的标题。 */
+    padding-top: 0;
 }
 
 [data-admin-root] .admin-page-header {
@@ -370,6 +372,11 @@
     margin-bottom: 12px;
     padding-bottom: 0;
     border-bottom: 0;
+}
+
+[data-admin-root] .admin-page-frame-scrollable > .admin-page-header {
+    min-height: calc(48px + var(--space-4));
+    padding-top: var(--space-4);
 }
 
 [data-admin-root] .admin-density-toggle {
