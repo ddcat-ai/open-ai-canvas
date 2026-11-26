@@ -15,7 +15,7 @@ func seedAgentMediaVersion(t *testing.T, s *Service, db *gorm.DB) {
 	t.Helper()
 	input := map[string]any{
 		"mode": "video", "prompt": "原片",
-		"config":          map[string]any{"channelId": "channel", "channelModelKey": "seedance-test", "size": "9:16", "videoSeconds": "6", "videoGenerateAudio": "false", "videoWatermark": "false"},
+		"config":          map[string]any{"channelId": "channel", "channelModelKey": "seedance-test", "size": "9:16", "vquality": "720p", "videoSeconds": "6", "videoGenerateAudio": "false", "videoWatermark": "false"},
 		"metadata":        map[string]any{"nodeId": "original"},
 		"referenceImages": []any{map[string]any{"id": "hero", "storageKey": "resource:ref-two"}, map[string]any{"id": "cat", "storageKey": "resource:ref-one"}},
 	}
@@ -39,6 +39,18 @@ func seedAgentMediaVersion(t *testing.T, s *Service, db *gorm.DB) {
 func TestCloudAgentMediaVersionPreservesExecutionThroughApproval(t *testing.T) {
 	s, db, a := agentMediaFixture(t)
 	seedAgentMediaVersion(t, s, db)
+	// 走真实完成入口；直接插入 succeeded 任务会漏测终态压缩造成的规格丢失。
+	originalTask, err := s.repo.TaskForUser("user", "original-task")
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalTask.Status = model.TaskStatusRunning
+	if err := db.Save(originalTask).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := s.saveTaskCompletionWithinStorageQuota(originalTask, []byte(`{}`), nil, false); err != nil {
+		t.Fatal(err)
+	}
 	run, state := agentMediaRun(t, s, a, "auto")
 	call := cloudAgentCall{ID: "revise-original"}
 	call.Function.Name = "generate_media"
@@ -75,7 +87,7 @@ func TestCloudAgentMediaVersionPreservesExecutionThroughApproval(t *testing.T) {
 		t.Fatal(err)
 	}
 	config := input["config"].(map[string]any)
-	if config["size"] != "9:16" || config["videoSeconds"] != "6" || config["videoGenerateAudio"] != "false" || config["videoWatermark"] != "false" {
+	if config["size"] != "9:16" || config["vquality"] != "720p" || config["videoSeconds"] != "6" || config["videoGenerateAudio"] != "false" || config["videoWatermark"] != "false" {
 		t.Fatalf("执行规格漂移：%+v", config)
 	}
 	refs := creationMaps(input["referenceImages"])

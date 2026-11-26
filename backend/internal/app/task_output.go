@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"yingce/backend/internal/canvas/contract"
 	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/workbench"
@@ -342,6 +343,63 @@ func taskForOutput(task model.Task) *model.Task {
 	task.RouteID = ""
 	task.ChannelModelID = ""
 	return &task
+}
+
+// 完成后的持久输入保留可继承的公开选项和资源身份；它不是公开 API 响应。
+// 不保留供应商地址、凭据、原始媒体 URL 或内联媒体，公开响应仍走 publicTaskInputJSON。
+func completedTaskInputJSON(raw string) string {
+	publicJSON := publicTaskInputJSON(raw)
+	var input, retained map[string]any
+	if json.Unmarshal([]byte(raw), &input) != nil || json.Unmarshal([]byte(publicJSON), &retained) != nil {
+		return publicJSON
+	}
+	mode := stringValue(input["mode"])
+	if mode != "image" && mode != "video" && mode != "audio" {
+		return publicJSON
+	}
+	if config, ok := input["config"].(map[string]any); ok {
+		options, err := contract.OptionsFromTaskConfig(mode, config)
+		if err == nil {
+			safeConfig := options.TaskConfig()
+			for _, key := range []string{"channelId", "channelModelKey"} {
+				if value := stringValue(config[key]); value != "" {
+					safeConfig[key] = value
+				}
+			}
+			retained["config"] = safeConfig
+		}
+	}
+	for _, key := range []string{"referenceImages", "referenceVideos", "referenceAudios", "referenceCharacters"} {
+		if refs, exists := input[key]; exists {
+			safeRefs := []any{}
+			for _, ref := range creationMaps(refs) {
+				safeRef := map[string]any{}
+				// 无稳定资源身份时保留空占位，让继承校验拒绝，不能悄悄少传素材。
+				if storageKey := stringValue(ref["storageKey"]); strings.HasPrefix(storageKey, "resource:") {
+					safeRef["id"], safeRef["storageKey"] = ref["id"], storageKey
+					for _, field := range []string{"role", "slotKey"} {
+						if value := stringValue(ref[field]); value != "" {
+							safeRef[field] = value
+						}
+					}
+				}
+				safeRefs = append(safeRefs, safeRef)
+			}
+			retained[key] = safeRefs
+		}
+	}
+	if input["mask"] != nil {
+		retained["mask"] = true
+	}
+	if bindings, exists := input["audioVoiceBindings"]; exists {
+		var safeBindings []cloudAgentAudioVoiceBinding
+		encoded, _ := json.Marshal(bindings)
+		if json.Unmarshal(encoded, &safeBindings) == nil {
+			retained["audioVoiceBindings"] = safeBindings
+		}
+	}
+	encoded, _ := json.Marshal(retained)
+	return string(encoded)
 }
 
 func publicTaskInputJSON(raw string) string {

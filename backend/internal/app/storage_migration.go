@@ -94,7 +94,7 @@ func (s *Service) MigrateLegacyStorage() (StorageMigrationSummary, error) {
 			}
 		}
 		if tasks[index].Status == "succeeded" {
-			compacted := publicTaskInputJSON(tasks[index].InputJSON)
+			compacted := completedTaskInputJSON(tasks[index].InputJSON)
 			if compacted != tasks[index].InputJSON {
 				tasks[index].InputJSON = compacted
 				changed = true
