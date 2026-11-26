@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -18,6 +19,60 @@ import (
 
 	"yingce/backend/internal/model"
 )
+
+func TestOfficialAssetResourceImportDelegatedContinuousWrites(t *testing.T) {
+	for _, source := range []string{"skill", "mcp"} {
+		t.Run(source, func(t *testing.T) {
+			t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+			s, db, admin := assistantTestService(t)
+			var downloads atomic.Int32
+			data := mediaTestPNG(t)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				downloads.Add(1)
+				w.Header().Set("Content-Type", "image/png")
+				_, _ = w.Write(data)
+			}))
+			defer server.Close()
+			p, _ := assistantTestToken(t, s, admin, "official-assets:write")
+			request := func(index int) AssistantExecuteRequest {
+				return AssistantExecuteRequest{Operation: "ImportOfficialAssetResourceURL", Arguments: json.RawMessage(assistantJSON(map[string]any{"req": map[string]any{"url": server.URL + "/sample.png", "uploadKey": fmt.Sprintf("delegated-upload-%d", index)}})), IdempotencyKey: fmt.Sprintf("delegated-import-%d", index)}
+			}
+			pending, err := s.ExecuteAssistantOperation(context.Background(), p, request(0), source)
+			if err != nil || pending.Status != "pending_confirmation" || downloads.Load() != 0 {
+				t.Fatalf("授权前不应下载：%+v %v", pending, err)
+			}
+			if err := s.UpdateAssistantAuthorization(admin, p.Credential.ID, AssistantFullAccess, false); err != nil {
+				t.Fatal(err)
+			}
+			for index := range 2 {
+				out, err := s.ExecuteAssistantOperation(context.Background(), p, request(index), source)
+				if err != nil || out.Status != "succeeded" || (index == 0 && out.ID != pending.ID) {
+					t.Fatalf("一次授权后连续导入仍被阻塞：%+v %v", out, err)
+				}
+				resourceID := out.Result.(map[string]any)["id"]
+				create := AssistantExecuteRequest{Operation: "CreateOfficialAsset", Arguments: json.RawMessage(assistantJSON(map[string]any{"req": map[string]any{"resourceId": resourceID, "title": fmt.Sprintf("批量素材 %d", index), "mediaType": "image", "category": string(model.AssetCategoryMaterial)}})), IdempotencyKey: fmt.Sprintf("delegated-asset-%d", index)}
+				created, err := s.ExecuteAssistantOperation(context.Background(), p, create, source)
+				if err != nil || created.Status != "succeeded" {
+					t.Fatalf("导入后创建素材不应再次审批：%+v %v", created, err)
+				}
+				if replay, err := s.ExecuteAssistantOperation(context.Background(), p, request(index), source); err != nil || replay.Status != "succeeded" || downloads.Load() != int32(index+1) {
+					t.Fatalf("重放不应重复下载：%+v %v downloads=%d", replay, err, downloads.Load())
+				}
+			}
+			var pendingCount int64
+			if err := db.Model(&model.AssistantInvocation{}).Where("status = ?", "pending").Count(&pendingCount).Error; err != nil || pendingCount != 0 {
+				t.Fatalf("连续写入残留待审批记录：%d %v", pendingCount, err)
+			}
+			if err := s.UpdateAssistantAuthorization(admin, p.Credential.ID, AssistantRequestApproval, false); err != nil {
+				t.Fatal(err)
+			}
+			after, err := s.ExecuteAssistantOperation(context.Background(), p, request(2), source)
+			if err != nil || after.Status != "pending_confirmation" || downloads.Load() != 2 {
+				t.Fatalf("切回逐次确认后仍自动写入：%+v %v", after, err)
+			}
+		})
+	}
+}
 
 func TestOfficialAssetResourceImportOAuth(t *testing.T) {
 	t.Setenv("CANVAS_PUBLIC_BASE_URL", "https://canvas.example.test")

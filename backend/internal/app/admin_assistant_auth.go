@@ -21,15 +21,29 @@ import (
 
 const AssistantAPIPath = "/api/admin-assistant"
 
+const AssistantFullAccess = "full_access"
+const AssistantRequestApproval = "request_approval"
+
+func assistantApprovalMode(mode string) (string, error) {
+	if mode == "" {
+		return AssistantRequestApproval, nil
+	}
+	if mode != AssistantFullAccess && mode != AssistantRequestApproval {
+		return "", BadAuthRequest("未知授权模式")
+	}
+	return mode, nil
+}
+
 type AssistantPrincipal struct {
 	User       *model.User
 	Credential *model.AssistantCredential
 	Scopes     []string
 }
 type AssistantTokenRequest struct {
-	Name   string   `json:"name"`
-	Scopes []string `json:"scopes"`
-	Days   int      `json:"days"`
+	ApprovalMode string   `json:"approvalMode"`
+	Name         string   `json:"name"`
+	Scopes       []string `json:"scopes"`
+	Days         int      `json:"days"`
 }
 type AssistantTokenView struct {
 	model.AssistantCredential
@@ -40,6 +54,7 @@ type AssistantGrantView struct {
 	Scopes []string `json:"scopes"`
 }
 type AssistantOAuthRequest struct {
+	ApprovalMode    string `json:"approvalMode,omitempty"`
 	ClientID        string `json:"client_id"`
 	RedirectURI     string `json:"redirect_uri"`
 	ResponseType    string `json:"response_type"`
@@ -178,7 +193,15 @@ func (s *Service) CreateAssistantToken(actor *model.User, req AssistantTokenRequ
 	if name == "" || len(name) > 120 {
 		return nil, "", BadAuthRequest("名称应为 1–120 字节")
 	}
-	scopes, err := s.validateAssistantScopes(req.Scopes, true)
+	mode, err := assistantApprovalMode(req.ApprovalMode)
+	if err != nil {
+		return nil, "", err
+	}
+	requestedScopes := req.Scopes
+	if mode == AssistantFullAccess {
+		requestedScopes = s.AssistantScopeOptions()
+	}
+	scopes, err := s.validateAssistantScopes(requestedScopes, true)
 	if err != nil {
 		return nil, "", err
 	}
@@ -197,12 +220,12 @@ func (s *Service) CreateAssistantToken(actor *model.User, req AssistantTokenRequ
 	}
 	secret := "cat_" + assistantSecret()
 	now := time.Now()
-	row := &model.AssistantCredential{ID: newID(), UserID: u.ID, Name: name, TokenHash: assistantHash(secret), ScopesJSON: assistantJSON(scopes), CreatedAt: now, ExpiresAt: now.Add(time.Duration(req.Days) * 24 * time.Hour)}
+	row := &model.AssistantCredential{ID: newID(), UserID: u.ID, Name: name, TokenHash: assistantHash(secret), ScopesJSON: assistantJSON(scopes), ApprovalMode: mode, CreatedAt: now, ExpiresAt: now.Add(time.Duration(req.Days) * 24 * time.Hour)}
 	err = s.repo.Transaction(func(tx *repository.Repository) error {
 		if e := tx.CreateAssistantRecord(row); e != nil {
 			return e
 		}
-		event, e := newAdminAuditEvent(u, "assistant.token.create", "assistant_credential", row.ID, "创建管理 Token", map[string]any{"scopes": scopes, "expiresAt": row.ExpiresAt})
+		event, e := newAdminAuditEvent(u, "assistant.token.create", "assistant_credential", row.ID, "创建管理 Token", map[string]any{"scopes": scopes, "approvalMode": mode, "expiresAt": row.ExpiresAt})
 		if e != nil {
 			return e
 		}
@@ -234,6 +257,7 @@ func (s *Service) AssistantTokens(actor *model.User, page int) ([]AssistantToken
 	rows, more, err := s.repo.AssistantCredentials(u.ID, page)
 	out := []AssistantTokenView{}
 	for _, r := range rows {
+		r.ApprovalMode, _ = assistantApprovalMode(r.ApprovalMode)
 		out = append(out, AssistantTokenView{r, assistantScopes(r.ScopesJSON)})
 	}
 	return out, more, err
@@ -250,6 +274,7 @@ func (s *Service) AssistantGrants(actor *model.User, page int) ([]AssistantGrant
 	rows, more, err := s.repo.AssistantGrants(u.ID, page)
 	out := []AssistantGrantView{}
 	for _, r := range rows {
+		r.ApprovalMode, _ = assistantApprovalMode(r.ApprovalMode)
 		out = append(out, AssistantGrantView{r, assistantScopes(r.ScopesJSON)})
 	}
 	return out, more, err
@@ -275,6 +300,33 @@ func (s *Service) RevokeAssistantAccess(actor *model.User, id string, grant bool
 		return tx.AppendAdminAudit(event)
 	})
 }
+
+func (s *Service) UpdateAssistantAuthorization(actor *model.User, id, mode string, grant bool) error {
+	u, err := s.assistantAdmin(actor)
+	if err != nil {
+		return err
+	}
+	if mode != AssistantFullAccess && mode != AssistantRequestApproval {
+		return BadAuthRequest("请选择有效授权模式")
+	}
+	scopes := ""
+	if mode == AssistantFullAccess {
+		scopes = assistantJSON(s.AssistantScopeOptions())
+	}
+	return s.repo.Transaction(func(tx *repository.Repository) error {
+		if err := tx.UpdateAssistantAuthorization(u.ID, id, mode, scopes, grant); err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return NotFound("有效授权不存在")
+			}
+			return err
+		}
+		event, err := newAdminAuditEvent(u, "assistant.authorization.update", "assistant_access", id, "修改 Agent 授权模式", map[string]any{"approvalMode": mode, "grant": grant})
+		if err != nil {
+			return err
+		}
+		return tx.AppendAdminAudit(event)
+	})
+}
 func (s *Service) AuthenticateAssistant(token string) (*AssistantPrincipal, error) {
 	if len(token) < 30 || len(token) > 256 {
 		return nil, Unauthorized("无效的管理 Token")
@@ -292,6 +344,7 @@ func (s *Service) AuthenticateAssistant(token string) (*AssistantPrincipal, erro
 		if e != nil || g.RevokedAt != nil || !g.ExpiresAt.After(time.Now()) {
 			return nil, Unauthorized("授权已撤销")
 		}
+		row.ApprovalMode, row.ScopesJSON = g.ApprovalMode, g.ScopesJSON
 	}
 	return &AssistantPrincipal{u, row, assistantScopes(row.ScopesJSON)}, nil
 }
@@ -358,7 +411,7 @@ func (s *Service) PreviewAssistantAuthorization(actor *model.User, req Assistant
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"clientId": client.ID, "clientName": client.Name, "redirectUri": req.RedirectURI, "scopes": scopes, "resource": req.Resource}, nil
+	return map[string]any{"clientId": client.ID, "clientName": client.Name, "redirectUri": req.RedirectURI, "scopes": scopes, "scopeOptions": s.AssistantScopeOptions(), "resource": req.Resource, "approvalMode": AssistantRequestApproval}, nil
 }
 func (s *Service) validateAssistantAuthorization(req *AssistantOAuthRequest) (*model.AssistantOAuthClient, []string, error) {
 	resource, err := assistantOAuthResource(req.Resource)
@@ -402,8 +455,15 @@ func (s *Service) AuthorizeAssistant(actor *model.User, req AssistantOAuthReques
 		callback.RawQuery = q.Encode()
 		return callback.String(), nil
 	}
+	mode, err := assistantApprovalMode(req.ApprovalMode)
+	if err != nil {
+		return "", err
+	}
+	if mode == AssistantFullAccess {
+		scopes = s.AssistantScopeOptions()
+	}
 	code := assistantSecret()
-	row := &model.AssistantOAuthCode{ID: assistantHash(code), ClientID: req.ClientID, UserID: u.ID, RedirectURI: req.RedirectURI, Resource: req.Resource, Challenge: req.Challenge, ScopesJSON: assistantJSON(scopes), ExpiresAt: time.Now().Add(5 * time.Minute)}
+	row := &model.AssistantOAuthCode{ID: assistantHash(code), ClientID: req.ClientID, UserID: u.ID, RedirectURI: req.RedirectURI, Resource: req.Resource, Challenge: req.Challenge, ScopesJSON: assistantJSON(scopes), ApprovalMode: mode, ExpiresAt: time.Now().Add(5 * time.Minute)}
 	if err = s.repo.CreateAssistantRecord(row); err != nil {
 		return "", err
 	}
@@ -440,7 +500,7 @@ func (s *Service) ExchangeAssistantToken(req AssistantOAuthTokenRequest) (*Assis
 	}
 	now := time.Now()
 	refresh := "car_" + assistantSecret()
-	grant := &model.AssistantGrant{ID: newID(), UserID: u.ID, ClientID: req.ClientID, ScopesJSON: code.ScopesJSON, CreatedAt: now, ExpiresAt: now.Add(30 * 24 * time.Hour), RefreshHash: assistantHash(refresh)}
+	grant := &model.AssistantGrant{ID: newID(), UserID: u.ID, ClientID: req.ClientID, ScopesJSON: code.ScopesJSON, ApprovalMode: code.ApprovalMode, CreatedAt: now, ExpiresAt: now.Add(30 * 24 * time.Hour), RefreshHash: assistantHash(refresh)}
 	access, row := assistantAccessToken(grant, now)
 	err = s.repo.Transaction(func(tx *repository.Repository) error {
 		if e := tx.ConsumeAssistantCode(code.ID, now); e != nil {
@@ -452,7 +512,7 @@ func (s *Service) ExchangeAssistantToken(req AssistantOAuthTokenRequest) (*Assis
 		if e := tx.CreateAssistantRecord(row); e != nil {
 			return e
 		}
-		event, e := newAdminAuditEvent(u, "assistant.oauth.authorize", "assistant_grant", grant.ID, "授权 Agent 客户端", map[string]any{"clientId": req.ClientID, "scopes": assistantScopes(grant.ScopesJSON)})
+		event, e := newAdminAuditEvent(u, "assistant.oauth.authorize", "assistant_grant", grant.ID, "授权 Agent 客户端", map[string]any{"clientId": req.ClientID, "approvalMode": grant.ApprovalMode, "scopes": assistantScopes(grant.ScopesJSON)})
 		if e != nil {
 			return e
 		}
@@ -469,7 +529,7 @@ func assistantAccessToken(grant *model.AssistantGrant, now time.Time) (string, *
 	if grant.ExpiresAt.Before(expires) {
 		expires = grant.ExpiresAt
 	}
-	return access, &model.AssistantCredential{ID: newID(), UserID: grant.UserID, Name: "OAuth: " + grant.ClientID, TokenHash: assistantHash(access), GrantID: grant.ID, ScopesJSON: grant.ScopesJSON, CreatedAt: now, ExpiresAt: expires}
+	return access, &model.AssistantCredential{ID: newID(), UserID: grant.UserID, Name: "OAuth: " + grant.ClientID, TokenHash: assistantHash(access), GrantID: grant.ID, ScopesJSON: grant.ScopesJSON, ApprovalMode: grant.ApprovalMode, CreatedAt: now, ExpiresAt: expires}
 }
 func (s *Service) refreshAssistantToken(req AssistantOAuthTokenRequest) (*AssistantOAuthTokenResponse, error) {
 	old := assistantHash(req.RefreshToken)
@@ -486,18 +546,36 @@ func (s *Service) refreshAssistantToken(req AssistantOAuthTokenRequest) (*Assist
 		return nil, BadAuthRequest("授权已失效")
 	}
 	if req.Scope != "" && req.Scope != strings.Join(assistantScopes(grant.ScopesJSON), " ") {
-		return nil, BadAuthRequest("刷新时不可更改权限")
+		// 用户在网页升级授权后，客户端可能仍携带旧的只读 scope；不得因此强制重新登录。
+		// 只接受当前 grant 已有范围的子集；切回逐次确认后也兼容客户端缓存，不能自行扩大授权。
+		allowed := map[string]bool{}
+		for _, scope := range assistantScopes(grant.ScopesJSON) {
+			allowed[scope] = true
+		}
+		for _, scope := range strings.Fields(req.Scope) {
+			if !allowed[scope] {
+				return nil, BadAuthRequest("刷新时不可更改权限")
+			}
+		}
 	}
 	if _, err = s.assistantAdmin(&model.User{ID: grant.UserID}); err != nil {
 		return nil, err
 	}
 	now := time.Now()
 	refresh := "car_" + assistantSecret()
-	access, row := assistantAccessToken(grant, now)
+	var access string
+	var row *model.AssistantCredential
 	err = s.repo.Transaction(func(tx *repository.Repository) error {
 		if e := tx.RotateAssistantRefresh(grant.ID, old, assistantHash(refresh), now); e != nil {
 			return e
 		}
+		// 轮换 UPDATE 持有授权行锁后重新读取，避免模式修改与刷新交错产生旧权限凭证。
+		var e error
+		grant, e = tx.AssistantGrant(grant.ID)
+		if e != nil {
+			return e
+		}
+		access, row = assistantAccessToken(grant, now)
 		return tx.CreateAssistantRecord(row)
 	})
 	if err != nil {

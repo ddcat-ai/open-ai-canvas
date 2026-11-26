@@ -138,6 +138,42 @@ func TestAssistantHTTPAuthenticationAndConfirmation(t *testing.T) {
 
 type assistantTokenTransport struct{ token string }
 
+func TestAssistantHTTPAuthorizationModeManagement(t *testing.T) {
+	r, svc, admin, _ := assistantHTTPFixture(t)
+	credential, token, err := svc.CreateAssistantToken(admin, service.AssistantTokenRequest{Name: "mode"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "/api/admin-assistant/tokens/" + credential.ID + "/authorization"
+	body := map[string]string{"approvalMode": "full_access"}
+	for _, tc := range []struct {
+		cookie, bearer, origin string
+		status                 int
+	}{
+		{"", token, "https://canvas.example.test", 403},
+		{"session-user.test-token", "", "https://canvas.example.test", 403},
+		{"session-admin.test-token", "", "https://evil.example", 403},
+		{"session-admin.test-token", "", "https://canvas.example.test", 200},
+	} {
+		w := assistantHTTPRequest(r, "PUT", path, tc.cookie, tc.bearer, tc.origin, body)
+		if w.Code != tc.status {
+			t.Fatalf("authorization status=%d want=%d body=%s", w.Code, tc.status, w.Body.String())
+		}
+	}
+	p, err := svc.AuthenticateAssistant(token)
+	if err != nil || p.Credential.ApprovalMode != "full_access" {
+		t.Fatal("browser upgrade did not persist")
+	}
+	w := assistantHTTPRequest(r, "GET", "/api/admin-assistant/tokens", "session-admin.test-token", "", "", nil)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"approvalMode":"full_access"`) {
+		t.Fatalf("mode missing from list: %s", w.Body.String())
+	}
+	w = assistantHTTPRequest(r, "PUT", path, "session-admin.test-token", "", "https://canvas.example.test", map[string]string{"approvalMode": "invalid"})
+	if w.Code != 400 {
+		t.Fatalf("invalid mode status=%d", w.Code)
+	}
+}
+
 func (t assistantTokenTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	r = r.Clone(r.Context())
 	r.Header = r.Header.Clone()

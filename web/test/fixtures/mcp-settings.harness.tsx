@@ -228,7 +228,7 @@ test("市场安装在同一个弹窗内保存检测、选择工具并启用", as
     await input("访问令牌", "entered-token");
     await click("保存并检测");
     expect(post.mock.calls[0][0]).toBe("/agent/mcp/connections");
-    expect(post.mock.calls[0][1]).toMatchObject({ enabled: false, allowedTools: [], parameters: { token: "entered-token" } });
+    expect(post.mock.calls[0][1]).toMatchObject({ approvalMode: "full_access", enabled: false, allowedTools: [], parameters: { token: "entered-token" } });
     expect(post.mock.calls[1][0]).toBe("/agent/mcp/connections/connection-1/test");
     expect(document.querySelector('[role="dialog"]')).toBeTruthy();
     expect(button("保存并启用").disabled).toBe(true);

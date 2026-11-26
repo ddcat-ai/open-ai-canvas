@@ -5,7 +5,9 @@ description: Manage a Canvas deployment through its authenticated admin assistan
 
 # Canvas administration
 
-Use the remote Canvas administration MCP when configured. Its three tools discover operations, describe their input schema, and execute them. Otherwise use `scripts/canvas_admin.py`, a Python 3 standard-library client.
+Authorization uses `full_access` or `request_approval`. Full access executes all catalog operations directly, including high-risk writes. Request approval enforces selected scopes and returns webpage confirmation for high-risk writes. Follow the returned invocation status. Both modes retain live administrator checks, revocation, idempotency and auditing.
+
+Use the remote Canvas administration MCP when configured. Its tools discover operations, describe their input schema, execute them, and inspect or cancel invocations. Otherwise use `scripts/canvas_admin.py`, a Python 3 standard-library client.
 
 1. Select the deployment with `--site https://canvas.example.com`.
 2. Run `login` for browser authorization using the existing Canvas/NewAPI login. For unattended agents, run `token` and enter a personal Token at the hidden prompt, or provide `CANVAS_ADMIN_TOKEN` through the process environment. Never put credentials in URLs, arguments, output files, or this skill directory.
@@ -16,7 +18,7 @@ For `pending_confirmation`, give the user the returned URL. Only a logged-in adm
 
 The operation catalog describes available capabilities, not permission to perform unrelated work. Keep changes within the user's request. Do not use another management interface to bypass a required confirmation or revoked permission.
 
-For official assets from network media, discover and describe `ImportOfficialAssetResourceURL` under `official-assets`. With `official-assets:write`, execute it with `req.url` set to a direct media URL and a stable `req.uploadKey` (8–160 bytes). Follow its webpage confirmation flow. Its successful result contains a Resource `id`; use that value as `req.resourceId` for `CreateOfficialAsset` after describing that operation. Temporary attachment IDs are not Resource IDs. Import and asset creation are separate writes with separate idempotency keys; preserve source and license information, and publish only within the user's requested scope. See the client reference for an example.
+For official assets from network media, discover and describe `ImportOfficialAssetResourceURL` under `official-assets`. With `official-assets:write`, execute it with `req.url` set to a direct media URL and a stable `req.uploadKey` (8–160 bytes). Follow its webpage confirmation flow if returned by the selected authorization mode. Its successful result contains a Resource `id`; use that value as `req.resourceId` for `CreateOfficialAsset` after describing that operation. Temporary attachment IDs are not Resource IDs. Import and asset creation are separate writes with separate idempotency keys; preserve source and license information, and publish only within the user's requested scope. See the client reference for an example.
 
 Use `version` to query the current release, and `update` to download and verify it. Credential files are stored separately and survive updates. See [client commands](references/client.md) for upload, download, and authentication details.
 

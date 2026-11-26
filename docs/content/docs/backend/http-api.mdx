@@ -5,6 +5,13 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## MCP 授权方式
+
+后台管理 Token 创建和同源 OAuth consent POST 支持 `approvalMode: full_access|request_approval`。全权委托覆盖当前管理员的全部管理能力并免逐操作确认；逐次确认继续校验模块 scopes，并对高风险操作返回 `pending_confirmation`。服务端省略模式及历史授权保持逐次确认，授权页面新建时默认选中全权委托，须点击授权才生效；OAuth authorize 查询参数不能自行提权。
+
+`PUT /admin-assistant/tokens/:id/authorization` 与 `PUT /admin-assistant/grants/:id/authorization` 接收 `{approvalMode}`，仅允许同源管理员 Cookie 会话修改本人有效授权，Bearer 不能调用。切换即时影响后续执行和刷新，切回逐次确认保留模块权限；账号停用、撤销及管理员降权始终生效。模式不改变幂等键和结果不确定时的防重约束。
+
+出站 `/agent/mcp/connections` 与 `/admin/mcp/connections` 的输入、返回值同样包含 `approvalMode`，按连接决定是否逐次确认。全权委托不扩大可用工具、平台用户或参数范围，Agent 只读模式仍禁止执行。细节见 [后台管理 MCP 与 Skill](/docs/backend/admin-assistant) 与 [Agent MCP](/docs/backend/agent-mcp)。
 ## 团队空间
 
 以下接口均在 `/api` 下，使用登录 Cookie。`teamId`、`membershipId`、素材 ID 只用于定位；操作权限由服务端根据当前账号及其有效成员关系决定。成员不能访问其他团队或冒用所有者，待处理邀请不授予读取权限。

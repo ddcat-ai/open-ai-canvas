@@ -108,6 +108,10 @@ func (s *Service) buildProfileConfig(profile cloudAgentProfileSnapshot) map[stri
 func (s *Service) buildFeaturesConfig(state *cloudAgentRuntime) map[string]any {
 	approvalTools := []string{}
 	for _, name := range cloudAgentRegistry().Names() {
+		// MCP 按具体连接决定是否审批，不能在 SDK 层按工具名统一拦截全权委托的连接。
+		if name == agenttool.MCPCallTool {
+			continue
+		}
 		if cloudAgentToolAllowed(state.Request, name) && agenttool.Of(name).ApprovalRequired(state.Request.PermissionMode) {
 			approvalTools = append(approvalTools, name)
 		}

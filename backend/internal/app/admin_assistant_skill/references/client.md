@@ -15,7 +15,7 @@ python scripts/canvas_admin.py --site https://canvas.example.com version
 python scripts/canvas_admin.py --site https://canvas.example.com update
 ```
 
-`login --scope channels:read --scope channels:write` requests explicit permissions. With no scope options, the server defaults to read access. Personal Tokens are created and revoked on `/admin/agent-access`. `token` reads one at a hidden prompt and verifies it before saving.
+`login --scope channels:read --scope channels:write` requests explicit permissions. With no scope options, the request initially asks for read access. On the browser authorization page, choose full delegation to grant all management capabilities of your current administrator account without per-operation approvals, or choose confirmation mode to retain module scopes and high-risk confirmations. Existing grants and personal Tokens can be switched on `/admin/agent-access` without logging in again. `token` reads a personal Token at a hidden prompt and verifies it before saving.
 
 The client stores each site's credentials under `~/.config/canvas-admin/` (or the platform XDG config directory). On Windows it restricts the directory and file ACL to the current account. OAuth credentials refresh automatically, with refresh token rotation; do not copy a refresh token between simultaneously running clients.
 

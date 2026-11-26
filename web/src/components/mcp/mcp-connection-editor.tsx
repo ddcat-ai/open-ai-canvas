@@ -152,6 +152,22 @@ export function MCPConnectionEditor({
                     <section className="mcp-connection-fields thin-scrollbar" aria-label="连接配置">
                         <h3 className="mcp-connection-section-title">连接配置</h3>
                         <div className="space-y-1.5">
+                            <label htmlFor={`${fieldId}-approval-mode`} className="text-caption font-medium">
+                                工具执行授权
+                            </label>
+                            <Select
+                                id={`${fieldId}-approval-mode`}
+                                value={draft.approvalMode}
+                                disabled={busy}
+                                onChange={(approvalMode) => setDraft((current) => ({ ...current, approvalMode }))}
+                                options={[
+                                    { value: "full_access", label: "全权委托" },
+                                    { value: "request_approval", label: "逐次确认" },
+                                ]}
+                            />
+                            <p className="text-caption text-muted-foreground">全权委托允许 Agent 直接调用此连接已授权的工具。逐次确认会在调用前展示操作并等待批准。只读会话不能调用外部工具。</p>
+                        </div>
+                        <div className="space-y-1.5">
                             <label htmlFor={`${fieldId}-name`} className="text-caption font-medium">
                                 连接名称
                             </label>
@@ -350,7 +366,7 @@ export function MCPConnectionEditor({
                                     <Switch id={`${fieldId}-enabled`} checked={draft.enabled} disabled={busy || !verified || !draft.allowedTools.length} onChange={(enabled) => setDraft((current) => ({ ...current, enabled }))} />
                                 </div>
                             ) : null}
-                            <p className="text-[var(--fs-label)] text-muted-foreground">每次执行 MCP 工具前，Agent 都会请求确认。</p>
+                            <p className="text-[var(--fs-label)] text-muted-foreground">执行授权仅对已启用、已授权的工具生效。</p>
                         </div>
                     </section>
                 </div>

@@ -23,6 +23,14 @@ type ToolCall struct {
 	Arguments    map[string]any `json:"arguments"`
 }
 
+// 只有显式保存的完全授权可免审批，旧数据和未知值一律要求逐次确认。
+func ApprovalMode(mode string) string {
+	if mode == "full_access" {
+		return mode
+	}
+	return "request_approval"
+}
+
 // AuthorizeCall is shared by approval preview and execution. Server hints such
 // as readOnly never grant permission or bypass the host's approval gate.
 func AuthorizeCall(repo *repository.Repository, userID string, call ToolCall) (*model.MCPConnection, error) {
@@ -77,6 +85,7 @@ func AuthorizeCall(repo *repository.Repository, userID string, call ToolCall) (*
 }
 
 type AvailableTools struct {
+	ApprovalMode string `json:"approvalMode"`
 	ConnectionID string `json:"connectionId"`
 	Name         string `json:"name"`
 	Scope        string `json:"scope"`
@@ -145,7 +154,7 @@ func (s *Service) AvailableTools(userID, connectionID, toolName string) ([]Avail
 		} else {
 			tools = slices.DeleteFunc(tools, func(t Tool) bool { return t.Name != toolName })
 		}
-		result = append(result, AvailableTools{ConnectionID: row.ID, Name: row.Name, Scope: row.Scope, Revision: row.Revision, ToolCount: count, Tools: tools})
+		result = append(result, AvailableTools{ConnectionID: row.ID, Name: row.Name, Scope: row.Scope, ApprovalMode: ApprovalMode(row.ApprovalMode), Revision: row.Revision, ToolCount: count, Tools: tools})
 	}
 	return result, nil
 }
@@ -213,7 +222,7 @@ func (s *Service) awaitReceipt(ctx context.Context, existing, expected *model.MC
 // the persisted approval while the run is locked; configuration is frozen and
 // the receipt is claimed before commit. Later revocation/cancellation cannot
 // undo an admitted external action. Network IO never holds database locks.
-func (s *Service) Call(ctx context.Context, userID, runID, callID string, call ToolCall, approve func(*model.CloudAgentExecution) error) (map[string]any, error) {
+func (s *Service) Call(ctx context.Context, userID, runID, callID string, call ToolCall, approve func(*model.CloudAgentExecution, *model.MCPConnection) error) (map[string]any, error) {
 	if userID == "" || runID == "" || callID == "" {
 		return nil, kernel.BadAuthRequest("MCP 调用缺少可追踪的用户、运行与调用标识")
 	}
@@ -262,9 +271,6 @@ func (s *Service) Call(ctx context.Context, userID, runID, callID string, call T
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
-		if err := approve(run); err != nil {
-			return err
-		}
 		if err := repo.LockMCPQuota(userID); err != nil {
 			return err
 		}
@@ -273,6 +279,10 @@ func (s *Service) Call(ctx context.Context, userID, runID, callID string, call T
 		}
 		row, err := AuthorizeCall(repo, userID, call)
 		if err != nil {
+			return err
+		}
+		// 信任策略与配置版本在同一把连接锁下读取，不能沿用调度时的快照。
+		if err := approve(run, row); err != nil {
 			return err
 		}
 		cfg, secrets, err = New(repo, s.encrypt, s.decrypt, s.coordinator).remoteConfig(row)

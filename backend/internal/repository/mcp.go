@@ -193,7 +193,7 @@ func (r *Repository) UpdateMCPConnection(row *model.MCPConnection, expectedRevis
 	row.Revision = expectedRevision + 1
 	row.UpdatedAt = time.Now()
 	result := r.db.Model(&model.MCPConnection{}).Where("id = ? AND revision = ?", row.ID, expectedRevision).
-		Select("name", "template_id", "transport", "server_url", "parameters_ciphertext", "enabled", "tools_json", "tools_summary_json", "allowed_tools_json", "allowed_user_ids_json", "tool_policies_json", "last_test_at", "revision", "updated_at").Updates(row)
+		Select("name", "template_id", "transport", "server_url", "parameters_ciphertext", "enabled", "approval_mode", "tools_json", "tools_summary_json", "allowed_tools_json", "allowed_user_ids_json", "tool_policies_json", "last_test_at", "revision", "updated_at").Updates(row)
 	if result.Error == nil && result.RowsAffected != 1 {
 		return ErrCreationConflict
 	}

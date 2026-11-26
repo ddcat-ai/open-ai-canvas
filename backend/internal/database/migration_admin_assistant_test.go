@@ -37,6 +37,35 @@ func TestAssistantMigrationSQLite(t *testing.T) {
 		t.Fatal("missing credential/idempotency unique index")
 	}
 }
+
+func TestAssistantApprovalModeUpgradePreservesExistingAuthorization(t *testing.T) {
+	db, err := Open(Config{Driver: "sqlite", DSN: filepath.Join(t.TempDir(), "approval-mode.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, _ := db.DB()
+	defer sqlDB.Close()
+	for _, table := range []string{"assistant_credentials", "assistant_oauth_codes", "assistant_grants", "mcp_connections"} {
+		if err = db.Exec("CREATE TABLE " + table + " (id TEXT PRIMARY KEY)").Error; err != nil {
+			t.Fatal(err)
+		}
+		if err = db.Exec("INSERT INTO " + table + " (id) VALUES ('existing')").Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = migrateAdminAssistantApprovalMode(db); err != nil {
+		t.Fatal(err)
+	}
+	if err = migrateAdminAssistantApprovalMode(db); err != nil {
+		t.Fatal("upgrade not repeatable", err)
+	}
+	for _, table := range []string{"assistant_credentials", "assistant_oauth_codes", "assistant_grants", "mcp_connections"} {
+		var mode string
+		if err = db.Table(table).Select("approval_mode").Where("id = 'existing'").Scan(&mode).Error; err != nil || mode != "request_approval" {
+			t.Fatalf("%s mode=%q err=%v", table, mode, err)
+		}
+	}
+}
 func TestAssistantMigrationPostgres(t *testing.T) {
 	dsn := strings.TrimSpace(os.Getenv("CANVAS_TEST_POSTGRES_DSN"))
 	if dsn == "" {

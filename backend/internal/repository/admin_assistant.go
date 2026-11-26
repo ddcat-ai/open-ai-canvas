@@ -12,7 +12,63 @@ import (
 var ErrAssistantConflict = errors.New("assistant state changed")
 var ErrAssistantAttachmentQuota = errors.New("assistant attachment quota exceeded")
 
+func (r *Repository) UpdateAssistantAuthorization(userID, id, mode, scopes string, grant bool) error {
+	var parent any = &model.AssistantCredential{}
+	query := "id = ? AND user_id = ? AND revoked_at IS NULL AND expires_at > ? AND grant_id = ''"
+	if grant {
+		parent = &model.AssistantGrant{}
+		query = "id = ? AND user_id = ? AND revoked_at IS NULL AND expires_at > ?"
+	}
+	values := map[string]any{"approval_mode": mode}
+	if scopes != "" {
+		values["scopes_json"] = scopes
+	}
+	res := r.db.Model(parent).Where(query, id, userID, time.Now()).Updates(values)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
+	}
+	if grant {
+		return r.db.Model(&model.AssistantCredential{}).Where("grant_id = ? AND user_id = ?", id, userID).Updates(values).Error
+	}
+	return nil
+}
+
 func (r *Repository) CreateAssistantRecord(value any) error { return r.db.Create(value).Error }
+
+func (r *Repository) LockAssistantAuthorization(credentialID, grantID string) (*model.AssistantCredential, error) {
+	// 与修改授权、撤销及刷新共用父行写锁，将最终授权检查和抢占调用放进同一事务。
+	var parent any = &model.AssistantCredential{}
+	id := credentialID
+	if grantID != "" {
+		parent = &model.AssistantGrant{}
+		id = grantID
+	}
+	res := r.db.Model(parent).Where("id = ? AND revoked_at IS NULL AND expires_at > ?", id, time.Now()).UpdateColumn("id", gorm.Expr("id"))
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	if res.RowsAffected != 1 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	row, err := r.AssistantCredentialByID(credentialID)
+	if err != nil {
+		return nil, err
+	}
+	if row.RevokedAt != nil || !row.ExpiresAt.After(time.Now()) {
+		return nil, gorm.ErrRecordNotFound
+	}
+	if grantID != "" {
+		grant, err := r.AssistantGrant(grantID)
+		if err != nil {
+			return nil, err
+		}
+		row.ApprovalMode, row.ScopesJSON = grant.ApprovalMode, grant.ScopesJSON
+	}
+	return row, nil
+}
 func (r *Repository) AssistantCredential(hash string) (*model.AssistantCredential, error) {
 	var row model.AssistantCredential
 	err := r.db.Where("token_hash = ?", hash).First(&row).Error

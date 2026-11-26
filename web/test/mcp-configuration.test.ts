@@ -2,6 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { createMCPConnectionDraft, mcpConnectionChanged, mcpConnectionWrite, mcpParameters, parseMCPToolPolicies, safeMCPHomepage, validateMCPConnection } from "../src/components/mcp/mcp-form";
 import type { MCPConnection, MCPServerTemplate } from "../src/services/api/agent-mcp";
 
+test("新建连接显式完全授权，既有空模式连接保留每次确认", () => {
+    expect(createMCPConnectionDraft().approvalMode).toBe("full_access");
+    expect(createMCPConnectionDraft(template, connection).approvalMode).toBe("request_approval");
+    const draft = createMCPConnectionDraft(template, { ...connection, approvalMode: "full_access" });
+    expect(mcpConnectionWrite(draft).approvalMode).toBe("full_access");
+});
+
 const template: MCPServerTemplate = {
     id: "template-1",
     name: "Example",

@@ -2,10 +2,13 @@ import { http } from "@/services/api/request";
 
 const prefix = "/admin-assistant";
 
+export type AssistantApprovalMode = "full_access" | "request_approval";
+
 export type AssistantCredential = {
     id: string;
     name: string;
     scopes: string[];
+    approvalMode: AssistantApprovalMode;
     grantId?: string;
     createdAt: string;
     expiresAt: string;
@@ -37,8 +40,9 @@ export type AssistantConsent = { clientId: string; clientName: string; redirectU
 
 export const getAssistantSetup = () => http.get<{ mcpUrl: string; scopes: string[]; skillUrl: string }>(`${prefix}/setup`);
 export const listAssistantTokens = (page: number) => http.get<{ items: AssistantCredential[]; hasMore: boolean }>(`${prefix}/tokens`, { params: { page } });
-export const createAssistantToken = (input: { name: string; scopes: string[]; days: number }) => http.post<{ token: string; credential: AssistantCredential }>(`${prefix}/tokens`, input);
+export const createAssistantToken = (input: { name: string; scopes: string[]; days: number; approvalMode: AssistantApprovalMode }) => http.post<{ token: string; credential: AssistantCredential }>(`${prefix}/tokens`, input);
 export const revokeAssistantToken = (id: string) => http.delete(`${prefix}/tokens/${encodeURIComponent(id)}`);
+export const updateAssistantAuthorization = (kind: "tokens" | "grants", id: string, approvalMode: AssistantApprovalMode) => http.put(`${prefix}/${kind}/${encodeURIComponent(id)}/authorization`, { approvalMode });
 export const listAssistantGrants = (page: number) => http.get<{ items: AssistantGrant[]; hasMore: boolean }>(`${prefix}/grants`, { params: { page } });
 export const revokeAssistantGrant = (id: string) => http.delete(`${prefix}/grants/${encodeURIComponent(id)}`);
 export const listAssistantCalls = (page: number) => http.get<{ items: AssistantCall[] }>(`${prefix}/calls`, { params: { page } });
@@ -46,4 +50,4 @@ export const getAssistantCall = (id: string) => http.get<AssistantCall>(`${prefi
 export const confirmAssistantCall = (id: string, approve: boolean) => http.post(`${prefix}/calls/${encodeURIComponent(id)}/confirm`, { approve });
 export const getAssistantSkillRelease = () => http.get<AssistantSkillRelease>(`${prefix}/skill/latest`);
 export const getAssistantConsent = (query: string) => http.get<AssistantConsent>(`${prefix}/oauth/consent?${query}`);
-export const authorizeAssistant = (params: Record<string, string>, approve: boolean) => http.post<{ redirectUrl: string }>(`${prefix}/oauth/consent`, { ...params, approve });
+export const authorizeAssistant = (params: Record<string, string>, approve: boolean, approvalMode: AssistantApprovalMode) => http.post<{ redirectUrl: string }>(`${prefix}/oauth/consent`, { ...params, approve, approvalMode });

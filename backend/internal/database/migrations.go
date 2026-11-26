@@ -13,7 +13,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 113
+const CurrentSchemaVersion int64 = 114
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -401,6 +401,7 @@ var schemaMigrations = []migration{
 	{version: 111, name: "redeem_batch_limits_and_capability_pools", checksum: "sha256:redeem-batch-limits-and-capability-pools-v111-20261125", apply: migrateRedeemBatchLimitsAndCapabilityPools},
 	{version: 112, name: "admin_assistant", checksum: "sha256:admin-assistant-v112-20261127", apply: migrateAdminAssistant},
 	{version: 113, name: "resource_content_sha256", checksum: "sha256:resource-content-sha256-v113", apply: migrateResourceContentSHA256},
+	{version: 114, name: "admin_assistant_approval_mode", checksum: "sha256:admin-assistant-approval-mode-v114", apply: migrateAdminAssistantApprovalMode},
 }
 
 func migrateRedeemBatchLimitsAndCapabilityPools(tx *gorm.DB) error {

@@ -47,6 +47,7 @@ type TemplateView struct {
 }
 
 type ConnectionInput struct {
+	ApprovalMode   string                    `json:"approvalMode"`
 	Name           string                    `json:"name"`
 	TemplateID     string                    `json:"templateId,omitempty"`
 	Transport      string                    `json:"transport"`
@@ -59,6 +60,7 @@ type ConnectionInput struct {
 }
 
 type ConnectionView struct {
+	ApprovalMode      string                    `json:"approvalMode"`
 	ID                string                    `json:"id"`
 	Scope             string                    `json:"scope"`
 	TemplateID        string                    `json:"templateId,omitempty"`
@@ -326,7 +328,7 @@ func decodeTools(row *model.MCPConnection) ([]Tool, []string, error) {
 
 func (s *Service) connectionView(row *model.MCPConnection, shared bool) (ConnectionView, error) {
 	view := ConnectionView{ID: row.ID, Scope: row.Scope, TemplateID: row.TemplateID, Name: row.Name, Transport: row.Transport, ServerURL: row.ServerURL,
-		Enabled: row.Enabled, Parameters: map[string]string{}, ConfiguredSecrets: []string{}, Revision: row.Revision, LastTestAt: row.LastTestAt, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
+		Enabled: row.Enabled, ApprovalMode: ApprovalMode(row.ApprovalMode), Parameters: map[string]string{}, ConfiguredSecrets: []string{}, Revision: row.Revision, LastTestAt: row.LastTestAt, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
 	var err error
 	view.Tools, view.AllowedTools, err = decodeTools(row)
 	if err != nil {

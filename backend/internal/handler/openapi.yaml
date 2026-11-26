@@ -128,6 +128,7 @@ paths:
               properties:
                 name: {type: string, maxLength: 120}
                 scopes: {type: array, items: {type: string}, description: 缺省授予模块只读权限}
+                approvalMode: {type: string, enum: [full_access, request_approval], default: request_approval, description: 全权委托覆盖当前账号全部管理能力并免逐操作确认；省略保留模块授权和危险操作确认}
                 days: {type: integer, minimum: 1, maximum: 365, default: 30}
       responses: {"200": {description: data.token 仅此一次返回明文，data.credential 为元数据}}
   /admin-assistant/tokens/{id}:
@@ -142,6 +143,20 @@ paths:
       summary: 当前管理员 OAuth 授权列表
       parameters: [{in: query, name: page, schema: {type: integer, minimum: 1, maximum: 10000, default: 1}}]
       responses: {"200": {description: data.items 为授权元数据，每页 50 条，data.hasMore 指示下一页，不返回刷新令牌}}
+  /admin-assistant/tokens/{id}/authorization:
+    parameters: [{in: path, name: id, required: true, schema: {type: string}}]
+    put:
+      tags: [admin]
+      summary: 修改本人有效个人 Token 的授权方式，仅同源 Cookie 会话
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [approvalMode], properties: {approvalMode: {type: string, enum: [full_access, request_approval]}}}}}}
+      responses: {"200": {description: 模式立即生效；全权委托授予全部模块权限；切回逐次确认保留模块范围}, "404": {description: 非本人凭据、不存在、已撤销或已过期}}
+  /admin-assistant/grants/{id}/authorization:
+    parameters: [{in: path, name: id, required: true, schema: {type: string}}]
+    put:
+      tags: [admin]
+      summary: 修改本人有效 OAuth 授权方式，仅同源 Cookie 会话
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [approvalMode], properties: {approvalMode: {type: string, enum: [full_access, request_approval]}}}}}}
+      responses: {"200": {description: 同步 grant 与其访问令牌，无需客户端重新登录；后续刷新保留当前模式}, "404": {description: 非本人授权、不存在、已撤销或已过期}}
   /admin-assistant/grants/{id}:
     parameters: [{in: path, name: id, required: true, schema: {type: string}}]
     delete:
@@ -200,7 +215,7 @@ paths:
                 arguments: {type: object, description: 参数结构由对应操作 describe 返回}
                 idempotencyKey: {type: string, minLength: 8, maxLength: 160, description: 写入必须提供，同一写入始终复用}
       responses:
-        "200": {description: data.status 为 succeeded、failed、pending_confirmation、rejected、expired 或 unknown；危险调用含 confirmationUrl；unknown 禁止自动换键重试}
+        "200": {description: data.status 为 succeeded、failed、pending_confirmation、rejected、expired 或 unknown；逐次确认模式的危险调用含 confirmationUrl，全权委托自动执行；unknown 禁止自动换键重试}
         "409": {description: 幂等键参数不一致或执行状态冲突}
   /admin-assistant/attachments:
     post:
@@ -271,7 +286,7 @@ paths:
     post:
       tags: [auth]
       summary: 同源 Cookie 管理员确认或拒绝 OAuth 授权
-      requestBody: {required: true, content: {application/json: {schema: {type: object, description: authorize 查询字段加必填布尔 approve}}}}
+      requestBody: {required: true, content: {application/json: {schema: {type: object, description: authorize 查询字段加必填布尔 approve；approvalMode 只由同源授权页选择，OAuth authorize 查询不接受提权, properties: {approve: {type: boolean}, approvalMode: {type: string, enum: [full_access, request_approval], default: request_approval}}}}}}
       responses: {"200": {description: data.redirectUrl 为精确登记的客户端回调}}
   /admin-assistant/oauth/token:
     post:
@@ -5553,6 +5568,7 @@ components:
       additionalProperties: false
       required: [name, transport, serverUrl]
       properties:
+        approvalMode: { type: string, enum: [full_access, request_approval], default: request_approval, description: 按连接选择全权委托或逐次确认；不扩大可调用工具、用户与参数范围 }
         name: { type: string, minLength: 1, maxLength: 100 }
         templateId:
           {
@@ -5628,6 +5644,7 @@ components:
           updatedAt,
         ]
       properties:
+        approvalMode: { type: string, enum: [full_access, request_approval], description: 当前连接的执行确认方式 }
         id: { type: string }
         scope: { type: string, enum: [user, platform] }
         templateId: { type: string }

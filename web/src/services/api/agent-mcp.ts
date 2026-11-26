@@ -34,6 +34,7 @@ export interface MCPTool {
 }
 
 export interface MCPConnection {
+    approvalMode?: "full_access" | "request_approval";
     id: string;
     revision: number;
     scope: MCPManagementScope;
@@ -54,6 +55,7 @@ export interface MCPConnection {
 }
 
 export interface MCPConnectionInput {
+    approvalMode: "full_access" | "request_approval";
     name: string;
     templateId?: string;
     transport: MCPTransport;

@@ -5,15 +5,16 @@ import "time"
 // AssistantCredential stores only opaque token hashes. OAuth access tokens share
 // a revocable grant; personal tokens have an empty GrantID.
 type AssistantCredential struct {
-	ID         string     `json:"id" gorm:"primaryKey;size:36"`
-	UserID     string     `json:"userId" gorm:"index;size:36"`
-	Name       string     `json:"name" gorm:"size:120"`
-	TokenHash  string     `json:"-" gorm:"uniqueIndex;size:64"`
-	ScopesJSON string     `json:"-" gorm:"type:text"`
-	GrantID    string     `json:"grantId,omitempty" gorm:"index;size:36"`
-	CreatedAt  time.Time  `json:"createdAt"`
-	ExpiresAt  time.Time  `json:"expiresAt" gorm:"index"`
-	RevokedAt  *time.Time `json:"revokedAt"`
+	ID           string     `json:"id" gorm:"primaryKey;size:36"`
+	UserID       string     `json:"userId" gorm:"index;size:36"`
+	Name         string     `json:"name" gorm:"size:120"`
+	TokenHash    string     `json:"-" gorm:"uniqueIndex;size:64"`
+	ScopesJSON   string     `json:"-" gorm:"type:text"`
+	ApprovalMode string     `json:"approvalMode" gorm:"size:30;default:request_approval"`
+	GrantID      string     `json:"grantId,omitempty" gorm:"index;size:36"`
+	CreatedAt    time.Time  `json:"createdAt"`
+	ExpiresAt    time.Time  `json:"expiresAt" gorm:"index"`
+	RevokedAt    *time.Time `json:"revokedAt"`
 }
 
 type AssistantOAuthClient struct {
@@ -26,28 +27,30 @@ type AssistantOAuthClient struct {
 func (AssistantOAuthClient) TableName() string { return "assistant_oauth_clients" }
 
 type AssistantOAuthCode struct {
-	ID          string    `gorm:"primaryKey;size:64"` // SHA256 of authorization code
-	ClientID    string    `gorm:"index;size:100"`
-	UserID      string    `gorm:"size:36"`
-	RedirectURI string    `gorm:"type:text"`
-	Resource    string    `gorm:"type:text"`
-	Challenge   string    `gorm:"size:100"`
-	ScopesJSON  string    `gorm:"type:text"`
-	ExpiresAt   time.Time `gorm:"index"`
-	ConsumedAt  *time.Time
+	ID           string    `gorm:"primaryKey;size:64"` // SHA256 of authorization code
+	ClientID     string    `gorm:"index;size:100"`
+	UserID       string    `gorm:"size:36"`
+	RedirectURI  string    `gorm:"type:text"`
+	Resource     string    `gorm:"type:text"`
+	Challenge    string    `gorm:"size:100"`
+	ScopesJSON   string    `gorm:"type:text"`
+	ApprovalMode string    `gorm:"size:30;default:request_approval"`
+	ExpiresAt    time.Time `gorm:"index"`
+	ConsumedAt   *time.Time
 }
 
 func (AssistantOAuthCode) TableName() string { return "assistant_oauth_codes" }
 
 type AssistantGrant struct {
-	ID          string     `json:"id" gorm:"primaryKey;size:36"`
-	UserID      string     `json:"userId" gorm:"index;size:36"`
-	ClientID    string     `json:"clientId" gorm:"size:100"`
-	ScopesJSON  string     `json:"-" gorm:"type:text"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	ExpiresAt   time.Time  `json:"expiresAt"`
-	RevokedAt   *time.Time `json:"revokedAt"`
-	RefreshHash string     `json:"-" gorm:"uniqueIndex;size:64"`
+	ID           string     `json:"id" gorm:"primaryKey;size:36"`
+	UserID       string     `json:"userId" gorm:"index;size:36"`
+	ClientID     string     `json:"clientId" gorm:"size:100"`
+	ScopesJSON   string     `json:"-" gorm:"type:text"`
+	ApprovalMode string     `json:"approvalMode" gorm:"size:30;default:request_approval"`
+	CreatedAt    time.Time  `json:"createdAt"`
+	ExpiresAt    time.Time  `json:"expiresAt"`
+	RevokedAt    *time.Time `json:"revokedAt"`
+	RefreshHash  string     `json:"-" gorm:"uniqueIndex;size:64"`
 }
 
 // Used refresh hashes are retained to detect replay and revoke the whole grant.

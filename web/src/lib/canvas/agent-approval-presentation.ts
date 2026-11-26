@@ -41,6 +41,7 @@ function fieldLabel(key: string, nodeType: string): string {
 }
 
 function operation(value: unknown): AgentApprovalPreviewOperation | null {
+    if (value === "mcp_call") return value;
     if (value === "update_drama_shot") return value;
     return value === "add_node" ||
         value === "update_node" ||

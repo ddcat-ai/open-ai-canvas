@@ -54,6 +54,10 @@ func (p *AssistantPrincipal) bindingID() string {
 	return p.Credential.ID
 }
 func (p *AssistantPrincipal) allows(op AssistantOperation) bool {
+	// 完全访问由登录管理员明确授予，覆盖当前及未来目录操作；管理员身份仍实时校验。
+	if p.Credential != nil && p.Credential.ApprovalMode == AssistantFullAccess {
+		return true
+	}
 	suffix := ":read"
 	if op.Write {
 		suffix = ":write"
@@ -82,6 +86,7 @@ func (s *Service) refreshAssistantPrincipal(p *AssistantPrincipal) (*AssistantPr
 		if e != nil || g.RevokedAt != nil || !g.ExpiresAt.After(time.Now()) {
 			return nil, Unauthorized("授权已撤销")
 		}
+		row.ApprovalMode, row.ScopesJSON = g.ApprovalMode, g.ScopesJSON
 	}
 	return &AssistantPrincipal{u, row, assistantScopes(row.ScopesJSON)}, nil
 }
@@ -284,7 +289,7 @@ func (s *Service) ExecuteAssistantOperation(ctx context.Context, p *AssistantPri
 	}
 	now := time.Now()
 	status := "ready"
-	if op.HighRisk {
+	if op.HighRisk && p.Credential.ApprovalMode != AssistantFullAccess {
 		status = "pending"
 	}
 	preview := assistantRedact(canonicalArgs)
@@ -322,6 +327,19 @@ func (s *Service) ExecuteAssistantOperation(ctx context.Context, p *AssistantPri
 	if !row.ExpiresAt.After(time.Now()) {
 		return &AssistantExecution{ID: row.ID, Status: "expired"}, nil
 	}
+	// 历史 pending 可沿用原键；降级后的 ready 必须重新进入审批，不能靠旧状态绕过。
+	if op.HighRisk && row.Status == "ready" && p.Credential.ApprovalMode != AssistantFullAccess {
+		if err = s.repo.TransitionAssistantInvocation(row.ID, "ready", "pending", time.Now()); err != nil {
+			return nil, err
+		}
+		row.Status = "pending"
+	}
+	if row.Status == "pending" && p.Credential.ApprovalMode == AssistantFullAccess {
+		if err = s.repo.TransitionAssistantInvocation(row.ID, "pending", "ready", time.Now()); err != nil {
+			return nil, err
+		}
+		row.Status = "ready"
+	}
 	if row.Status == "pending" {
 		base, _ := AssistantBaseURL()
 		return &AssistantExecution{ID: row.ID, Status: "pending_confirmation", ConfirmationURL: base + "/admin/agent-access?confirmation=" + row.ID}, nil
@@ -338,11 +356,35 @@ func (s *Service) ExecuteAssistantOperation(ctx context.Context, p *AssistantPri
 	}
 	defer cleanup()
 	// Recheck after preparing arguments, before claiming a side effect.
-	if _, err = s.refreshAssistantPrincipal(p); err != nil {
+	p, err = s.refreshAssistantPrincipal(p)
+	if err != nil {
 		return nil, err
 	}
-	if err = s.repo.TransitionAssistantInvocation(row.ID, row.Status, "running", time.Now()); err != nil {
-		return nil, NewAppError(409, "操作已由其他请求接管，请查询原调用")
+	needsApproval := false
+	err = s.repo.Transaction(func(tx *repository.Repository) error {
+		credential, e := tx.LockAssistantAuthorization(p.Credential.ID, p.Credential.GrantID)
+		if e != nil {
+			return Unauthorized("原授权已失效")
+		}
+		p.Credential, p.Scopes = credential, assistantScopes(credential.ScopesJSON)
+		if !p.allows(op) {
+			return Forbidden("Token 未授予此操作权限")
+		}
+		if op.HighRisk && row.Status == "ready" && credential.ApprovalMode != AssistantFullAccess {
+			needsApproval = true
+			return tx.TransitionAssistantInvocation(row.ID, "ready", "pending", time.Now())
+		}
+		return tx.TransitionAssistantInvocation(row.ID, row.Status, "running", time.Now())
+	})
+	if err != nil {
+		if errors.Is(err, repository.ErrAssistantConflict) {
+			return nil, NewAppError(409, "操作已由其他请求接管，请查询原调用")
+		}
+		return nil, err
+	}
+	if needsApproval {
+		base, _ := AssistantBaseURL()
+		return &AssistantExecution{ID: row.ID, Status: "pending_confirmation", ConfirmationURL: base + "/admin/agent-access?confirmation=" + row.ID}, nil
 	}
 	start := time.Now()
 	result, callErr := s.assistantInvoke(p, op, values)
@@ -472,7 +514,7 @@ func (s *Service) ConfirmAssistantCall(actor *model.User, id string, approve boo
 		if grant.UserID != u.ID || grant.RevokedAt != nil || !grant.ExpiresAt.After(time.Now()) {
 			return Forbidden("原授权已失效")
 		}
-		principal := &AssistantPrincipal{Scopes: assistantScopes(grant.ScopesJSON)}
+		principal := &AssistantPrincipal{Credential: &model.AssistantCredential{ApprovalMode: grant.ApprovalMode}, Scopes: assistantScopes(grant.ScopesJSON)}
 		if !principal.allows(op) {
 			return Forbidden("原授权不允许此操作")
 		}
@@ -481,7 +523,7 @@ func (s *Service) ConfirmAssistantCall(actor *model.User, id string, approve boo
 		if e != nil || credential.UserID != u.ID || credential.RevokedAt != nil || !credential.ExpiresAt.After(time.Now()) {
 			return Forbidden("原 Token 已失效")
 		}
-		principal := &AssistantPrincipal{Scopes: assistantScopes(credential.ScopesJSON)}
+		principal := &AssistantPrincipal{Credential: credential, Scopes: assistantScopes(credential.ScopesJSON)}
 		if !principal.allows(op) {
 			return Forbidden("原 Token 不允许此操作")
 		}

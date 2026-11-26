@@ -11,7 +11,7 @@ description: 管理员浏览器授权、可撤销 Token、管理操作发现及 
 
 设置 `CANVAS_PUBLIC_BASE_URL` 为站点唯一 Origin，例如 `https://canvas.example.com`。生产要求 HTTPS；开发允许 localhost 或回环 IP 的 HTTP。OAuth 元数据不信任请求 Host，不从 NewAPI access token 直接推导管理员身份。
 
-远程 MCP 地址为 `/api/admin-assistant/mcp`，使用 Streamable HTTP。客户端可选择浏览器授权，复用 Canvas 登录和已经配置的 NewAPI OIDC；也可在后台创建个人 Token，使用 `Authorization: Bearer <token>`。个人 Token 只展示一次，默认只读、30 天有效，可选择 1–365 天及模块权限。
+远程 MCP 地址为 `/api/admin-assistant/mcp`，使用 Streamable HTTP。客户端可选择浏览器授权，复用 Canvas 登录和已经配置的 NewAPI OIDC；也可在后台创建个人 Token，使用 `Authorization: Bearer <token>`。个人 Token 只展示一次，30 天有效，可选择 1–365 天。新建 Token 和浏览器授权页面默认选中「全权委托」，点击授权后生效；服务端 API 省略模式时仍保留逐次确认及默认只读范围。
 
 浏览器 OAuth 使用 Authorization Code + PKCE S256，授权码 5 分钟有效且单次使用，access token 最多 1 小时，refresh grant 30 天有效。刷新令牌每次轮换，重放旧刷新令牌会撤销整项授权；并发客户端应各自登录，不共享刷新令牌文件。每次调用重新读取账号、管理员角色及撤销状态。
 
@@ -48,9 +48,23 @@ MCP 执行保留原始 JSON 数字，调账等 int64 参数不会经 float64 舍
 
 普通渠道、技能和公告写入可按权限执行。删除、批量修改、财务额度、权限认证、存储凭据、安装插件和系统更新等操作默认需要网页确认；新增写入默认需要确认，确认机制在服务端强制执行。
 
-危险调用返回 `pending_confirmation`、调用 ID 和后台链接。管理员检查操作、参数预览和参数指纹后确认，客户端在 10 分钟内用原幂等键、原参数重试。确认不执行操作，也不能改参数。拒绝、过期、Token 撤销、管理员降权及参数变化均不允许继续执行。
+逐次审批模式下，普通渠道、技能和公告写入按 scopes 执行，删除、批量修改、财务额度、权限认证、存储凭据、安装插件和系统更新等高风险操作需要网页确认；完全访问模式直接执行这些操作。`UpdateAdminChannelModelLabel` 只修改 `channelLabel`/`displayName`，不触碰价格、能力或路由，因此按字段风险判定为普通写入；`BatchUpdateAdminAllChannelModels` 的 `changes.channelLabel` 支持一次批量修改渠道展示名。渠道模型的跨渠道列表和 `AdminChannelModelCosts` 读操作会投影 `costPricing`，用于写入后核验成本；普通列表仍隐藏成本。
+
+渠道模型保存冲突时，错误会同时给出期望与当前 `updatedAt`/`priceVersion`。调用方可以刷新后重提，或显式传入 `refresh: true` 接受当前版本；后者只跳过乐观锁检查，仍执行完整的权限、能力和价格校验。
+
+逐次审批模式的危险调用返回 `pending_confirmation`、调用 ID 和后台链接。管理员检查操作、参数预览和参数指纹后确认，客户端在 60 分钟内用原幂等键、原参数重试。确认不执行操作，也不能改参数。拒绝、过期、Token 撤销、管理员降权及参数变化均不允许继续执行。
 
 同一凭据的同一幂等键不能重复执行写入；OAuth 刷新前后按同一 grant 绑定。`running` 或 `unknown` 表示正在执行或结果待核实，禁止自动换键重试。业务副作用与调用结果落库不能承诺跨进程崩溃下的 exactly-once；需从调用 ID、业务记录和审计核实。已完成写入的记录保留用于幂等查询。
+
+## 授权模式
+
+授权支持 `approvalMode: full_access | request_approval`。全权委托由登录管理员明确选择，覆盖当前和未来目录中的全部后台操作，高风险写入也直接执行；管理员身份实时检查、撤销、幂等和审计仍生效。逐次确认模式按所选 scopes 授权，保留高风险操作的网页确认。历史空值视为逐次确认，不自动提权。两种模式均不改变客户端自身的工具确认设置。
+
+创建个人 Token 的请求为 `{name, days, scopes, approvalMode}`。OAuth `GET /oauth/consent` 返回客户端请求的 `scopes` 与完整 `scopeOptions`；仅同源登录用户的 `POST /oauth/consent` 可选择 `approvalMode`，客户端查询参数及 token 刷新不能改变模式。模式贯穿授权码、grant 和 access credential。
+
+同源登录管理员可用 `PUT /api/admin-assistant/tokens/:id/authorization` 或 `PUT /api/admin-assistant/grants/:id/authorization`，正文 `{approvalMode}`，修改本人尚未撤销且未过期的授权；个人 Token 接口拒绝 OAuth access credential。升为完全访问时扩展全部 scopes；降级保留 scopes 并恢复高风险审批。OAuth grant 的 access credential 同事务同步，刷新重新读取 grant 权限。旧 pending 调用升级后可沿用原参数和幂等键执行；降级后的旧 ready 调用重新进入确认。
+
+升级全权委托后，OAuth 客户端刷新时仍可携带之前缓存的只读 scope 子集，无需重新登录；实际模式和权限以当前服务端授权为准，刷新不能申请未获准 scope。对于连续素材导入，`ImportOfficialAssetResourceURL` 与 `CreateOfficialAsset` 共用该授权，MCP 和 Skill 均无需逐条确认；同一写入重试继续复用原幂等键。
 
 ## Skill 与文件
 
@@ -66,7 +80,7 @@ python scripts/canvas_admin.py --site https://canvas.example.com version
 python scripts/canvas_admin.py --site https://canvas.example.com update
 ```
 
-后台「Agent 接入 → 连接与下载 → 复制 Agent 安装说明」可复制一段包含当前站点 MCP 地址、latest 清单和安装客户端地址的提示词，交给 Agent 配置。说明不包含凭据，要求复用已有配置、浏览器授权、默认只读及真实连接验证。Codex 可通过 `codex mcp add canvas-admin --url <MCP地址>` 和 `codex mcp login canvas-admin` 配置 OAuth；已有 Bearer 配置的切换由用户决定。
+后台「Agent 接入 → 连接与下载 → 复制 Agent 安装说明」可复制一段包含当前站点 MCP 地址、latest 清单和安装客户端地址的提示词，交给 Agent 配置。说明不包含凭据，要求复用已有配置、由用户在浏览器选择授权方式及完成真实连接验证。Codex 可通过 `codex mcp add canvas-admin --url <MCP地址>` 和 `codex mcp login canvas-admin` 配置 OAuth；已有 Bearer 配置的切换由用户决定。
 
 初次安装可从 `GET /api/admin-assistant/skill/install.py` 下载无凭据的同版 Python 客户端（禁止缓存），阅读后执行：
 
@@ -74,7 +88,7 @@ python scripts/canvas_admin.py --site https://canvas.example.com update
 python canvas_admin.py --site https://canvas.example.com install --destination /path/to/skills/canvas-admin
 ```
 
-客户端要求 Python 3.10+；安装不需要登录，实时查询 latest 并复用更新流程校验兼容性、大小、哈希、路径及符号链接，再写入指定目录。凭据目录不能包含在安装目录内。MCP 和 Python 客户端分别使用自己的 OAuth 凭据；完成安装后按需运行 Skill 的 `login`。复制说明指导 Agent 使用只读握手和发现验证，安装过程中不执行后台写操作，危险操作仍由用户在网页确认。
+客户端要求 Python 3.10+；安装不需要登录，实时查询 latest 并复用更新流程校验兼容性、大小、哈希、路径及符号链接，再写入指定目录。凭据目录不能包含在安装目录内。MCP 和 Python 客户端分别使用自己的 OAuth 凭据；完成安装后按需运行 Skill 的 `login`。复制说明指导 Agent 使用只读握手和发现验证，安装过程中不执行后台写操作，危险操作按所选授权模式直接执行或返回网页确认。
 
 客户端凭据存放于 Skill 之外的用户配置目录，Unix 权限 0600，Windows 限制当前账号 ACL。无人值守可使用隐藏输入的个人 Token 或 `CANVAS_ADMIN_TOKEN` 环境变量。更新检查 API 兼容性、大小、SHA256、ZIP 路径和符号链接，不覆盖凭据。
 
@@ -86,7 +100,7 @@ Skill REST 发现与描述路径为 `/api/admin-assistant/operations` 和 `/oper
 
 ### 官方素材网络导入
 
-`ImportOfficialAssetResourceURL` 归属 `official-assets:write`，MCP 和 Skill 可通过现有操作发现、描述及执行入口调用。参数形如 `{"req":{"url":"https://media.example.com/sample.jpg","uploadKey":"official-test-image-001"}}`；`uploadKey` 为 8–160 字节，同一素材重试保持不变。该操作默认需要网页确认，确认前不会下载或写入资源；执行层要求独立的稳定 `idempotencyKey`。
+`ImportOfficialAssetResourceURL` 归属 `official-assets:write`，MCP 和 Skill 可通过现有操作发现、描述及执行入口调用。参数形如 `{"req":{"url":"https://media.example.com/sample.jpg","uploadKey":"official-test-image-001"}}`；`uploadKey` 为 8–160 字节，同一素材重试保持不变。逐次审批模式下该操作需要网页确认，确认前不会下载或写入资源；完全访问模式直接执行；执行层要求独立的稳定 `idempotencyKey`。
 
 成功结果的 `result.id` 是持久 Resource ID，可作为 `CreateOfficialAsset` 的 `req.resourceId`。先描述创建接口并按 Schema 提供分类、媒体类型、来源和授权信息；创建默认草稿，发布仍是独立操作。临时附件 ID 不能代替 Resource ID，也无需向普通上传接口提交 Agent OAuth 凭据。
 

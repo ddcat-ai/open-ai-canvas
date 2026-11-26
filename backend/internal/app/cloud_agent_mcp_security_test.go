@@ -45,7 +45,7 @@ func TestMCPPlatformGrantAndArgumentPolicyAreIndependentOfApproval(t *testing.T)
 	}
 	_, err = cloudAgentPreviewMCPCall(s.repo, "user", "", call)
 	assertMCPErrorStatus(t, err, http.StatusForbidden)
-	_, err = s.mcpDomain().Call(t.Context(), "user", "any-run", call.ID, args, func(*model.CloudAgentExecution) error { return nil })
+	_, err = s.mcpDomain().Call(t.Context(), "user", "any-run", call.ID, args, func(*model.CloudAgentExecution, *model.MCPConnection) error { return nil })
 	assertMCPErrorStatus(t, err, http.StatusForbidden)
 	if remote.requests.Load() != before {
 		t.Fatal("a rejected resource policy reached the remote server")

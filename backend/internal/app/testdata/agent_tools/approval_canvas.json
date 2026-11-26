@@ -44,7 +44,7 @@
   },
   {
     "function": {
-      "description": "调用授权 MCP：先发现，按 revision/Schema 传参；需审批，禁凭据；不确定核实，勿重试。",
+      "description": "调用授权 MCP：先发现，按 revision/Schema 传参；按连接授权模式确认，禁凭据；不确定核实，勿重试。",
       "name": "mcp_call_tool",
       "parameters": {
         "additionalProperties": false,

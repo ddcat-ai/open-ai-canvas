@@ -457,8 +457,12 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 	allowed := cloudAgentToolAllowed(state.Request, call.Function.Name)
 	binding, _ := cloudAgentRegistry().Lookup(call.Function.Name)
 	toolPolicy := agenttool.Of(call.Function.Name)
-	// 媒体工具在所有模式下都进入审批；其他写入只在 request_approval 下审批。
-	if allowed && toolPolicy.ApprovalRequired(state.Request.PermissionMode) && state.Approval == nil {
+	approvalRequired := toolPolicy.ApprovalRequired(state.Request.PermissionMode)
+	if call.Function.Name == agenttool.MCPCallTool {
+		// 外部 MCP 信任由当前连接决定，不能由会话模式或模型参数提升权限。
+		approvalRequired = cloudAgentMCPRequiresApproval(s.repo, run.UserID, call)
+	}
+	if allowed && approvalRequired && state.Approval == nil {
 		if call.Function.Name == agenttool.GenerateMediaBatch {
 			return s.requestCloudAgentMediaBatchApproval(run, state, call)
 		}

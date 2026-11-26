@@ -1,6 +1,7 @@
 import { Button, Skeleton } from "antd";
 import { ArrowRight, Bot, Check, Info } from "lucide-react";
-import type { AssistantConsent } from "@/services/api/admin-assistant";
+import type { AssistantApprovalMode, AssistantConsent } from "@/services/api/admin-assistant";
+import { AssistantAuthorizationMode } from "./assistant-authorization-mode";
 import "./assistant-consent-card.css";
 
 const moduleLabels: Record<string, string> = {
@@ -51,7 +52,21 @@ const moduleLabels: Record<string, string> = {
     workbench: "工作台",
 };
 
-export function AssistantConsentCard({ consent, loading, busy, onAuthorize }: { consent?: AssistantConsent; loading: boolean; busy: boolean; onAuthorize: (approve: boolean) => void }) {
+export function AssistantConsentCard({
+    consent,
+    loading,
+    busy,
+    approvalMode,
+    onApprovalModeChange,
+    onAuthorize,
+}: {
+    consent?: AssistantConsent;
+    loading: boolean;
+    busy: boolean;
+    approvalMode: AssistantApprovalMode;
+    onApprovalModeChange: (mode: AssistantApprovalMode) => void;
+    onAuthorize: (approve: boolean) => void;
+}) {
     const modules = new Map<string, string[]>();
     for (const scope of consent?.scopes ?? []) {
         const module = scope.slice(0, scope.lastIndexOf(":"));
@@ -71,7 +86,7 @@ export function AssistantConsentCard({ consent, loading, busy, onAuthorize }: { 
                 </div>
                 <p className="assistant-consent-eyebrow">Agent 客户端授权</p>
                 <h2 id="assistant-consent-title">{consent ? consent.clientName : "连接管理后台"}</h2>
-                <p className="assistant-consent-subtitle">请求访问你的管理后台，请核对以下权限后继续。</p>
+                <p className="assistant-consent-subtitle">请求连接你的管理后台，选择执行方式后授权。</p>
             </header>
 
             {loading && (
@@ -82,33 +97,45 @@ export function AssistantConsentCard({ consent, loading, busy, onAuthorize }: { 
             {consent && (
                 <>
                     <div className="assistant-consent-body">
-                        <div className="assistant-consent-section-title">
-                            <h3>请求的访问权限</h3>
-                            <span>
-                                {modules.size} 个模块 · {consent.scopes.length} 项权限
-                            </span>
-                        </div>
-                        <ul className="assistant-consent-scopes">
-                            {Array.from(modules, ([module, scopes]) => (
-                                <li key={module}>
-                                    <Check className="assistant-consent-check" size={16} aria-hidden="true" />
-                                    <div className="assistant-consent-module">
-                                        <strong>{moduleLabels[module] ?? module}</strong>
-                                        <span className="assistant-consent-scope-codes">{scopes.join(" · ")}</span>
-                                    </div>
-                                    <div className="assistant-consent-access">
-                                        {scopes.map((scope) => (
-                                            <span key={scope} className={scope.endsWith(":write") ? "is-write" : undefined}>
-                                                {scope.endsWith(":write") ? "写入" : scope.endsWith(":read") ? "读取" : scope}
-                                            </span>
-                                        ))}
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
+                        <AssistantAuthorizationMode value={approvalMode} onChange={onApprovalModeChange} disabled={busy} />
+                        {approvalMode === "request_approval" && (
+                            <>
+                                <div className="assistant-consent-section-title">
+                                    <h3>请求的访问权限</h3>
+                                    <span>
+                                        {modules.size} 个模块 · {consent.scopes.length} 项权限
+                                    </span>
+                                </div>
+                                <ul className="assistant-consent-scopes">
+                                    {Array.from(modules, ([module, scopes]) => (
+                                        <li key={module}>
+                                            <Check className="assistant-consent-check" size={16} aria-hidden="true" />
+                                            <div className="assistant-consent-module">
+                                                <strong>{moduleLabels[module] ?? module}</strong>
+                                                <span className="assistant-consent-scope-codes">{scopes.join(" · ")}</span>
+                                            </div>
+                                            <div className="assistant-consent-access">
+                                                {scopes.map((scope) => (
+                                                    <span key={scope} className={scope.endsWith(":write") ? "is-write" : undefined}>
+                                                        {scope.endsWith(":write") ? "写入" : scope.endsWith(":read") ? "读取" : scope}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </>
+                        )}
                         <div className="assistant-consent-notice">
                             <Info size={17} aria-hidden="true" />
-                            <p>{hasWrite ? "此请求包含写入权限，客户端可修改对应模块的数据。危险操作仍需你在网页单独确认。" : "此请求仅包含读取权限，客户端无法通过此授权修改后台数据。"} 你可随时在「Agent 接入」撤销授权。</p>
+                            <p>
+                                {approvalMode === "full_access"
+                                    ? "本次授权覆盖全部后台管理模块，不受客户端最初申请的只读范围限制。权限始终受你当前的账号身份约束，所有调用保留记录。"
+                                    : hasWrite
+                                      ? "此请求包含写入权限，客户端可修改对应模块的数据。危险操作仍需你在网页单独确认。"
+                                      : "此请求仅包含读取权限，客户端无法通过此授权修改后台数据。"}{" "}
+                                你可随时在「Agent 接入」撤销授权。客户端自身的工具确认设置仍独立生效。
+                            </p>
                         </div>
                         <details className="assistant-consent-details">
                             <summary>查看连接详情</summary>
@@ -135,7 +162,7 @@ export function AssistantConsentCard({ consent, loading, busy, onAuthorize }: { 
                                 拒绝
                             </Button>
                             <Button type="primary" loading={busy} onClick={() => onAuthorize(true)}>
-                                同意并授权
+                                {approvalMode === "full_access" ? "全权委托并连接" : "同意并授权"}
                             </Button>
                         </div>
                     </footer>

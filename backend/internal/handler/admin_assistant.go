@@ -133,6 +133,27 @@ func RegisterAdminAssistantRoutes(api *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"token": secret, "credential": row})
 	})
+	for _, resource := range []string{"tokens", "grants"} {
+		grant := resource == "grants"
+		g.PUT("/"+resource+"/:id/authorization", func(c *gin.Context) {
+			u, err := assistantBrowserUser(c, svc, true)
+			if err != nil {
+				failService(c, err)
+				return
+			}
+			var req struct {
+				ApprovalMode string `json:"approvalMode"`
+			}
+			if !assistantDecode(c, &req) {
+				return
+			}
+			if err := svc.UpdateAssistantAuthorization(u, c.Param("id"), req.ApprovalMode, grant); err != nil {
+				failService(c, err)
+				return
+			}
+			ok(c, gin.H{"ok": true})
+		})
+	}
 	g.DELETE("/tokens/:id", func(c *gin.Context) {
 		u, err := assistantBrowserUser(c, svc, true)
 		if err == nil {
@@ -497,7 +518,7 @@ func assistantMCPHandler(svc *service.Service) http.Handler {
 		IdempotencyKey string          `json:"idempotencyKey,omitempty"`
 	}
 	// 原始处理器避免 SDK 的 Schema/default 与 map 解码把 int64 转为 float64。
-	server.AddTool(&mcp.Tool{Name: "admin_execute_operation", Description: "执行明确的后台操作。写入必须使用稳定幂等键；危险操作返回网页确认地址，确认后原参数重试。unknown 状态需人工核实，禁止换键重试。", InputSchema: map[string]any{
+	server.AddTool(&mcp.Tool{Name: "admin_execute_operation", Description: "执行明确的后台操作。写入必须使用稳定幂等键；逐次审批模式下危险操作返回网页确认地址，完全访问模式直接执行。确认后原参数重试。unknown 状态需人工核实，禁止换键重试。", InputSchema: map[string]any{
 		"type": "object", "required": []string{"operation", "arguments"}, "additionalProperties": false,
 		"properties": map[string]any{"operation": map[string]any{"type": "string"}, "arguments": map[string]any{"type": "object"}, "idempotencyKey": map[string]any{"type": "string"}},
 	}}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
