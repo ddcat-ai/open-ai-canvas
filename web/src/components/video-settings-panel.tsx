@@ -7,7 +7,7 @@ import { ImageSettingsTheme } from "@/components/image-settings-panel";
 import { boolConfig, isSeedanceFastModel, isSeedanceVideoConfig, normalizeSeedanceDuration, normalizeSeedanceRatio, normalizeSeedanceResolution, seedanceRatioOptions } from "@/lib/seedance-video";
 import { isVolcengineArkVideoProtocol } from "@/lib/model-protocols";
 import { type CanvasTheme } from "@/lib/canvas-theme";
-import { formatVideoResolutionLabel, isVideoResolutionMatch, normalizeVideoDuration, videoDimensionsForRatioAndResolution, videoResolutionComparisonKey, VIDEO_DURATION_MIN } from "@/lib/video-generation-options";
+import { formatVideoResolutionLabel, isVideoResolutionMatch, normalizeVideoDuration, videoDimensionsForRatioAndResolution, VIDEO_DURATION_MIN } from "@/lib/video-generation-options";
 import { modelCapabilityConfigFor, resolveVideoRatioValue, resolveVideoResolutionValue, videoDurationOptions, type VideoCapabilityConfig } from "@/lib/model-capabilities";
 import { modelOptionName, resolveModelChannel, resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import { LL2_CONNECTED_VIDEO_MODELS, LL2_VIDEO_DURATION, ll2TiersFor, type LL2ConnectedVideoModel } from "@/lib/ll2-models";
@@ -67,13 +67,7 @@ function VideoSettingsControls({ config, onConfigChange, theme, showTitle = true
                     <SettingGroup title="分辨率" color={theme.node.muted}>
                         <div className="grid grid-cols-3 gap-2">
                             {configuredResolutions.map((item) => (
-                                <OptionPill
-                                    key={item.value}
-                                    selected={isVideoResolutionMatch(resolution, item.value)}
-                                    disabled={!hasPriceTierForVideoSelection(priceTiers, item.value, Number(seconds))}
-                                    theme={theme}
-                                    onClick={() => onConfigChange("vquality", item.value)}
-                                >
+                                <OptionPill key={item.value} selected={isVideoResolutionMatch(resolution, item.value)} theme={theme} onClick={() => onConfigChange("vquality", item.value)}>
                                     {item.label}
                                 </OptionPill>
                             ))}
@@ -107,7 +101,7 @@ function VideoSettingsControls({ config, onConfigChange, theme, showTitle = true
                     </SettingGroup>
                 ) : null}
                 <SettingGroup title="秒数" color={theme.node.muted}>
-                    <VideoDurationControl profile={profile} value={Number(seconds)} theme={theme} disabled={(value) => !hasPriceTierForVideoSelection(priceTiers, resolution, value)} onChange={(value) => onConfigChange("videoSeconds", String(value))} />
+                    <VideoDurationControl profile={profile} value={Number(seconds)} theme={theme} onChange={(value) => onConfigChange("videoSeconds", String(value))} />
                 </SettingGroup>
                 {profile.generateAudio.supported || profile.watermark.supported ? (
                     <SettingGroup title="输出" color={theme.node.muted}>
@@ -138,7 +132,7 @@ function JiMengVideoSettingsPanel({ config, profile, priceTiers, onConfigChange,
                     </div>
                 </SettingGroup>
                 <SettingGroup title="秒数" color={theme.node.muted}>
-                    <VideoDurationControl profile={profile} value={Number(seconds)} theme={theme} disabled={(value) => !hasPriceTierForVideoSelection(priceTiers, "*", value)} onChange={(value) => onConfigChange("videoSeconds", String(value))} />
+                    <VideoDurationControl profile={profile} value={Number(seconds)} theme={theme} onChange={(value) => onConfigChange("videoSeconds", String(value))} />
                 </SettingGroup>
             </div>
         </ImageSettingsTheme>
@@ -162,7 +156,8 @@ function SeedanceVideoSettingsPanel({ config, profile, priceTiers, onConfigChang
                     <div className="grid grid-cols-3 gap-2">
                         {profile.resolutions.map((value) => {
                             const item = { value, label: value.toUpperCase() };
-                            const disabled = (item.value === "1080p" && isSeedanceFastModel(model)) || !hasPriceTierForVideoSelection(priceTiers, item.value, duration);
+                            // 价格档位只是报价参考，不能拿它当能力限制；否则个人渠道没配价时整排分辨率都会变灰。
+                            const disabled = item.value === "1080p" && isSeedanceFastModel(model);
                             return (
                                 <OptionPill key={item.value} selected={resolution === item.value} disabled={disabled} theme={theme} onClick={() => onConfigChange("vquality", item.value)}>
                                     {item.label}
@@ -195,7 +190,7 @@ function SeedanceVideoSettingsPanel({ config, profile, priceTiers, onConfigChang
                     </div>
                 </SettingGroup>
                 <SettingGroup title="时长" color={theme.node.muted}>
-                    <VideoDurationControl profile={profile} value={duration} theme={theme} disabled={(value) => !hasPriceTierForVideoSelection(priceTiers, resolution, value)} onChange={(value) => onConfigChange("videoSeconds", String(value))} />
+                    <VideoDurationControl profile={profile} value={duration} theme={theme} onChange={(value) => onConfigChange("videoSeconds", String(value))} />
                 </SettingGroup>
                 <SettingGroup title="输出" color={theme.node.muted}>
                     <div className="grid grid-cols-2 gap-3 rounded-md px-2" style={{ background: theme.toolbar.itemHover }}>
@@ -245,7 +240,7 @@ function OptionPill({ selected, disabled = false, theme, onClick, children }: { 
             type="button"
             disabled={disabled}
             aria-pressed={selected}
-            className="h-8 cursor-pointer whitespace-nowrap rounded-md px-1 text-[var(--fs-label)] font-medium leading-none transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:opacity-35"
+            className="h-8 cursor-pointer whitespace-nowrap rounded-md px-1 text-[var(--fs-label)] font-medium leading-none transition-all hover:brightness-110 active:scale-[0.97] active:brightness-125 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:opacity-35"
             style={{
                 background: selected ? "#5b21b6" : "transparent",
                 border: `1px solid ${selected ? "#8d54ff" : "transparent"}`,
@@ -349,21 +344,6 @@ function modelPriceTiers(config: AiConfig) {
     const channel = resolveModelChannel(config, config.model);
     const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(config.model));
     return cost?.logicalPriceTiers || [];
-}
-
-function hasPriceTierForVideoSelection(tiers: ReturnType<typeof modelPriceTiers>, resolution: string, seconds: number) {
-    if (!tiers.length) return true;
-    const normalizedResolution = normalizeTierResolution(resolution);
-    return tiers.some((tier) => {
-        const selector = tier.selector || {};
-        const tierResolution = selector.vquality || tier.resolution;
-        const tierSeconds = selector.videoSeconds ? Number(selector.videoSeconds) : tier.videoSeconds;
-        return (tierResolution === "*" || !tierResolution || normalizeTierResolution(tierResolution) === normalizedResolution) && (!tierSeconds || tierSeconds === seconds);
-    });
-}
-
-function normalizeTierResolution(value: string) {
-    return videoResolutionComparisonKey(value);
 }
 
 function DurationRangeControl({ value, min, max, step, theme, onChange }: { value: number; min: number; max: number; step: number; theme: CanvasTheme; onChange: (value: number) => void }) {
@@ -564,7 +544,7 @@ function LL2Pill({ selected, theme, onClick, children }: { selected: boolean; th
         <button
             type="button"
             aria-pressed={selected}
-            className="flex h-8 items-center justify-center rounded-md px-1 text-[var(--fs-label)] font-medium transition-colors hover:brightness-110"
+            className="flex h-8 items-center justify-center rounded-md px-1 text-[var(--fs-label)] font-medium transition-all hover:brightness-110 active:scale-[0.97] active:brightness-125"
             style={{
                 background: selected ? "#5b21b6" : theme.toolbar.itemHover,
                 border: `1px solid ${selected ? "#8d54ff" : "transparent"}`,
