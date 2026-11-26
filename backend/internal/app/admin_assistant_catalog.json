@@ -2050,6 +2050,18 @@
     ]
   },
   {
+    "method": "ImportOfficialAssetResourceURL",
+    "module": "official-assets",
+    "write": true,
+    "highRisk": true,
+    "parameters": [
+      "req"
+    ],
+    "routes": [
+      "POST /admin/official-assets/resources/import-url"
+    ]
+  },
+  {
     "method": "ImportPoseLibrary",
     "module": "pose-library",
     "write": true,

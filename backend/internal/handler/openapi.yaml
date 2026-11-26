@@ -76,6 +76,34 @@ paths:
       summary: 管理 MCP HTTP 传输协商
       security: [{adminAssistantBearer: []}]
       responses: {"405": {description: 无状态模式不提供独立事件流}}
+  /admin/official-assets/resources/import-url:
+    post:
+      tags: [admin, resources]
+      summary: 导入官方素材所需的网络媒体资源
+      description: 仅管理员登录会话。Agent OAuth 通过管理操作 ImportOfficialAssetResourceURL 调用，要求 official-assets:write、稳定幂等键及网页确认。仅接收实际图片、视频和音频；沿用出站 SSRF、上传配额和存储限制。资源归属固定为当前管理员。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [url, uploadKey]
+              properties:
+                url: {type: string, format: uri, description: 媒体文件直链，最多 8192 字节}
+                uploadKey: {type: string, description: 8–160 字节，同一素材重试保持不变，改变内容须使用新键}
+      responses:
+        "200":
+          description: data 为持久资源对象，data.id 可作为 CreateOfficialAsset 的 resourceId；包含实际 kind、mimeType 及可探测的图片尺寸。导入不会自动创建或发布官方素材。
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Envelope"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+        "409": {$ref: "#/components/responses/Error"}
+        "502": {$ref: "#/components/responses/Error"}
+        "504": {$ref: "#/components/responses/Error"}
   /admin-assistant/setup:
     get:
       tags: [admin]

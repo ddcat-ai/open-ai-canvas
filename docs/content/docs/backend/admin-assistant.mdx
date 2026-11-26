@@ -17,7 +17,7 @@ description: 管理员浏览器授权、可撤销 Token、管理操作发现及 
 
 个人 Token 和 OAuth 授权列表支持 `?page=1` 分页，每页 50 条，返回 `data.items` 和 `data.hasMore`。后台可逐页查看及撤销历史凭据，已撤销记录不会截断较早仍有效的凭据。
 
-公开客户端支持动态注册，默认按来源 IP 限流。也可通过 `CANVAS_ADMIN_ASSISTANT_OAUTH_CLIENTS` 配置预注册客户端：
+公开客户端支持动态注册，默认按来源 IP 限流。动态注册忽略未使用的客户端扩展元数据（如 Codex 的 `application_type: "native"`），仍校验已支持字段的类型、回调地址、授权类型和客户端认证方式；其他管理 JSON 接口仍拒绝未知字段。也可通过 `CANVAS_ADMIN_ASSISTANT_OAUTH_CLIENTS` 配置预注册客户端：
 
 ```json
 [{"client_id":"agent-client","client_name":"Agent","redirect_uris":["https://client.example/callback"]}]
@@ -84,7 +84,17 @@ Skill REST 发现与描述路径为 `/api/admin-assistant/operations` 和 `/oper
 
 ## 数据与验证
 
-Schema 111 添加专用认证、授权码、刷新重放、调用记录和临时附件表，并纳入 SQLite→PostgreSQL 迁移清单。PostgreSQL 新表启用 RLS，普通 PostgREST 角色无策略，不可读取管理凭据或记录；后端使用数据库 owner/service role。Token 和授权码只保存哈希，预览及结果中的认证字段脱敏，调用审计保留来源、操作、耗时、结果及关联 ID。
+### 官方素材网络导入
+
+`ImportOfficialAssetResourceURL` 归属 `official-assets:write`，MCP 和 Skill 可通过现有操作发现、描述及执行入口调用。参数形如 `{"req":{"url":"https://media.example.com/sample.jpg","uploadKey":"official-test-image-001"}}`；`uploadKey` 为 8–160 字节，同一素材重试保持不变。该操作默认需要网页确认，确认前不会下载或写入资源；执行层要求独立的稳定 `idempotencyKey`。
+
+成功结果的 `result.id` 是持久 Resource ID，可作为 `CreateOfficialAsset` 的 `req.resourceId`。先描述创建接口并按 Schema 提供分类、媒体类型、来源和授权信息；创建默认草稿，发布仍是独立操作。临时附件 ID 不能代替 Resource ID，也无需向普通上传接口提交 Agent OAuth 凭据。
+
+仅接收图片、视频和音频直链，按实际内容探测类型，拒绝伪装媒体的 HTML 等文件。下载沿用出站目标及重定向 SSRF 检查和平台单文件限制；写入沿用每日上传、容量配额、资源幂等和对象存储策略。资源归属固定为当前管理员，调用方不能指定其他用户；普通只读凭据、撤销后的授权均不可调用。
+
+浏览器同源登录可使用 `POST /api/admin/official-assets/resources/import-url`，JSON 正文为上述 `req` 内的对象；返回标准业务信封，`data.id` 为资源 ID。Agent 继续走管理执行入口，以保留 OAuth scope、网页确认和调用审计。
+
+Schema 112 添加专用认证、授权码、刷新重放、调用记录和临时附件表，并纳入 SQLite→PostgreSQL 迁移清单。PostgreSQL 新表启用 RLS，普通 PostgREST 角色无策略，不可读取管理凭据或记录；后端使用数据库 owner/service role。Token 和授权码只保存哈希，预览及结果中的认证字段脱敏，调用审计保留来源、操作、耗时、结果及关联 ID。
 
 专项验证：`go test ./internal/app ./internal/handler ./internal/database -run 'Assistant|CurrentSchemaVersionMatchesMigrationPlan'`。PostgreSQL 集成测试使用专用测试库的 `CANVAS_TEST_POSTGRES_DSN`，自动创建并清理隔离 schema，禁止填生产 DSN。
 

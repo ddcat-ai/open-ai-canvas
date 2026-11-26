@@ -53,9 +53,15 @@ func assistantBearer(c *gin.Context, svc *service.Service) (*service.AssistantPr
 	return svc.AuthenticateAssistant(fields[1])
 }
 func assistantDecode(c *gin.Context, v any) bool {
+	return assistantDecodeObject(c, v, false)
+}
+
+func assistantDecodeObject(c *gin.Context, v any, allowUnknownFields bool) bool {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20)
 	d := json.NewDecoder(c.Request.Body)
-	d.DisallowUnknownFields()
+	if !allowUnknownFields {
+		d.DisallowUnknownFields()
+	}
 	if err := d.Decode(v); err != nil {
 		failService(c, service.BadAuthRequest("无效的 JSON 参数"))
 		return false
@@ -339,7 +345,9 @@ func registerAssistantOAuth(g *gin.RouterGroup, svc *service.Service) {
 			AuthMethod    string   `json:"token_endpoint_auth_method"`
 			Scope         string   `json:"scope,omitempty"`
 		}
-		if !assistantDecode(c, &req) {
+		// OAuth 动态注册允许忽略未使用的客户端元数据；Codex 会附带 application_type。
+		// 仅此公开协议入口放宽未知字段，仍限制正文大小、字段类型和单个 JSON 对象。
+		if !assistantDecodeObject(c, &req, true) {
 			return
 		}
 		if req.AuthMethod != "" && req.AuthMethod != "none" {

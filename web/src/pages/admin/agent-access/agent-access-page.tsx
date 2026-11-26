@@ -1,4 +1,4 @@
-import { App, Alert, Button, Descriptions, Input, InputNumber, Popconfirm, Space, Tag, Typography } from "antd";
+import { App, Alert, Button, Input, InputNumber, Popconfirm, Space, Tag, Typography } from "antd";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router";
@@ -7,6 +7,7 @@ import { AdminPageFrame } from "../components/admin-shell";
 import { AdminModal } from "../ui/overlays";
 import { Checkbox } from "../ui/controls";
 import { assistantInstallInstructions } from "./install-instructions";
+import { AssistantConsentCard } from "./assistant-consent-card";
 import {
     authorizeAssistant,
     confirmAssistantCall,
@@ -102,50 +103,13 @@ export default function AgentAccessPage() {
     const failures = [setup.error, release.error, tokens.error, grants.error, calls.error, focused.error, consent.error].filter(Boolean);
     const installInstructions = setup.data ? assistantInstallInstructions(setup.data.mcpUrl, setup.data.skillUrl) : "";
     return (
-        <AdminPageFrame title={consentMode ? "授权 Agent 客户端" : "Agent 接入"} description="通过 MCP 或 Skill 管理后台，按模块授权并保留调用记录。" scroll>
-            <div className="flex flex-col gap-5 p-4 sm:p-5">
+        <AdminPageFrame title={consentMode ? "授权 Agent 客户端" : "Agent 接入"} description={consentMode ? "确认客户端身份及访问权限，完成连接。" : "通过 MCP 或 Skill 管理后台，按模块授权并保留调用记录。"} scroll>
+            <div className={`flex flex-col gap-5 p-4 sm:p-5${consentMode ? " assistant-consent-layout" : ""}`}>
                 {failures.map((error, index) => (
                     <Alert key={index} type="error" showIcon title={errorLabel(error)} />
                 ))}
                 {consentMode ? (
-                    <section className="rounded-xl border border-border bg-background p-5">
-                        <h2 className="mb-4 text-lg font-semibold">允许此客户端访问管理后台？</h2>
-                        {consent.data && (
-                            <>
-                                <Descriptions
-                                    column={1}
-                                    items={[
-                                        { key: "client", label: "客户端", children: consent.data.clientName },
-                                        { key: "id", label: "客户端 ID", children: consent.data.clientId },
-                                        { key: "redirect", label: "回调地址", children: <span className="break-all">{consent.data.redirectUri}</span> },
-                                        { key: "resource", label: "访问服务", children: consent.data.resource },
-                                        {
-                                            key: "scopes",
-                                            label: "请求权限",
-                                            children: (
-                                                <div className="flex flex-wrap gap-1">
-                                                    {consent.data.scopes.map((scope) => (
-                                                        <Tag key={scope} color={scope.endsWith(":write") ? "orange" : undefined}>
-                                                            {scope}
-                                                        </Tag>
-                                                    ))}
-                                                </div>
-                                            ),
-                                        },
-                                    ]}
-                                />
-                                <Alert className="my-4" type="warning" showIcon title="授权后客户端可按这些权限操作后台。危险操作仍需在网页单独确认，可随时撤销授权。" />
-                                <Space>
-                                    <Button type="primary" loading={busy} onClick={() => void authorize(true)}>
-                                        授权此客户端
-                                    </Button>
-                                    <Button disabled={busy} onClick={() => void authorize(false)}>
-                                        拒绝
-                                    </Button>
-                                </Space>
-                            </>
-                        )}
-                    </section>
+                    <AssistantConsentCard consent={consent.data} loading={consent.isPending} busy={busy} onAuthorize={(approve) => void authorize(approve)} />
                 ) : (
                     <>
                         <section className="rounded-xl border border-border bg-background p-5">

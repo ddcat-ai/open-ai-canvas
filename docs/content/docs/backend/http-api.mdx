@@ -59,6 +59,8 @@ description: 信封、错误码与 OpenAPI
 
 ## 官方素材扩展
 
+管理员网络媒体导入使用 `POST /api/admin/official-assets/resources/import-url`，正文为 `{ url, uploadKey }`，成功返回资源对象（`data.id` 用于新建素材的 `resourceId`）。仅接收实际图片／视频／音频，保留出站 SSRF、上传和存储配额限制。Agent OAuth 通过 `ImportOfficialAssetResourceURL` 管理操作调用，要求 `official-assets:write`、幂等键及网页确认；普通资源上传接口的登录方式保持不变。
+
 用户浏览和详情使用 `/api/official-assets`，画布通过 `/api/official-assets/:id/reference` 获取引用；管理员管理使用 `/api/admin/official-assets`，发布、下架为对应资源的 PATCH 操作。推荐提交、详情和审核由官方素材推荐路由提供，保留登录及管理员鉴权。角色引用不自动创建个人素材副本。
 
 ## 系统更新来源

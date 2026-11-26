@@ -347,3 +347,87 @@ func TestAssistantHTTPOAuthDCR(t *testing.T) {
 		t.Fatal("authorization does not lead to existing login UI")
 	}
 }
+
+func TestAssistantHTTPOfficialResourceImportRoute(t *testing.T) {
+	r, svc, _, _ := assistantHTTPFixture(t)
+	RegisterOfficialAssetRoutes(r.Group("/api"), svc)
+	for _, tc := range []struct {
+		cookie string
+		status int
+	}{
+		{"", http.StatusUnauthorized},
+		{"session-user.test-token", http.StatusForbidden},
+		{"session-admin.test-token", http.StatusBadRequest},
+	} {
+		w := assistantHTTPRequest(r, http.MethodPost, "/api/admin/official-assets/resources/import-url", tc.cookie, "", "", map[string]any{})
+		if w.Code != tc.status {
+			t.Fatalf("import route %d, want %d: %s", w.Code, tc.status, w.Body.String())
+		}
+	}
+}
+
+func TestAssistantHTTPOAuthDCRClientMetadata(t *testing.T) {
+	r, _, _, _ := assistantHTTPFixture(t)
+	for _, tc := range []struct {
+		name   string
+		extra  map[string]any
+		status int
+	}{
+		{"codex native client", map[string]any{"application_type": "native"}, http.StatusCreated},
+		{"extension metadata", map[string]any{"client_uri": "https://example.com", "custom_metadata": map[string]any{"version": 1}}, http.StatusCreated},
+		{"unsafe redirect", map[string]any{"application_type": "native", "redirect_uris": []string{"http://untrusted.example/callback"}}, http.StatusBadRequest},
+		{"unsupported authentication", map[string]any{"application_type": "native", "token_endpoint_auth_method": "client_secret_basic"}, http.StatusBadRequest},
+		{"unsupported grant", map[string]any{"application_type": "native", "grant_types": []string{"client_credentials"}}, http.StatusBadRequest},
+		{"unsupported response", map[string]any{"application_type": "native", "response_types": []string{"token"}}, http.StatusBadRequest},
+		{"invalid redirect type", map[string]any{"application_type": "native", "redirect_uris": "http://127.0.0.1:1234/callback"}, http.StatusBadRequest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := map[string]any{
+				"client_name": "Codex", "redirect_uris": []string{"http://127.0.0.1:1234/callback"},
+				"grant_types":    []string{"authorization_code", "refresh_token"},
+				"response_types": []string{"code"}, "token_endpoint_auth_method": "none",
+			}
+			for key, value := range tc.extra {
+				body[key] = value
+			}
+			w := assistantHTTPRequest(r, "POST", "/api/admin-assistant/oauth/register", "", "", "", body)
+			if w.Code != tc.status {
+				t.Fatalf("DCR %d, want %d: %s", w.Code, tc.status, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestAssistantDecodeObjectBoundaries(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, tc := range []struct {
+		name         string
+		body         string
+		allowUnknown bool
+		status       int
+	}{
+		{"strict unknown field", `{"client_name":"Codex","application_type":"native"}`, false, http.StatusBadRequest},
+		{"registration metadata", `{"client_name":"Codex","application_type":"native"}`, true, http.StatusNoContent},
+		{"multiple objects", `{"client_name":"Codex"} {}`, true, http.StatusBadRequest},
+		{"invalid field type", `{"client_name":123}`, true, http.StatusBadRequest},
+		{"malformed JSON", `{"client_name":`, true, http.StatusBadRequest},
+		{"oversized metadata", `{"extension":"` + strings.Repeat("x", 1<<20) + `"}`, true, http.StatusBadRequest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := gin.New()
+			r.POST("/decode", func(c *gin.Context) {
+				var req struct {
+					Name string `json:"client_name"`
+				}
+				if assistantDecodeObject(c, &req, tc.allowUnknown) {
+					c.Status(http.StatusNoContent)
+				}
+			})
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/decode", strings.NewReader(tc.body)))
+			if w.Code != tc.status {
+				t.Fatalf("decode %d, want %d: %s", w.Code, tc.status, w.Body.String())
+			}
+		})
+	}
+}

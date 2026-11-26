@@ -33,6 +33,7 @@ func RegisterOfficialAssetRoutes(r *gin.RouterGroup, svc *service.Service) {
 	r.GET("/official-assets/:id/reference", getOfficialAssetReferenceHandler(svc))
 
 	admin := r.Group("/admin/official-assets")
+	admin.POST("/resources/import-url", importOfficialAssetResourceURLHandler(svc))
 	admin.POST("", createOfficialAssetHandler(svc))
 	admin.GET("", listAdminOfficialAssetsHandler(svc))
 	admin.GET("/:id", getAdminOfficialAssetHandler(svc))
@@ -41,6 +42,26 @@ func RegisterOfficialAssetRoutes(r *gin.RouterGroup, svc *service.Service) {
 	admin.PATCH("/:id/unpublish", unpublishOfficialAssetHandler(svc))
 	admin.PATCH("/:id/sort", sortOfficialAssetHandler(svc))
 	admin.DELETE("/:id", deleteOfficialAssetHandler(svc))
+}
+
+func importOfficialAssetResourceURLHandler(svc *service.Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.ImportOfficialAssetResourceRequest
+		if !assistantDecode(c, &req) {
+			return
+		}
+		resource, err := svc.ImportOfficialAssetResourceURL(user, req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, resource)
+	}
 }
 
 func copyOfficialCharacterHandler(svc *service.Service) gin.HandlerFunc {
