@@ -12,62 +12,87 @@ import (
 
 func TestObjectRangeReadsHonorCancellation(t *testing.T) {
 	for _, provider := range []string{aliyunOSSProvider, tencentCOSProvider, s3Provider, "cdn"} {
-		t.Run(provider, func(t *testing.T) {
-			t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
-			for _, name := range []string{"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"} {
-				t.Setenv(name, "")
-			}
-			started, stopped, release := make(chan struct{}), make(chan struct{}), make(chan struct{})
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Header.Get("Range") != "bytes=0-3" {
-					t.Errorf("range = %q", r.Header.Get("Range"))
+		for _, phase := range []string{"headers", "body"} {
+			t.Run(provider+"/"+phase, func(t *testing.T) {
+				t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+				for _, name := range []string{"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"} {
+					t.Setenv(name, "")
 				}
-				close(started)
+				started, stopped, release, bodyRead := make(chan struct{}), make(chan struct{}), make(chan struct{}), make(chan struct{})
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Header.Get("Range") != "bytes=0-3" {
+						t.Errorf("range = %q", r.Header.Get("Range"))
+					}
+					if phase == "body" {
+						w.Header().Set("Content-Length", "4")
+						w.Header().Set("Content-Range", "bytes 0-3/6")
+						w.WriteHeader(http.StatusPartialContent)
+						_, _ = w.Write([]byte("x"))
+						w.(http.Flusher).Flush()
+					}
+					close(started)
+					select {
+					case <-r.Context().Done():
+						close(stopped)
+					case <-release:
+					}
+				}))
+				defer server.Close()
+				defer close(release)
+				setting := Settings{Provider: provider, Endpoint: server.URL, Region: "us-east-1", Bucket: "bucket", PathStyle: true, AccessKeyID: "test-id", AccessKeySecret: "test-secret"}
+				if provider == "cdn" {
+					setting.CDNBaseURL = server.URL
+					setting.Delivery.CDNAuthMode = "public"
+				}
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				result := make(chan error, 1)
+				go func() {
+					stream, err := GetOSSObjectRangeContext(ctx, setting, "image.png", "bytes=0-3")
+					if stream != nil {
+						if phase == "body" && err == nil {
+							_, err = io.ReadFull(stream.Body, make([]byte, 1))
+							if err == nil {
+								close(bodyRead)
+								_, err = io.Copy(io.Discard, stream.Body)
+							}
+						}
+						stream.Body.Close()
+					}
+					result <- err
+				}()
 				select {
-				case <-r.Context().Done():
-					close(stopped)
-				case <-release:
+				case <-started:
+				case err := <-result:
+					t.Fatalf("read failed before reaching upstream: %v", err)
+				case <-time.After(5 * time.Second):
+					t.Fatal("upstream request did not start")
 				}
-			}))
-			defer server.Close()
-			defer close(release)
-			setting := Settings{Provider: provider, Endpoint: server.URL, Region: "us-east-1", Bucket: "bucket", PathStyle: true, AccessKeyID: "test-id", AccessKeySecret: "test-secret"}
-			if provider == "cdn" {
-				setting.CDNBaseURL = server.URL
-				setting.Delivery.CDNAuthMode = "public"
-			}
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			result := make(chan error, 1)
-			go func() {
-				stream, err := GetOSSObjectRangeContext(ctx, setting, "image.png", "bytes=0-3")
-				if stream != nil {
-					stream.Body.Close()
+				if phase == "body" {
+					select {
+					case <-bodyRead:
+					case err := <-result:
+						t.Fatalf("body read ended before cancellation: %v", err)
+					case <-time.After(5 * time.Second):
+						t.Fatal("body read did not start")
+					}
 				}
-				result <- err
-			}()
-			select {
-			case <-started:
-			case err := <-result:
-				t.Fatalf("read failed before reaching upstream: %v", err)
-			case <-time.After(5 * time.Second):
-				t.Fatal("upstream request did not start")
-			}
-			cancel()
-			select {
-			case err := <-result:
-				if err == nil {
-					t.Fatal("canceled read succeeded")
+				cancel()
+				select {
+				case err := <-result:
+					if err == nil {
+						t.Fatal("canceled read succeeded")
+					}
+				case <-time.After(2 * time.Second):
+					t.Fatal("object read ignored cancellation")
 				}
-			case <-time.After(2 * time.Second):
-				t.Fatal("object read ignored cancellation")
-			}
-			select {
-			case <-stopped:
-			case <-time.After(2 * time.Second):
-				t.Fatal("upstream request was not canceled")
-			}
-		})
+				select {
+				case <-stopped:
+				case <-time.After(2 * time.Second):
+					t.Fatal("upstream request was not canceled")
+				}
+			})
+		}
 	}
 }
 
