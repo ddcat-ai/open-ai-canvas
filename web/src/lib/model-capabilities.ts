@@ -618,7 +618,7 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
     const comflyOperation = starRouterComflyVideoProcessingOperation(protocol);
     if (comflyOperation) {
         // 只公开单视频输入；时长上限属于平台预算，不代表上游规格。
-        video.references = { ...video.references, minImages: 0, maxImages: 0, maxImageBytes: 0, maxVideos: 1, maxVideoBytes: 100 * 1024 * 1024, maxVideoDurationSeconds: DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS, maxAudios: 0 };
+        video.references = { ...video.references, minImages: 0, maxImages: 0, maxImageBytes: 0, maxVideos: 1, maxVideoBytes: 100 * 1024 * 1024, maxAudios: 0 };
         video.duration = { selection: "range", min: 1, max: DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS, step: 1, default: 5 };
         video.ratios = [];
         video.defaultRatio = "";

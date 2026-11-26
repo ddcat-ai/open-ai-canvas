@@ -310,7 +310,7 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 	}
 	if operation := starRouterComflyVideoProcessingOperation(protocol); operation != "" {
 		// 工作流只公开单视频输入；180 秒是平台处理预算，不是供应商声明的上限。
-		video.References = VideoReferenceConfig{PromptMaxChars: DefaultVideoPromptMaxChars, MaxVideos: 1, MaxVideoBytes: 100 * 1024 * 1024, MaxVideoDuration: DefaultVideoProcessingMaxSourceSeconds}
+		video.References = VideoReferenceConfig{PromptMaxChars: DefaultVideoPromptMaxChars, MaxVideos: 1, MaxVideoBytes: 100 * 1024 * 1024}
 		video.Duration = VideoDurationConfig{Selection: "range", Min: 1, Max: DefaultVideoProcessingMaxSourceSeconds, Step: 1, Default: 5}
 		video.Ratios, video.DefaultRatio = []string{}, ""
 		video.Resolutions, video.DefaultResolution = []string{}, ""
