@@ -125,6 +125,10 @@ func putS3Object(ctx context.Context, setting Settings, objectKey string, mimeTy
 }
 
 func GetS3ObjectRange(setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
+	return getS3ObjectRange(context.Background(), setting, objectKey, rangeHeader)
+}
+
+func getS3ObjectRange(ctx context.Context, setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
 	setting = NormalizeSettings(setting)
 	client, err := NewS3Client(setting, transferTimeout(setting))
 	if err != nil {
@@ -134,7 +138,7 @@ func GetS3ObjectRange(setting Settings, objectKey string, rangeHeader string) (*
 	if rangeHeader != "" {
 		input.Range = aws.String(rangeHeader)
 	}
-	output, err := client.GetObjectWithContext(context.Background(), input)
+	output, err := client.GetObjectWithContext(ctx, input)
 	if err != nil {
 		if requestFailure, ok := err.(awserr.RequestFailure); ok && requestFailure.StatusCode() == http.StatusRequestedRangeNotSatisfiable {
 			return &ObjectStream{Body: io.NopCloser(bytes.NewReader(nil)), StatusCode: http.StatusRequestedRangeNotSatisfiable, AcceptRanges: "bytes"}, nil

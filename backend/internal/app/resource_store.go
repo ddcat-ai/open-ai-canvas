@@ -6,6 +6,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -248,14 +249,21 @@ func (s *Service) OpenResource(userID string, id string) (*model.Resource, io.Re
 }
 
 func (s *Service) OpenResourceRange(userID string, id string, rangeHeader string) (*ResourceStream, error) {
-	resource, err := s.repo.ResourceForUser(userID, id)
+	return s.OpenResourceRangeContext(context.Background(), userID, id, rangeHeader)
+}
+
+func (s *Service) OpenResourceRangeContext(ctx context.Context, userID string, id string, rangeHeader string) (*ResourceStream, error) {
+	resource, err := s.repo.WithContext(ctx).ResourceForUser(userID, id)
 	if err != nil {
 		return nil, err
 	}
-	return s.openResourceRange(userID, resource, rangeHeader)
+	return s.openResourceRange(ctx, userID, resource, rangeHeader)
 }
 
-func (s *Service) openResourceRange(userID string, resource *model.Resource, rangeHeader string) (*ResourceStream, error) {
+func (s *Service) openResourceRange(ctx context.Context, userID string, resource *model.Resource, rangeHeader string) (*ResourceStream, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if resource.Status != model.ResourceStatusReady {
 		return nil, BadAuthRequest("资源尚未上传完成")
 	}
@@ -277,8 +285,11 @@ func (s *Service) openResourceRange(userID string, resource *model.Resource, ran
 	setting.Endpoint = firstNonEmpty(resource.Endpoint, setting.Endpoint)
 	setting.Bucket = firstNonEmpty(resource.Bucket, setting.Bucket)
 	setting = s.storageSettingWithRuntimePolicy(setting)
-	stream, err := getOriginOSSObjectRange(setting, resource.ObjectKey, normalizeSingleByteRange(rangeHeader))
+	stream, err := getOriginOSSObjectRange(ctx, setting, resource.ObjectKey, normalizeSingleByteRange(rangeHeader))
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		return nil, err
 	}
 	return &ResourceStream{Resource: resource, Body: stream.Body, ETag: stream.ETag, StatusCode: stream.StatusCode, ContentLength: stream.ContentLength, ContentRange: stream.ContentRange, AcceptRanges: stream.AcceptRanges}, nil

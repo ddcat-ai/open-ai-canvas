@@ -74,9 +74,9 @@ func RegisterAdminStorageRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		delivery, err := svc.PrepareResourceDeliveryAsAdmin(user, c.Param("id"), resourceAccessOptions(c), c.GetHeader("Range"))
+		delivery, err := svc.PrepareResourceDeliveryAsAdmin(c.Request.Context(), user, c.Param("id"), resourceAccessOptions(c), c.GetHeader("Range"))
 		if err != nil {
-			failService(c, err)
+			failResourceDelivery(c, err)
 			return
 		}
 		disposition := ""

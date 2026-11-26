@@ -196,7 +196,7 @@ func (s *Service) measuredAudioOutput(task model.Task) (*model.Resource, int64, 
 	if strings.Trim(res.ETag, "\"") == "" || strings.HasPrefix(res.ETag, "W/") {
 		return nil, 0, audioReviewError("audio_duration_unverified", "原音频对象缺少可核对的版本")
 	}
-	stream, err := s.openResourceRange(task.UserID, res, "")
+	stream, err := s.openResourceRange(context.Background(), task.UserID, res, "")
 	if err != nil {
 		return nil, 0, WrapAppError(503, "暂时无法读取原音频对象，请确认存储可用后重试", err)
 	}

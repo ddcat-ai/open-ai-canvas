@@ -24,9 +24,9 @@ func RegisterAppearanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 					return
 				}
 			}
-			delivery, err := svc.PrepareUpdateAnnouncementDelivery(actor, c.Param("id"), resourceAccessOptions(c), c.GetHeader("Range"))
+			delivery, err := svc.PrepareUpdateAnnouncementDelivery(c.Request.Context(), actor, c.Param("id"), resourceAccessOptions(c), c.GetHeader("Range"))
 			if err != nil {
-				failService(c, err)
+				failResourceDelivery(c, err)
 				return
 			}
 			serveResourceDelivery(c, delivery, "private, no-store", "")
@@ -45,9 +45,9 @@ func RegisterAppearanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 	})
 
 	r.GET("/public/appearance/assets/:slot", func(c *gin.Context) {
-		delivery, err := svc.PrepareAppearanceAssetDelivery(c.Param("slot"), resourceAccessOptions(c), c.GetHeader("Range"))
+		delivery, err := svc.PrepareAppearanceAssetDelivery(c.Request.Context(), c.Param("slot"), resourceAccessOptions(c), c.GetHeader("Range"))
 		if err != nil {
-			failService(c, err)
+			failResourceDelivery(c, err)
 			return
 		}
 		serveResourceDelivery(c, delivery, "public, no-cache", "")

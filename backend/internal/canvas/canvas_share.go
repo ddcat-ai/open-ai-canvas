@@ -1,6 +1,7 @@
 package canvas
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -146,15 +147,15 @@ func (s *Service) OpenSharedCanvasResourceRange(token string, resourceID string,
 	return s.host.OpenResourceRange(userID, resource, rangeHeader)
 }
 
-func (s *Service) PrepareSharedCanvasResourceDelivery(token string, resourceID string, options assets.AccessOptions, rangeHeader string) (*assets.ResourceDelivery, error) {
-	userID, resource, share, err := s.sharedCanvasResource(token, resourceID)
+func (s *Service) PrepareSharedCanvasResourceDelivery(ctx context.Context, token string, resourceID string, options assets.AccessOptions, rangeHeader string) (*assets.ResourceDelivery, error) {
+	userID, resource, share, err := New(s.repo.WithContext(ctx), s.host).sharedCanvasResource(token, resourceID)
 	if err != nil {
 		return nil, err
 	}
 	if share.ExpiresAt != nil {
 		options.ExpiresAt = *share.ExpiresAt
 	}
-	return s.host.PrepareResourceDelivery(userID, resource, options, rangeHeader)
+	return s.host.PrepareResourceDelivery(ctx, userID, resource, options, rangeHeader)
 }
 
 func (s *Service) sharedCanvasResource(token string, resourceID string) (string, *model.Resource, *model.CanvasShare, error) {

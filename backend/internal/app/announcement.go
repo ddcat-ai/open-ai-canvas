@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -267,14 +268,14 @@ func (s *Service) OpenAnnouncementImage(actor *model.User, announcementID string
 	if resource.Kind != "image" || resource.Status != model.ResourceStatusReady {
 		return nil, BadAuthRequest("公告配图资源不可用")
 	}
-	return s.openResourceRange(resource.UserID, resource, rangeHeader)
+	return s.openResourceRange(context.Background(), resource.UserID, resource, rangeHeader)
 }
 
-func (s *Service) PrepareAnnouncementImageDelivery(actor *model.User, announcementID string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
+func (s *Service) PrepareAnnouncementImageDelivery(ctx context.Context, actor *model.User, announcementID string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
 	if actor == nil {
 		return nil, Unauthorized("请先登录")
 	}
-	announcement, err := s.repo.Announcement(strings.TrimSpace(announcementID))
+	announcement, err := s.repo.WithContext(ctx).Announcement(strings.TrimSpace(announcementID))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, NotFound("公告不存在")
@@ -287,7 +288,7 @@ func (s *Service) PrepareAnnouncementImageDelivery(actor *model.User, announceme
 	if announcement.ImageResourceID == "" {
 		return nil, NotFound("公告配图不存在")
 	}
-	resource, err := s.repo.Resource(announcement.ImageResourceID)
+	resource, err := s.repo.WithContext(ctx).Resource(announcement.ImageResourceID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, NotFound("公告配图不存在")
@@ -300,7 +301,7 @@ func (s *Service) PrepareAnnouncementImageDelivery(actor *model.User, announceme
 	if options.Purpose == "" {
 		options.Purpose = assets.PurposeDisplay
 	}
-	return s.prepareResourceDelivery(resource.UserID, resource, options, rangeHeader)
+	return s.prepareResourceDelivery(ctx, resource.UserID, resource, options, rangeHeader)
 }
 
 func (s *Service) cleanupStaleAnnouncementImageDrafts() {

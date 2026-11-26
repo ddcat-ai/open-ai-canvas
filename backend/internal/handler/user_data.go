@@ -249,9 +249,9 @@ func registerAccountResourceExtras(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, gin.H{"sync": result})
 	})
 	publicResourceHandler := func(c *gin.Context) {
-		delivery, err := svc.PreparePublicResourceDelivery(c.Param("id"), c.Query("expires"), c.Query("signature"), resourceAccessOptions(c), c.GetHeader("Range"))
+		delivery, err := svc.PreparePublicResourceDelivery(c.Request.Context(), c.Param("id"), c.Query("expires"), c.Query("signature"), resourceAccessOptions(c), c.GetHeader("Range"))
 		if err != nil {
-			failService(c, err)
+			failResourceDelivery(c, err)
 			return
 		}
 		serveResourceDelivery(c, delivery, publicResourceCacheControl(c, delivery, time.Now().UTC()), "")
@@ -350,7 +350,7 @@ func registerWorkspaceResourceFiles(r *gin.RouterGroup, svc *service.Service) {
 		if targetFormat := strings.ToLower(strings.TrimSpace(c.Query("format"))); targetFormat == "jpeg" {
 			if resource, resErr := svc.Resource(ownerKey, c.Param("id")); resErr == nil &&
 				imageTranscodeEligible(resource.MimeType, resource.Size, targetFormat) {
-				if stream, streamErr := svc.OpenResourceRange(ownerKey, resource.ID, ""); streamErr == nil {
+				if stream, streamErr := svc.OpenResourceRangeContext(c.Request.Context(), ownerKey, resource.ID, ""); streamErr == nil {
 					if tryServeImageTranscoded(c, stream.Body, resource.MimeType, resource.Size, targetFormat) {
 						stream.Body.Close()
 						return
@@ -359,9 +359,12 @@ func registerWorkspaceResourceFiles(r *gin.RouterGroup, svc *service.Service) {
 				}
 			}
 		}
-		delivery, err := svc.PrepareResourceDelivery(ownerKey, c.Param("id"), options, c.GetHeader("Range"))
+		if c.Request.Context().Err() != nil {
+			return
+		}
+		delivery, err := svc.PrepareResourceDelivery(c.Request.Context(), ownerKey, c.Param("id"), options, c.GetHeader("Range"))
 		if err != nil {
-			failService(c, err)
+			failResourceDelivery(c, err)
 			return
 		}
 		cache := "private, no-cache"

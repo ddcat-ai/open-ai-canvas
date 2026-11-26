@@ -6,6 +6,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"strconv"
 	"strings"
@@ -153,10 +154,10 @@ func (s *Service) OpenAdminAPICallLogMediaRange(actor *model.User, logID string,
 	if err != nil {
 		return nil, err
 	}
-	return s.openResourceRange(userID, resource, rangeHeader)
+	return s.openResourceRange(context.Background(), userID, resource, rangeHeader)
 }
 
-func (s *Service) PrepareAdminAPICallLogMediaDelivery(actor *model.User, logID string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
+func (s *Service) PrepareAdminAPICallLogMediaDelivery(ctx context.Context, actor *model.User, logID string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
 	userID, resource, err := s.adminAPICallLogMediaResource(actor, logID)
 	if err != nil {
 		return nil, err
@@ -164,7 +165,7 @@ func (s *Service) PrepareAdminAPICallLogMediaDelivery(actor *model.User, logID s
 	if options.Purpose == "" {
 		options.Purpose = assets.PurposeDisplay
 	}
-	return s.prepareResourceDelivery(userID, resource, options, rangeHeader)
+	return s.prepareResourceDelivery(ctx, userID, resource, options, rangeHeader)
 }
 
 func (s *Service) adminAPICallLogMediaResource(actor *model.User, logID string) (string, *model.Resource, error) {

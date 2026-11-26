@@ -108,32 +108,48 @@ type ObjectStream struct {
 }
 
 func GetOSSObjectRange(setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
+	return GetOSSObjectRangeContext(context.Background(), setting, objectKey, rangeHeader)
+}
+
+// GetOSSObjectRangeContext keeps both the request and its response body bound to ctx.
+// The caller must close the body before releasing the context.
+func GetOSSObjectRangeContext(ctx context.Context, setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	setting = NormalizeSettings(setting)
 	// This compatibility entry point is also used by older callers that only
 	// know CDNBaseURL. The application delivery policy uses GetOriginObjectRange
 	// for an explicit private-proxy fallback, so a missing CDN auth mode never
 	// turns that fallback into an accidental CDN request.
 	if setting.CDNBaseURL != "" && (setting.Delivery.CDNAuthMode == "" || CDNEnabled(setting)) {
-		return getCDNObjectRange(setting, objectKey, rangeHeader)
+		return getCDNObjectRange(ctx, setting, objectKey, rangeHeader)
 	}
-	return GetOriginObjectRange(setting, objectKey, rangeHeader)
+	return GetOriginObjectRangeContext(ctx, setting, objectKey, rangeHeader)
 }
 
 func GetOriginObjectRange(setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
-	setting = NormalizeSettings(setting)
-	if usesS3Protocol(setting.Provider) {
-		return GetS3ObjectRange(setting, objectKey, rangeHeader)
-	}
-	if setting.Provider == tencentCOSProvider {
-		return GetCOSObjectRange(setting, objectKey, rangeHeader)
-	}
-	if setting.Provider == qiniuKodoProvider {
-		return GetQiniuObjectRange(setting, objectKey, rangeHeader)
-	}
-	return GetAliyunOSSObjectRange(setting, objectKey, rangeHeader)
+	return GetOriginObjectRangeContext(context.Background(), setting, objectKey, rangeHeader)
 }
 
-func getCDNObjectRange(setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
+func GetOriginObjectRangeContext(ctx context.Context, setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	setting = NormalizeSettings(setting)
+	if usesS3Protocol(setting.Provider) {
+		return getS3ObjectRange(ctx, setting, objectKey, rangeHeader)
+	}
+	if setting.Provider == tencentCOSProvider {
+		return getCOSObjectRange(ctx, setting, objectKey, rangeHeader)
+	}
+	if setting.Provider == qiniuKodoProvider {
+		return getQiniuObjectRange(ctx, setting, objectKey, rangeHeader)
+	}
+	return getAliyunOSSObjectRange(ctx, setting, objectKey, rangeHeader)
+}
+
+func getCDNObjectRange(ctx context.Context, setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
 	var (
 		urlValue string
 		err      error
@@ -146,7 +162,7 @@ func getCDNObjectRange(setting Settings, objectKey string, rangeHeader string) (
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequest(http.MethodGet, urlValue, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlValue, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -167,11 +183,16 @@ func getCDNObjectRange(setting Settings, objectKey string, rangeHeader string) (
 }
 
 func GetAliyunOSSObjectRange(setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
+	return getAliyunOSSObjectRange(context.Background(), setting, objectKey, rangeHeader)
+}
+
+func getAliyunOSSObjectRange(ctx context.Context, setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
 	setting = NormalizeSettings(setting)
 	req, err := NewOSSRequest(http.MethodGet, setting, objectKey, "", nil)
 	if err != nil {
 		return nil, err
 	}
+	req = req.WithContext(ctx)
 	if rangeHeader != "" {
 		req.Header.Set("Range", rangeHeader)
 	}
@@ -399,13 +420,17 @@ func putQiniuObject(ctx context.Context, setting Settings, objectKey string, mim
 }
 
 func GetCOSObjectRange(setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
+	return getCOSObjectRange(context.Background(), setting, objectKey, rangeHeader)
+}
+
+func getCOSObjectRange(ctx context.Context, setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
 	setting = NormalizeSettings(setting)
 	client, err := NewCOSClient(setting, transferTimeout(setting))
 	if err != nil {
 		return nil, err
 	}
 	options := &cos.ObjectGetOptions{Range: rangeHeader}
-	resp, err := client.Object.Get(context.Background(), objectKey, options)
+	resp, err := client.Object.Get(ctx, objectKey, options)
 	if err != nil {
 		if resp != nil && resp.StatusCode == http.StatusRequestedRangeNotSatisfiable {
 			return &ObjectStream{Body: io.NopCloser(bytes.NewReader(nil)), StatusCode: resp.StatusCode, ContentRange: resp.Header.Get("Content-Range"), AcceptRanges: kernel.FirstNonEmpty(resp.Header.Get("Accept-Ranges"), "bytes")}, nil
@@ -416,12 +441,16 @@ func GetCOSObjectRange(setting Settings, objectKey string, rangeHeader string) (
 }
 
 func GetQiniuObjectRange(setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
+	return getQiniuObjectRange(context.Background(), setting, objectKey, rangeHeader)
+}
+
+func getQiniuObjectRange(ctx context.Context, setting Settings, objectKey string, rangeHeader string) (*ObjectStream, error) {
 	setting = NormalizeSettings(setting)
 	signedURL, err := SignedQiniuS3ObjectURL(setting, objectKey, time.Now().Add(accessURLTTL(setting)))
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequest(http.MethodGet, signedURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, signedURL, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,7 @@
 package canvas
 
 import (
+	"context"
 	"yingce/backend/internal/assets"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
@@ -11,7 +12,7 @@ type Host interface {
 	EncryptSecret(value string) (string, error)
 	DecryptSecret(value string) (string, error)
 	OpenResourceRange(userID string, resource *model.Resource, rangeHeader string) (*assets.ResourceStream, error)
-	PrepareResourceDelivery(userID string, resource *model.Resource, options assets.AccessOptions, rangeHeader string) (*assets.ResourceDelivery, error)
+	PrepareResourceDelivery(ctx context.Context, userID string, resource *model.Resource, options assets.AccessOptions, rangeHeader string) (*assets.ResourceDelivery, error)
 	WithStorageLock(fn func() error) error
 	StructuredQuota(userID, kind string, creating bool, deltaBytes int64) error
 	CanvasQuotaCheck(userID string) (func(*repository.Repository, bool, int64) error, error)
@@ -28,7 +29,7 @@ func (nopHost) DecryptSecret(value string) (string, error) { return value, nil }
 func (nopHost) OpenResourceRange(string, *model.Resource, string) (*assets.ResourceStream, error) {
 	return nil, nil
 }
-func (nopHost) PrepareResourceDelivery(string, *model.Resource, assets.AccessOptions, string) (*assets.ResourceDelivery, error) {
+func (nopHost) PrepareResourceDelivery(context.Context, string, *model.Resource, assets.AccessOptions, string) (*assets.ResourceDelivery, error) {
 	return nil, nil
 }
 func (nopHost) WithStorageLock(fn func() error) error {

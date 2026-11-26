@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -301,7 +302,11 @@ func clipText(s string, max int) string {
 // OpenResourcePlaybackRange 打开浏览器兼容播放副本（本地 ffmpeg 转码的 H.264）。
 // 仅当资源为本地存储且副本 ready 时可用；否则返回 ErrPlaybackNotReady，调用方回退原件。
 func (s *Service) OpenResourcePlaybackRange(userID string, resourceID string) (*ResourceStream, error) {
-	resource, err := s.repo.ResourceForUser(userID, resourceID)
+	return s.openResourcePlaybackRange(context.Background(), userID, resourceID)
+}
+
+func (s *Service) openResourcePlaybackRange(ctx context.Context, userID string, resourceID string) (*ResourceStream, error) {
+	resource, err := s.repo.WithContext(ctx).ResourceForUser(userID, resourceID)
 	if err != nil {
 		return nil, err
 	}
