@@ -60,7 +60,7 @@ import { CanvasMediaVersionModal } from "@/components/canvas/canvas-media-versio
 import { CanvasVideoFrameDialog } from "@/components/canvas/canvas-video-frame-dialog";
 import { CanvasVideoSegmentDialog } from "@/components/canvas/canvas-video-segment-dialog";
 import { CanvasVideoEnhanceDialog } from "@/components/canvas/canvas-video-enhance-dialog";
-import { CanvasVideoDepthDialog } from "@/components/canvas/canvas-video-depth-dialog";
+import { CanvasVideoProcessingDialog } from "@/components/canvas/canvas-video-processing-dialog";
 import { listVideoProcessingModels } from "@/lib/canvas/canvas-video-processing";
 import { CanvasNodeAnglePanel } from "@/components/canvas/canvas-node-angle-dialog";
 import { CanvasNodeLightingPanel } from "@/components/canvas/canvas-node-lighting-dialog";
@@ -1595,7 +1595,15 @@ function CanvasViewportPage() {
     const frameNode = frameDialogNodeId ? nodeById.get(frameDialogNodeId) || null : null;
     const segmentNode = segmentDialogNodeId ? nodeById.get(segmentDialogNodeId) || null : null;
     const videoProcessingNode = videoProcessingDialog ? nodeById.get(videoProcessingDialog.nodeId) || null : null;
-    const videoProcessingModels = useMemo(() => ({ enhance: listVideoProcessingModels(effectiveConfig, "enhance"), depth: listVideoProcessingModels(effectiveConfig, "depth") }), [effectiveConfig]);
+    const videoProcessingModels = useMemo(
+        () => ({
+            enhance: listVideoProcessingModels(effectiveConfig, "enhance"),
+            depth: listVideoProcessingModels(effectiveConfig, "depth"),
+            upscale: listVideoProcessingModels(effectiveConfig, "upscale"),
+            remove_subtitles: listVideoProcessingModels(effectiveConfig, "remove_subtitles"),
+        }),
+        [effectiveConfig],
+    );
     const textEditorNode = textEditorNodeId ? nodeById.get(textEditorNodeId) || null : null;
     const characterReferenceNode = characterReferenceNodeId ? nodeById.get(characterReferenceNodeId) || null : null;
     const drawingNode = drawingNodeId ? nodeById.get(drawingNodeId) || null : null;
@@ -3427,6 +3435,8 @@ function CanvasViewportPage() {
                                 onTrimVideoSegments={openVideoSegmentExtractor}
                                 onEnhanceVideo={videoProcessingModels.enhance.length ? (node) => openVideoProcessing(node, "enhance") : undefined}
                                 onDepthVideo={videoProcessingModels.depth.length ? (node) => openVideoProcessing(node, "depth") : undefined}
+                                onUpscaleVideo={videoProcessingModels.upscale.length ? (node) => openVideoProcessing(node, "upscale") : undefined}
+                                onRemoveVideoSubtitles={videoProcessingModels.remove_subtitles.length ? (node) => openVideoProcessing(node, "remove_subtitles") : undefined}
                                 onVersions={(node) => setMediaVersionNodeId(node.id)}
                                 onAdoptToDrama={drama.active ? drama.openAdopt : undefined}
                                 onRefreshFromDrama={toolbarNode && drama.staleNodeIds.has(toolbarNode.id) ? drama.refreshNode : undefined}
@@ -3586,13 +3596,17 @@ function CanvasViewportPage() {
                                     onConfirm={(params) => void processVideoNode(videoProcessingNode, { operation: "enhance", params })}
                                 />
                             ) : null}
-                            {videoProcessingNode && videoProcessingDialog?.operation === "depth" ? (
-                                <CanvasVideoDepthDialog
+                            {videoProcessingNode && videoProcessingDialog && videoProcessingDialog.operation !== "enhance" ? (
+                                <CanvasVideoProcessingDialog
                                     node={videoProcessingNode}
                                     open
                                     config={effectiveConfig}
+                                    operation={videoProcessingDialog.operation}
                                     onClose={() => setVideoProcessingDialog(null)}
-                                    onConfirm={(params) => void processVideoNode(videoProcessingNode, { operation: "depth", params })}
+                                    onConfirm={(params) => {
+                                        const { operation } = videoProcessingDialog;
+                                        if (operation !== "enhance") void processVideoNode(videoProcessingNode, { operation, params });
+                                    }}
                                 />
                             ) : null}
 

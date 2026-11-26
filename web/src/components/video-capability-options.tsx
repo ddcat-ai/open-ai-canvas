@@ -33,6 +33,8 @@ const operationLabels = new Map([
     ["style_transfer", "风格迁移"],
     ["enhance", "画质增强"],
     ["depth", "相对深度"],
+    ["upscale", "视频超分"],
+    ["remove_subtitles", "去字幕"],
 ]);
 
 export function VideoOperationOptions({ profile, suggested, disabled, update }: { profile: VideoCapabilityConfig; suggested?: string[]; disabled: boolean; update: (patch: Partial<VideoCapabilityConfig>) => void }) {

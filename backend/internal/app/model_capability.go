@@ -137,9 +137,11 @@ const (
 	// 轮询上限固定 1 小时，按大模型画质增强 RTF≈20 估算，源视频默认不超过 180 秒。
 	DefaultVideoProcessingMaxSourceSeconds = 180
 	// VideoProcessingOperationEnhance 是画质增强任务的 operation，前后端与价格档共用。
-	VideoProcessingOperationEnhance = "enhance"
-	VideoProcessingOperationDepth   = "depth"
-	MediaKitDepthMaxSourceSeconds   = 600
+	VideoProcessingOperationEnhance         = "enhance"
+	VideoProcessingOperationDepth           = "depth"
+	VideoProcessingOperationUpscale         = "upscale"
+	VideoProcessingOperationRemoveSubtitles = "remove_subtitles"
+	MediaKitDepthMaxSourceSeconds           = 600
 	// VolcengineMediaKitEnhanceVideoProtocol 是官方插件 volcengine-mediakit 的画质增强 provider。
 	VolcengineMediaKitEnhanceVideoProtocol = "volcengine-mediakit-enhance-video"
 	VolcengineMediaKitVideoDepthProtocol   = "volcengine-mediakit-video-depth"
@@ -363,6 +365,10 @@ func NormalizeModelCapabilityConfigForModel(capability string, protocol string, 
 	}
 	value := &ModelCapabilityConfig{Version: 1, MediaTransport: transport, Video: &resolvedVideo}
 	if err := validateVideoCapabilityConfig(value.Video); err != nil {
+		return nil, err
+	}
+	// 固定工作流约束也必须在配置保存时校验，避免发布能展示却无法执行的模型。
+	if err := validateStarRouterComflyVideoProcessingConfig(protocol, value.Video); err != nil {
 		return nil, err
 	}
 	return value, nil
@@ -611,7 +617,7 @@ func CapabilitySpecFromModelCapabilityConfig(config *ModelCapabilityConfig, capa
 		if video.Processing != nil {
 			// 处理类模型的 videoSeconds 是服务端测得的源时长，fpsBand 只用于价格档选择。
 			spec.Options["videoSeconds"] = numericRange(1, float64(videoProcessingMaxSourceSeconds(video)), 1)
-			if video.DefaultOperation != VideoProcessingOperationDepth {
+			if video.DefaultOperation == VideoProcessingOperationEnhance {
 				spec.Options["fpsBand"] = anyValues(videoProcessingFPSBands)
 			}
 		}

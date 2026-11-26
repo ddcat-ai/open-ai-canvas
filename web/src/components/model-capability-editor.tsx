@@ -26,6 +26,7 @@ import {
     defaultModelCapabilityConfig,
     normalizeModelCapabilityConfig,
     officialVideoCapabilityPreset,
+    starRouterComflyVideoProcessingOperation,
     type ImageCapabilityConfig,
     type ImageResponseFormat,
     type ModelCapabilityConfig,
@@ -80,7 +81,13 @@ export function ModelCapabilityEditor({ value, onChange, protocol, definition, c
     const updateDuration = (patch: Partial<VideoCapabilityConfig["duration"]>) => update({ duration: { ...profile.duration, ...patch } });
     const fixedDurationFields = <VideoDurationOptions duration={profile.duration} output={output} disabled={disabled} update={updateDuration} />;
     const preset = model.trim() ? officialVideoCapabilityPreset(protocol, model, definition) : undefined;
-    const operationFields = <VideoOperationOptions profile={profile} suggested={preset?.operations} disabled={disabled} update={update} />;
+    const fixedProcessingOperation = starRouterComflyVideoProcessingOperation(protocol);
+    const fixedProcessingLabel = fixedProcessingOperation ? ({ depth: "相对深度", upscale: "视频超分", remove_subtitles: "去字幕" } as Record<string, string>)[fixedProcessingOperation] : "";
+    const operationFields = fixedProcessingOperation ? (
+        <p className="text-sm text-muted-foreground">工作流固定操作：{fixedProcessingLabel}，不能切换为其他处理或生成模式。</p>
+    ) : (
+        <VideoOperationOptions profile={profile} suggested={preset?.operations} disabled={disabled} update={update} />
+    );
     const applyPreset =
         preset && !disabled ? (
             <button type="button" className="text-xs font-medium underline underline-offset-2 focus-visible:ring-2" onClick={() => onChange?.({ ...value, version: 1, video: preset })}>
@@ -88,7 +95,14 @@ export function ModelCapabilityEditor({ value, onChange, protocol, definition, c
             </button>
         ) : null;
     const autoDLSpecFields = <AutoDLScreenSpecFields profile={profile} workflow={workflow} disabled={disabled} onChange={(video) => onChange?.({ version: 1, video })} />;
-    const screenFields = autoDL ? autoDLSpecFields : <VideoCapabilityOptions profile={profile} preset={preset} output={output} disabled={disabled} update={update} />;
+    const inputOnlyProcessing = Boolean(profile.processing && ["depth", "upscale", "remove_subtitles"].includes(profile.defaultOperation));
+    const screenFields = inputOnlyProcessing ? (
+        <p className="text-sm text-muted-foreground">输出规格由处理协议决定，无需配置画面比例或分辨率。</p>
+    ) : autoDL ? (
+        autoDLSpecFields
+    ) : (
+        <VideoCapabilityOptions profile={profile} preset={preset} output={output} disabled={disabled} update={update} />
+    );
     const outputFields = (
         <div className="grid gap-3 sm:grid-cols-2">
             {output?.generateAudio !== false || profile.generateAudio.supported ? (
@@ -105,8 +119,8 @@ export function ModelCapabilityEditor({ value, onChange, protocol, definition, c
     const maxProcessingSeconds = depthProcessing ? MEDIAKIT_DEPTH_MAX_SOURCE_SECONDS : DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS;
     const processingFields = processing ? (
         <div className="grid gap-3 sm:grid-cols-2">
-            {depthProcessing ? (
-                <p className="text-sm text-muted-foreground">固定 standard 档，不提供输出分辨率、帧率或码率选项。</p>
+            {inputOnlyProcessing ? (
+                <p className="text-sm text-muted-foreground">处理协议不提供输出分辨率、帧率或码率选项。</p>
             ) : (
                 <Field label="帧率策略">
                     <Select
@@ -123,7 +137,7 @@ export function ModelCapabilityEditor({ value, onChange, protocol, definition, c
                     />
                 </Field>
             )}
-            {processing.fpsPolicy === "user_select" ? (
+            {!inputOnlyProcessing && processing.fpsPolicy === "user_select" ? (
                 <Field label="可选帧率（15–120，逗号分隔）">
                     <Input disabled={disabled} value={(processing.fpsOptions || []).join(",")} placeholder="例如：30,60" onChange={(event) => update({ processing: { ...processing, fpsOptions: parseIntegerList(event.target.value) } })} />
                 </Field>

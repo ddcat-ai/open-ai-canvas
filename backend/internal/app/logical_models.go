@@ -750,7 +750,10 @@ func channelModelDefaultOptions(channelModel model.ChannelModel, spec Capability
 	case "video":
 		video := config.Video
 		defaults["videoSeconds"] = video.Duration.Default
-		defaults["vquality"] = normalizeChannelModelTierResolution(video.DefaultResolution)
+		// 单视频处理不声明输出分辨率，不能把空值归一成 * 后发布为默认规格。
+		if _, supported := spec.Options["vquality"]; supported {
+			defaults["vquality"] = normalizeChannelModelTierResolution(video.DefaultResolution)
+		}
 		if len(video.Ratios) > 0 {
 			defaults["size"] = video.DefaultRatio
 		}
@@ -767,7 +770,7 @@ func channelModelDefaultOptions(channelModel model.ChannelModel, spec Capability
 			if !tier.Enabled || !tier.PriceConfigured {
 				continue
 			}
-			if tier.Resolution != "*" {
+			if _, supported := spec.Options["vquality"]; supported && tier.Resolution != "*" {
 				defaults["vquality"] = normalizeChannelModelTierResolution(tier.Resolution)
 			}
 			if tier.VideoSeconds > 0 {

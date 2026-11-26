@@ -490,6 +490,15 @@ export function videoProfileForOperation(profile: VideoCapabilityConfig, operati
     };
 }
 
+export function starRouterComflyVideoProcessingOperation(protocol?: ModelProtocol): string | undefined {
+    const operations: Record<string, string> = {
+        "starrouter-comfly-video-subtitle-removal": "remove_subtitles",
+        "starrouter-comfly-video-depth": "depth",
+        "starrouter-comfly-video-upscale": "upscale",
+    };
+    return operations[protocol || ""];
+}
+
 export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = ""): ModelCapabilityConfig {
     const text: TextCapabilityConfig = {
         streaming: true,
@@ -605,6 +614,21 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         video.operations = ["depth"];
         video.defaultOperation = "depth";
         video.processing = { fpsPolicy: "keep_source", maxSourceSeconds: MEDIAKIT_DEPTH_MAX_SOURCE_SECONDS };
+    }
+    const comflyOperation = starRouterComflyVideoProcessingOperation(protocol);
+    if (comflyOperation) {
+        // 只公开单视频输入；时长上限属于平台预算，不代表上游规格。
+        video.references = { ...video.references, minImages: 0, maxImages: 0, maxImageBytes: 0, maxVideos: 1, maxVideoBytes: 100 * 1024 * 1024, maxVideoDurationSeconds: DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS, maxAudios: 0 };
+        video.duration = { selection: "range", min: 1, max: DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS, step: 1, default: 5 };
+        video.ratios = [];
+        video.defaultRatio = "";
+        video.resolutions = [];
+        video.defaultResolution = "";
+        video.generateAudio = { supported: false, default: false };
+        video.watermark = { supported: false, default: false };
+        video.operations = [comflyOperation];
+        video.defaultOperation = comflyOperation;
+        video.processing = { fpsPolicy: "keep_source", maxSourceSeconds: DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS };
     }
     return { version: 1, text, image: defaultImageCapabilityConfig(protocol, model), video };
 }

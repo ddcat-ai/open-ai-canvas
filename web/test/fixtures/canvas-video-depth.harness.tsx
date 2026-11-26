@@ -22,7 +22,8 @@ for (const [key, value] of Object.entries({
 const { act, useRef, useState } = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { App } = await import("antd");
-const { CanvasVideoDepthDialog } = await import("../../src/components/canvas/canvas-video-depth-dialog");
+const { CanvasVideoProcessingDialog } = await import("../../src/components/canvas/canvas-video-processing-dialog");
+const { ModelCapabilityEditor } = await import("../../src/components/model-capability-editor");
 const { useCanvasMediaTools } = await import("../../src/pages/canvas/use-canvas-media-tools");
 const { useCanvasGenerationRetry } = await import("../../src/pages/canvas/use-canvas-generation-retry");
 const { apiClient } = await import("../../src/services/api/request");
@@ -33,6 +34,15 @@ const { CanvasNodeType } = await import("../../src/types/canvas");
 const config = {
     ...defaultConfig,
     channels: [
+        ...(["upscale", "remove_subtitles"] as const).map((operation) => {
+            const protocol = operation === "upscale" ? "starrouter-comfly-video-upscale" : "starrouter-comfly-video-subtitle-removal";
+            return createModelChannel({
+                id: operation,
+                scope: "system",
+                models: [operation],
+                modelCosts: [{ model: operation, protocol, capability: "video", billingMode: "per_second", unitPriceMicrocredits: 10, capabilityConfig: defaultModelCapabilityConfig(protocol) }],
+            });
+        }),
         createModelChannel({
             id: "depth-channel",
             scope: "system",
@@ -53,116 +63,141 @@ const config = {
 const source: CanvasNodeData = { id: "source", type: CanvasNodeType.Video, title: "原视频", position: { x: 0, y: 0 }, width: 720, height: 405, metadata: { storageKey: "resource:source", content: "/source.mp4", durationMs: 18_600, status: "success" } };
 afterAll(() => dom.happyDOM.abort());
 
-test("opening and cancelling create nothing; confirming creates one connected result and one backend task", async () => {
-    useConfigStore.setState({ config });
-    useUserStore.setState((state) => ({ features: { ...state.features, creditsEnabled: false, frontendModelsEnabled: true } }));
-    const requests: Array<{ url?: string; body: any }> = [];
-    apiClient.defaults.adapter = async (request) => {
-        if (request.method === "post") requests.push({ url: request.url, body: JSON.parse(request.data) });
-        if (request.url !== "/tasks" && request.url !== "/tasks/depth-task") throw new Error(`Unexpected request ${request.url}`);
-        return {
-            status: 200,
-            statusText: "OK",
-            headers: {},
-            config: request,
-            data: { code: 0, data: { id: "depth-task", type: "canvas_video", status: "succeeded", resultJson: JSON.stringify({ mode: "video", video: { storageKey: "resource:result" } }) } },
-        };
-    };
-    let snapshot!: { nodes: CanvasNodeData[]; connections: CanvasConnection[] };
-    let processing: Promise<void> | undefined;
-    const consumed: string[] = [];
-    function Harness() {
-        const [nodes, setNodes] = useState([source]);
-        const [connections, setConnections] = useState<CanvasConnection[]>([]);
-        const nodesRef = useRef(nodes);
-        nodesRef.current = nodes;
-        const connectionsRef = useRef(connections);
-        connectionsRef.current = connections;
-        const tools = useCanvasMediaTools({
-            projectId: "canvas-test",
-            nodesRef,
-            connectionsRef,
-            selectedNodeIdsRef: useRef(new Set<string>()),
-            setNodes,
-            setConnections,
-            setSelectedNodeIds: () => {},
-            setSelectedConnectionId: () => {},
-            setDialogNodeId: () => {},
-            setContextMenu: () => {},
-            setHoveredNodeId: () => {},
-            setToolbarNodeId: () => {},
-            setRunningNodeId: () => {},
-            startUploadStatus: () => () => {},
-            startGenerationRequest: () => new AbortController(),
-            finishGenerationRequest: () => {},
-            bindGenerationTask: (id, task) => setNodes((current) => current.map((node) => (node.id === id ? { ...node, metadata: { ...node.metadata, taskId: task.id } } : node))),
-            applyGenerationTaskResult: async (id) => {
-                consumed.push(id);
-            },
-        });
-        snapshot = { nodes, connections };
-        return (
-            <>
-                <button onClick={() => tools.openVideoProcessing(source, "depth")}>打开深度</button>
-                {tools.videoProcessingDialog ? (
-                    <CanvasVideoDepthDialog
-                        node={source}
-                        open
-                        config={config}
-                        onClose={() => tools.setVideoProcessingDialog(null)}
-                        onConfirm={(params) => {
-                            processing = tools.processVideoNode(source, { operation: "depth", params });
-                        }}
-                    />
-                ) : null}
-            </>
-        );
-    }
+test("Comfly capability editor keeps workflow operations fixed", async () => {
     const host = document.createElement("div");
     document.body.append(host);
     const root = createRoot(host);
-    const click = async (label: string) => {
-        const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find((item) => item.textContent === label)!;
-        expect(button).toBeDefined();
-        await act(async () => {
-            button.click();
-            await processing;
-        });
-    };
     try {
-        await act(async () => {
-            root.render(
-                <App>
-                    <Harness />
-                </App>,
-            );
-        });
-        await click("打开深度");
-        expect(document.body.textContent).toContain("HEVC");
-        expect(requests).toHaveLength(0);
-        expect(snapshot.nodes).toEqual([source]);
-        expect(snapshot.connections).toEqual([]);
-        const cancel = [...document.querySelectorAll<HTMLButtonElement>("button")].find((item) => /取\s*消|Cancel/.test(item.textContent || ""))!;
-        await act(async () => {
-            cancel.click();
-        });
-        expect(requests).toHaveLength(0);
-        expect(snapshot.nodes).toEqual([source]);
-        await click("打开深度");
-        await click("开始处理");
-        expect(requests).toHaveLength(1);
-        expect(requests[0]).toMatchObject({ url: "/tasks", body: { operation: "depth", input: { metadata: { videoEditOperation: "depth" }, referenceVideos: [{ storageKey: "resource:source" }] } } });
-        expect(snapshot.nodes).toHaveLength(2);
-        expect(snapshot.nodes[0]).toEqual(source);
-        const result = snapshot.nodes[1]!;
-        expect(result.metadata).toMatchObject({ videoDepth: { sourceNodeId: source.id }, videoEditOperation: "depth", taskId: "depth-task" });
-        expect(snapshot.connections).toMatchObject([{ fromNodeId: source.id, toNodeId: result.id }]);
-        expect(consumed).toEqual([result.id]);
+        for (const protocol of ["starrouter-comfly-video-depth", "starrouter-comfly-video-upscale", "starrouter-comfly-video-subtitle-removal"]) {
+            await act(async () => root.render(<ModelCapabilityEditor protocol={protocol} value={defaultModelCapabilityConfig(protocol)} capability="video" section="protocol" />));
+            expect(host.textContent).toContain("工作流固定操作");
+            expect(host.querySelector("legend")?.textContent).not.toBe("支持模式");
+            expect(host.querySelector('[aria-label="设文生视频为默认模式"]')).toBeNull();
+            expect(host.textContent).not.toContain("查看预设以外的模式");
+        }
     } finally {
         await act(async () => root.unmount());
         host.remove();
     }
 });
+
+for (const operation of ["depth", "upscale", "remove_subtitles"] as const)
+    test(`${operation}: opening and cancelling create nothing; confirming creates one connected result and one backend task`, async () => {
+        useConfigStore.setState({ config });
+        useUserStore.setState((state) => ({ features: { ...state.features, creditsEnabled: false, frontendModelsEnabled: true } }));
+        const requests: Array<{ url?: string; body: any }> = [];
+        apiClient.defaults.adapter = async (request) => {
+            if (request.method === "post") requests.push({ url: request.url, body: JSON.parse(request.data) });
+            if (request.url !== "/tasks" && request.url !== "/tasks/depth-task") throw new Error(`Unexpected request ${request.url}`);
+            return {
+                status: 200,
+                statusText: "OK",
+                headers: {},
+                config: request,
+                data: { code: 0, data: { id: "depth-task", type: "canvas_video", status: "succeeded", resultJson: JSON.stringify({ mode: "video", video: { storageKey: "resource:result" } }) } },
+            };
+        };
+        let snapshot!: { nodes: CanvasNodeData[]; connections: CanvasConnection[] };
+        let processing: Promise<void> | undefined;
+        const consumed: string[] = [];
+        function Harness() {
+            const [nodes, setNodes] = useState([source]);
+            const [connections, setConnections] = useState<CanvasConnection[]>([]);
+            const nodesRef = useRef(nodes);
+            nodesRef.current = nodes;
+            const connectionsRef = useRef(connections);
+            connectionsRef.current = connections;
+            const tools = useCanvasMediaTools({
+                projectId: "canvas-test",
+                nodesRef,
+                connectionsRef,
+                selectedNodeIdsRef: useRef(new Set<string>()),
+                setNodes,
+                setConnections,
+                setSelectedNodeIds: () => {},
+                setSelectedConnectionId: () => {},
+                setDialogNodeId: () => {},
+                setContextMenu: () => {},
+                setHoveredNodeId: () => {},
+                setToolbarNodeId: () => {},
+                setRunningNodeId: () => {},
+                startUploadStatus: () => () => {},
+                startGenerationRequest: () => new AbortController(),
+                finishGenerationRequest: () => {},
+                bindGenerationTask: (id, task) => setNodes((current) => current.map((node) => (node.id === id ? { ...node, metadata: { ...node.metadata, taskId: task.id } } : node))),
+                applyGenerationTaskResult: async (id) => {
+                    consumed.push(id);
+                },
+            });
+            snapshot = { nodes, connections };
+            return (
+                <>
+                    <button onClick={() => tools.openVideoProcessing(source, operation)}>打开深度</button>
+                    {tools.videoProcessingDialog ? (
+                        <CanvasVideoProcessingDialog
+                            operation={operation}
+                            node={source}
+                            open
+                            config={config}
+                            onClose={() => tools.setVideoProcessingDialog(null)}
+                            onConfirm={(params) => {
+                                processing = tools.processVideoNode(source, { operation, params });
+                            }}
+                        />
+                    ) : null}
+                </>
+            );
+        }
+        const host = document.createElement("div");
+        document.body.append(host);
+        const root = createRoot(host);
+        const click = async (label: string) => {
+            const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find((item) => item.textContent === label)!;
+            expect(button).toBeDefined();
+            await act(async () => {
+                button.click();
+                await processing;
+            });
+        };
+        try {
+            await act(async () => {
+                root.render(
+                    <App>
+                        <Harness />
+                    </App>,
+                );
+            });
+            await click("打开深度");
+            if (operation === "depth") expect(document.body.textContent).toContain("HEVC");
+            else expect(document.body.textContent).not.toContain("HEVC");
+            expect(requests).toHaveLength(0);
+            expect(snapshot.nodes).toEqual([source]);
+            expect(snapshot.connections).toEqual([]);
+            const cancel = [...document.querySelectorAll<HTMLButtonElement>("button")].find((item) => /取\s*消|Cancel/.test(item.textContent || ""))!;
+            await act(async () => {
+                cancel.click();
+            });
+            expect(requests).toHaveLength(0);
+            expect(snapshot.nodes).toEqual([source]);
+            await click("打开深度");
+            await click("开始处理");
+            expect(requests).toHaveLength(1);
+            expect(requests[0]).toMatchObject({ url: "/tasks", body: { operation, input: { metadata: { videoEditOperation: operation }, referenceVideos: [{ storageKey: "resource:source" }] } } });
+            expect(snapshot.nodes).toHaveLength(2);
+            expect(snapshot.nodes[0]).toEqual(source);
+            const result = snapshot.nodes[1]!;
+            expect(result.metadata).toMatchObject(
+                operation === "depth"
+                    ? { videoDepth: { sourceNodeId: source.id }, videoEditOperation: operation, taskId: "depth-task" }
+                    : { videoProcessingTool: { sourceNodeId: source.id, operation }, videoEditOperation: operation, taskId: "depth-task" },
+            );
+            expect(snapshot.connections).toMatchObject([{ fromNodeId: source.id, toNodeId: result.id }]);
+            expect(consumed).toEqual([result.id]);
+        } finally {
+            await act(async () => root.unmount());
+            host.remove();
+        }
+    });
 
 test("a quote failure is visible and blocks the paid confirmation", async () => {
     useUserStore.setState((state) => ({ features: { ...state.features, creditsEnabled: true } }));
@@ -179,7 +214,8 @@ test("a quote failure is visible and blocks the paid confirmation", async () => 
         await act(async () => {
             root.render(
                 <App>
-                    <CanvasVideoDepthDialog
+                    <CanvasVideoProcessingDialog
+                        operation="depth"
                         node={source}
                         open
                         config={config}
@@ -203,68 +239,71 @@ test("a quote failure is visible and blocks the paid confirmation", async () => 
     }
 });
 
-test("retry reuses the result node and depth parameters; a missing source cannot submit again", async () => {
-    useConfigStore.setState({ config });
-    const result: CanvasNodeData = { ...source, id: "depth-result", metadata: { status: "error", taskId: "failed-depth", videoEditOperation: "depth", videoDepth: { sourceNodeId: source.id, model: encodeChannelModel("depth-channel", "depth-model") } } };
-    const requests: Array<{ url?: string; method?: string; body?: any }> = [];
-    apiClient.defaults.adapter = async (request) => {
-        requests.push({ url: request.url, method: request.method, body: request.data ? JSON.parse(request.data) : undefined });
-        const task = request.url === "/tasks/failed-depth" ? { id: "failed-depth", status: "failed" } : { id: "retried-depth", status: "succeeded", resultJson: JSON.stringify({ mode: "video", video: { storageKey: "resource:result" } }) };
-        return { status: 200, statusText: "OK", headers: {}, config: request, data: { code: 0, data: task } };
-    };
-    let retry!: ReturnType<typeof useCanvasGenerationRetry>;
-    let removeSource!: () => void;
-    let nodesSnapshot!: CanvasNodeData[];
-    const consumed: string[] = [];
-    function Harness() {
-        const [nodes, setNodes] = useState([source, result]);
-        const nodesRef = useRef(nodes);
-        nodesRef.current = nodes;
-        nodesSnapshot = nodes;
-        removeSource = () => setNodes((current) => current.filter((node) => node.id !== source.id));
-        retry = useCanvasGenerationRetry({
-            projectId: "canvas-test",
-            addedSkills: [],
-            assets: [],
-            nodesRef,
-            connectionsRef: useRef([{ id: "connection", fromNodeId: source.id, toNodeId: result.id }]),
-            setNodes,
-            setRunningNodeId: () => {},
-            startGenerationRequest: () => new AbortController(),
-            finishGenerationRequest: () => {},
-            bindGenerationTask: (id, task) => setNodes((current) => current.map((node) => (node.id === id ? { ...node, metadata: { ...node.metadata, taskId: task.id } } : node))),
-            applyGenerationTaskResult: async (id) => {
-                consumed.push(id);
-            },
-        });
-        return null;
-    }
-    const host = document.createElement("div");
-    document.body.append(host);
-    const root = createRoot(host);
-    try {
-        await act(async () => {
-            root.render(
-                <App>
-                    <Harness />
-                </App>,
-            );
-        });
-        await act(async () => {
-            await retry(result);
-        });
-        expect(requests.map((request) => request.method)).toEqual(["get", "post", "get"]);
-        expect(requests[1]).toMatchObject({ url: "/tasks", body: { operation: "depth", input: { metadata: { nodeId: result.id, sourceNodeId: source.id, videoEditOperation: "depth", retryOf: "failed-depth" } } } });
-        expect(nodesSnapshot.map((node) => node.id)).toEqual([source.id, result.id]);
-        expect(consumed).toEqual([result.id]);
-        await act(async () => removeSource());
-        await act(async () => {
-            await retry(result);
-        });
-        expect(requests.filter((request) => request.method === "post")).toHaveLength(1);
-        expect(nodesSnapshot.map((node) => node.id)).toEqual([result.id]);
-    } finally {
-        await act(async () => root.unmount());
-        host.remove();
-    }
-});
+for (const operation of ["depth", "upscale", "remove_subtitles"] as const)
+    test(`${operation}: retry reuses the result node and processing parameters; a missing source cannot submit again`, async () => {
+        useConfigStore.setState({ config });
+        const processing =
+            operation === "depth" ? { videoDepth: { sourceNodeId: source.id, model: encodeChannelModel("depth-channel", "depth-model") } } : { videoProcessingTool: { sourceNodeId: source.id, operation, model: encodeChannelModel(operation, operation) } };
+        const result: CanvasNodeData = { ...source, id: "depth-result", metadata: { status: "error", taskId: "failed-depth", videoEditOperation: operation, ...processing } };
+        const requests: Array<{ url?: string; method?: string; body?: any }> = [];
+        apiClient.defaults.adapter = async (request) => {
+            requests.push({ url: request.url, method: request.method, body: request.data ? JSON.parse(request.data) : undefined });
+            const task = request.url === "/tasks/failed-depth" ? { id: "failed-depth", status: "failed" } : { id: "retried-depth", status: "succeeded", resultJson: JSON.stringify({ mode: "video", video: { storageKey: "resource:result" } }) };
+            return { status: 200, statusText: "OK", headers: {}, config: request, data: { code: 0, data: task } };
+        };
+        let retry!: ReturnType<typeof useCanvasGenerationRetry>;
+        let removeSource!: () => void;
+        let nodesSnapshot!: CanvasNodeData[];
+        const consumed: string[] = [];
+        function Harness() {
+            const [nodes, setNodes] = useState([source, result]);
+            const nodesRef = useRef(nodes);
+            nodesRef.current = nodes;
+            nodesSnapshot = nodes;
+            removeSource = () => setNodes((current) => current.filter((node) => node.id !== source.id));
+            retry = useCanvasGenerationRetry({
+                projectId: "canvas-test",
+                addedSkills: [],
+                assets: [],
+                nodesRef,
+                connectionsRef: useRef([{ id: "connection", fromNodeId: source.id, toNodeId: result.id }]),
+                setNodes,
+                setRunningNodeId: () => {},
+                startGenerationRequest: () => new AbortController(),
+                finishGenerationRequest: () => {},
+                bindGenerationTask: (id, task) => setNodes((current) => current.map((node) => (node.id === id ? { ...node, metadata: { ...node.metadata, taskId: task.id } } : node))),
+                applyGenerationTaskResult: async (id) => {
+                    consumed.push(id);
+                },
+            });
+            return null;
+        }
+        const host = document.createElement("div");
+        document.body.append(host);
+        const root = createRoot(host);
+        try {
+            await act(async () => {
+                root.render(
+                    <App>
+                        <Harness />
+                    </App>,
+                );
+            });
+            await act(async () => {
+                await retry(result);
+            });
+            expect(requests.map((request) => request.method)).toEqual(["get", "post", "get"]);
+            expect(requests[1]).toMatchObject({ url: "/tasks", body: { operation, input: { metadata: { nodeId: result.id, sourceNodeId: source.id, videoEditOperation: operation, retryOf: "failed-depth" } } } });
+            expect(nodesSnapshot.map((node) => node.id)).toEqual([source.id, result.id]);
+            expect(consumed).toEqual([result.id]);
+            await act(async () => removeSource());
+            await act(async () => {
+                await retry(result);
+            });
+            expect(requests.filter((request) => request.method === "post")).toHaveLength(1);
+            expect(nodesSnapshot.map((node) => node.id)).toEqual([result.id]);
+        } finally {
+            await act(async () => root.unmount());
+            host.remove();
+        }
+    });

@@ -273,6 +273,7 @@ Pi SDK 执行前的参数校验失败由 `agent-runtime/pi/agent-runtime.mjs` �
 | 媒体弹窗装配 | `web/src/pages/canvas/canvas-project-media-dialogs.tsx` |
 | 画布视口、拖拽、缩放和框选 | `web/src/components/canvas/canvas-viewport.tsx`、`web/src/lib/canvas/canvas-live-viewport.ts`；`pages/canvas/use-canvas-image-wheel-resize.ts` 合并单选图片 Ctrl 滚轮尺寸、历史和保存，`lib/canvas/canvas-wheel.ts` 识别离散滚轮，角点与滚轮共用 registry 最小尺寸规则 |
 | 节点渲染与节点工具 | `web/src/components/canvas/canvas-node.tsx`、`canvas-node-hover-toolbar.tsx`、`canvas-node-toolbar.tsx` |
+| 视频节点处理 | `web/src/lib/canvas/canvas-video-processing.ts` 按后台能力筛选工具模型并组装统一输入、报价；`canvas-video-processing-dialog.tsx` 共用确认面板；`use-canvas-media-tools.ts` / `use-canvas-generation-retry.ts` 负责结果节点与重试；服务端 `internal/app/video_processing.go` 强校验资源与输入，StarRouter 线协议由 `plugin-packages/starrouter-media` 提供 |
 | 图片多角度、宫格切分与多选框 | `canvas-node-angle-dialog.tsx`、`canvas-angle-scene.tsx`、`canvas-grid-split-picker.tsx`、`web/src/lib/canvas/canvas-grid-split.ts`、`canvas-selection.ts` |
 | 图片自然比例与默认尺寸 | `web/src/lib/canvas/canvas-node-size.ts`；上传、生成结果和派生图片共用尺寸规则，节点调整继续使用现有角点入口 |
 | 图片编辑副本与工具菜单 | `web/src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx` 声明入口；`web/src/pages/canvas/use-canvas-node-operations.ts` 负责带来源连线的复制；`web/src/components/canvas/canvas-node-toolbar.tsx` 与 `canvas-grid-split-picker.css` 共用菜单布局、滚动及子面板视口约束 |

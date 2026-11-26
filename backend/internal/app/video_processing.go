@@ -21,6 +21,30 @@ const videoProcessingMetadataKey = "videoProcessing"
 
 var videoProcessingFPSBands = []string{"le30", "le60", "le120"}
 
+func starRouterComflyVideoProcessingOperation(protocolID string) string {
+	switch protocolID {
+	case "starrouter-comfly-video-subtitle-removal":
+		return VideoProcessingOperationRemoveSubtitles
+	case "starrouter-comfly-video-depth":
+		return VideoProcessingOperationDepth
+	case "starrouter-comfly-video-upscale":
+		return VideoProcessingOperationUpscale
+	default:
+		return ""
+	}
+}
+
+func validateStarRouterComflyVideoProcessingConfig(protocolID string, profile *VideoCapabilityConfig) error {
+	operation := starRouterComflyVideoProcessingOperation(protocolID)
+	if operation == "" {
+		return nil
+	}
+	if profile == nil || profile.Processing == nil || len(profile.Operations) != 1 || profile.Operations[0] != operation || profile.DefaultOperation != operation || profile.Processing.FPSPolicy != VideoProcessingFPSKeepSource || len(profile.Resolutions) > 0 || len(profile.Ratios) > 0 {
+		return BadAuthRequest("Comfly 视频处理仅支持工作流固定操作和单视频输入，请检查模型能力配置")
+	}
+	return nil
+}
+
 type videoProcessingAdmission struct {
 	Prompt string
 }
@@ -95,8 +119,13 @@ func (s *Service) prepareVideoProcessingTask(userID string, input map[string]any
 		return nil, BadAuthRequest(fmt.Sprintf("源视频时长超过 %d 秒上限，请先截取片段后再处理", maxSeconds))
 	}
 	isDepth := profile.DefaultOperation == VideoProcessingOperationDepth
+	isComfly := starRouterComflyVideoProcessingOperation(protocolID) != ""
+	if isComfly && resource.Size > 100*1024*1024 {
+		return nil, BadAuthRequest("Comfly 源视频大小不能超过 100 MiB")
+	}
 	// 深度接口只公布了 2K 上限，未定义像素边界；交由上游校验，不能套用增强的 1080p 限制。
-	if !isDepth {
+	// Comfly 的工作流契约未声明尺寸范围，也不套用火山增强的限制。
+	if !isDepth && !isComfly {
 		if err := validateVideoProcessingSourceSize(resource.Width, resource.Height); err != nil {
 			return nil, err
 		}
@@ -116,8 +145,9 @@ func (s *Service) prepareVideoProcessingTask(userID string, input map[string]any
 		options = map[string]any{}
 	}
 	band := ""
-	if isDepth {
-		// 深度接口只有固定 standard 档，不接收增强参数或客户端指定的回调/存储位置。
+	inputOnly := isDepth || isComfly
+	if inputOnly {
+		// 单视频工作流不接收增强参数或客户端指定的回调、存储位置与源地址覆盖。
 		options = map[string]any{}
 	} else {
 		band, err = normalizeVideoProcessingOptions(processing, options)
@@ -132,7 +162,7 @@ func (s *Service) prepareVideoProcessingTask(userID string, input map[string]any
 
 	config["videoSeconds"] = strconv.Itoa(seconds)
 	config["fpsBand"] = band
-	if isDepth {
+	if inputOnly {
 		delete(config, "vquality")
 		delete(config, "fpsBand")
 	}
@@ -145,12 +175,13 @@ func (s *Service) prepareVideoProcessingTask(userID string, input map[string]any
 		}
 		capabilityOptions["videoSeconds"] = seconds
 		capabilityOptions["fpsBand"] = band
-		if isDepth {
+		if inputOnly {
 			delete(capabilityOptions, "vquality")
 			delete(capabilityOptions, "fpsBand")
 		}
 	}
 	source["durationMs"] = durationMs
+	source["bytes"] = resource.Size
 	source["width"], source["height"] = resource.Width, resource.Height
 
 	prompt := strings.TrimSpace(metadataInfo.Name)

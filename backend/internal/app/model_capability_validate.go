@@ -207,8 +207,8 @@ func validateVideoProcessingConfig(value *VideoProcessingConfig, operation strin
 	if value == nil {
 		return nil
 	}
-	if operation == VideoProcessingOperationDepth && value.FPSPolicy != VideoProcessingFPSKeepSource {
-		return BadAuthRequest("相对深度视频不支持选择输出帧率")
+	if (operation == VideoProcessingOperationDepth || operation == VideoProcessingOperationUpscale || operation == VideoProcessingOperationRemoveSubtitles) && value.FPSPolicy != VideoProcessingFPSKeepSource {
+		return BadAuthRequest("此视频处理操作不支持选择输出帧率")
 	}
 	switch value.FPSPolicy {
 	case VideoProcessingFPSKeepSource:

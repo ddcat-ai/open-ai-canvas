@@ -237,19 +237,26 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         disabled: (ctx) => !ctx.nodeMetadata?.storageKey && !ctx.nodeMetadata?.content,
         run: (ctx) => ctx.handlers.onNodeEnhanceVideo?.(ctx.node!),
     },
-    {
-        id: "depthVideo",
+    ...(
+        [
+            { id: "depthVideo", label: "相对深度", description: "提取相对深度，另存为新视频", icon: <Layers className="size-3.5" />, handler: "onNodeDepthVideo" },
+            { id: "upscaleVideo", label: "视频超分", description: "提升视频清晰度，另存为新视频", icon: <ImageUpscale className="size-3.5" />, handler: "onNodeUpscaleVideo" },
+            { id: "removeVideoSubtitles", label: "去字幕", description: "去除画面字幕，另存为新视频", icon: <Captions className="size-3.5" />, handler: "onNodeRemoveVideoSubtitles" },
+        ] as const
+    ).map((tool, index): ToolDefinition => ({
+        id: tool.id,
         toolbar: "node-hover",
         category: "node-state",
-        label: "生成逐帧相对深度视频，用于动作与运镜参考",
-        displayLabel: "相对深度",
-        icon: <Layers className="size-3.5" />,
+        label: tool.description,
+        displayLabel: tool.label,
+        icon: tool.icon,
         defaultVisible: true,
-        defaultOrder: 46,
-        nodeToolbar: { group: "process", order: 31, section: "深度", description: "提取相对深度，另存为新视频" },
-        applicable: (ctx) => hasVideo(ctx) && !simpleMode(ctx) && Boolean(ctx.handlers.onNodeDepthVideo) && ctx.nodeMetadata?.status !== "loading",
-        run: (ctx) => ctx.handlers.onNodeDepthVideo?.(ctx.node!),
-    },
+        defaultOrder: 46 + index,
+        nodeToolbar: { group: "process", order: 31 + index, section: "视频处理", description: tool.description },
+        applicable: (ctx) => hasVideo(ctx) && !simpleMode(ctx) && Boolean(ctx.handlers[tool.handler]) && ctx.nodeMetadata?.status !== "loading",
+        disabled: (ctx) => !ctx.nodeMetadata?.storageKey && !ctx.nodeMetadata?.content,
+        run: (ctx) => ctx.handlers[tool.handler]?.(ctx.node!),
+    })),
     {
         id: "saveAsset",
         toolbar: "node-hover",
