@@ -67,11 +67,13 @@ export function ModelPicker({
     const [activeGroupKey, setActiveGroupKey] = useState<string | null>(null);
     const menuRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
-    // 画布编辑器里的弹窗要和节点面板同色；其余入口跟随工作台浮层表面。
-    const [inSpatialWorkspace, setInSpatialWorkspace] = useState(false);
-    useLayoutEffect(() => {
-        setInSpatialWorkspace(Boolean(triggerRef.current?.closest(".app-spatial-workspace")));
-    }, []);
+    // 弹窗表面必须跟当前生效主题走：浅色画布 / 浅色工作台都给白底深字，
+    // 深色画布给深色底白字，不能把外观交给 AntD 默认浮层。
+    const pickerSurfaceStyle = {
+        "--model-picker-surface": theme.node.panel,
+        "--model-picker-ink": theme.node.text,
+        "--model-picker-edge": theme.toolbar.border,
+    } as CSSProperties;
     const options = useMemo(
         () =>
             Array.from(
@@ -354,16 +356,7 @@ export function ModelPicker({
                     container: cn("canvas-composer-popover-surface", "creation-model-picker-surface"),
                     content: "canvas-composer-popover-content",
                 }}
-                // 弹窗与发起它的输入框同一表面：画布入口取节点面板色，工作台入口回退到 --user-surface-raised（model-picker.css）。
-                styles={{
-                    container: (!inSpatialWorkspace
-                        ? {}
-                        : {
-                              "--model-picker-surface": theme.node.panel,
-                              "--model-picker-ink": theme.node.text,
-                              "--model-picker-edge": theme.toolbar.border,
-                          }) as CSSProperties,
-                }}
+                styles={{ container: pickerSurfaceStyle }}
             >
                 <button
                     ref={triggerRef}
