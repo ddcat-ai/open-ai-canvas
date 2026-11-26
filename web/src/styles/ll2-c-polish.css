@@ -2331,12 +2331,35 @@ html:not(.dark) .canvas-node-composer {
     box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12) !important;
 }
 
-/* 底部「模型 / 参数摘要」必须跟画布主题，而不是全局浅色文字；
-   否则深色画布上会出现黑底深灰字，看起来像不能点。 */
-.canvas-node-composer-footer .canvas-node-composer-model-trigger,
-.canvas-node-composer-footer .canvas-node-composer-settings-trigger,
-.canvas-node-composer-footer .canvas-node-composer-settings-trigger * {
-    color: var(--cn-text) !important;
+/* 底部「模型 / 参数摘要」按画布主题重做：深色画布给浅字+微亮底，
+   浅色画布给深字+浅灰底，不再依赖可能被全局主题覆盖的 --cn-text。 */
+.canvas-node-composer[data-canvas-theme="dark"] .canvas-node-composer-footer .canvas-node-composer-model-trigger,
+.canvas-node-composer[data-canvas-theme="dark"] .canvas-node-composer-footer .canvas-node-composer-settings-trigger,
+.canvas-node-composer[data-canvas-theme="dark"] .canvas-node-composer-footer .canvas-node-composer-settings-trigger * {
+    color: #f4f4f5 !important;
+}
+
+.canvas-node-composer[data-canvas-theme="dark"] .canvas-node-composer-footer .canvas-node-composer-model-trigger,
+.canvas-node-composer[data-canvas-theme="dark"] .canvas-node-composer-footer .canvas-node-composer-settings-trigger {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+.canvas-node-composer[data-canvas-theme="light"] .canvas-node-composer-footer .canvas-node-composer-model-trigger,
+.canvas-node-composer[data-canvas-theme="light"] .canvas-node-composer-footer .canvas-node-composer-settings-trigger,
+.canvas-node-composer[data-canvas-theme="light"] .canvas-node-composer-footer .canvas-node-composer-settings-trigger * {
+    color: #111827 !important;
+}
+
+.canvas-node-composer[data-canvas-theme="light"] .canvas-node-composer-footer .canvas-node-composer-model-trigger,
+.canvas-node-composer[data-canvas-theme="light"] .canvas-node-composer-footer .canvas-node-composer-settings-trigger {
+    background: #f3f4f6 !important;
+    border: 1px solid rgba(17, 24, 39, 0.1) !important;
+}
+
+.canvas-node-composer[data-canvas-theme="dark"] .canvas-node-composer-footer .canvas-node-composer-submit:disabled {
+    background: rgba(255, 255, 255, 0.06) !important;
+    color: rgba(244, 244, 245, 0.5) !important;
 }
 
 html:not(.dark) .canvas-workspace-rail-button {
