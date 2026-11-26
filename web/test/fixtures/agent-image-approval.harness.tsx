@@ -7,6 +7,7 @@ for (const [key, value] of Object.entries({
     document: dom.document,
     navigator: dom.navigator,
     HTMLElement: dom.HTMLElement,
+    HTMLTextAreaElement: dom.HTMLTextAreaElement,
     SVGElement: dom.SVGElement,
     Element: dom.Element,
     Node: dom.Node,
@@ -68,6 +69,81 @@ const channel = createModelChannel({
 });
 const config = normalizeConfigSnapshot({ config: { ...defaultConfig, channels: [channel] } }).config;
 useConfigStore.setState({ config });
+
+test("来源确认卡不预选，必须明确选择原片或独立创作", async () => {
+    for (const choice of [
+        { nodeId: "", label: "独立新建" },
+        { nodeId: "original", label: "9:16 · 视频创作 · original" },
+        { nodeId: "other", label: "16:9 · 视频创作 · other" },
+    ]) {
+        const host = document.createElement("div");
+        document.body.append(host);
+        const root = createRoot(host);
+        let submitted: AgentMediaSettings | undefined;
+        let focusedNode: string | undefined;
+        try {
+            await act(async () =>
+                root.render(
+                    <ApprovalCard
+                        approval={{
+                            approvalId: "source-choice",
+                            reason: "",
+                            detail: {
+                                toolName: "generate_media",
+                                arguments: { mode: "video", prompt: "只修改结尾" },
+                                sourceChoices: [
+                                    { nodeId: "", label: "独立新建" },
+                                    { nodeId: "original", label: "9:16 · 视频创作 · original" },
+                                    { nodeId: "other", label: "16:9 · 视频创作 · other" },
+                                ],
+                                preview: { kind: "media_source", title: "确认生成来源", description: "确认来源后再报价，不提交收费任务", items: [{ operation: "generate_media", summary: "选择来源" }] },
+                            },
+                        }}
+                        theme={canvasThemes.dark}
+                        submitting={false}
+                        onReasonChange={() => {}}
+                        onApprove={(settings) => {
+                            submitted = settings;
+                        }}
+                        onReject={() => {}}
+                        onFocusNode={(id) => {
+                            focusedNode = id;
+                        }}
+                    />,
+                ),
+            );
+            const approve = [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.trim() === "确认来源并查看报价")!;
+            expect(approve).toBeDefined();
+            expect(approve.disabled).toBe(true);
+            await act(async () => approve.click());
+            expect(submitted).toBeUndefined();
+            const input = host.querySelector<HTMLInputElement>('[role="combobox"]')!;
+            expect(input).toBeDefined();
+            await act(async () => {
+                input.focus();
+                input.dispatchEvent(new dom.KeyboardEvent("keydown", { key: "ArrowDown", code: "ArrowDown", keyCode: 40, bubbles: true }));
+            });
+            const option = [...document.querySelectorAll<HTMLElement>(".ant-select-item-option")].find((item) => item.textContent?.includes(choice.label));
+            expect(option).toBeDefined();
+            await act(async () => option!.click());
+            expect(approve.disabled).toBe(false);
+            const locate = [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.trim() === "定位所选来源");
+            if (choice.nodeId) {
+                expect(locate).toBeDefined();
+                await act(async () => locate!.click());
+                expect(focusedNode).toBe(choice.nodeId);
+                expect(submitted).toBeUndefined();
+            } else {
+                expect(locate).toBeUndefined();
+            }
+            await act(async () => approve.click());
+            expect(submitted).toEqual({ size: "", quality: "", inheritFromNodeId: choice.nodeId });
+        } finally {
+            await act(async () => root.unmount());
+            host.remove();
+        }
+    }
+});
 afterAll(() => dom.happyDOM.abort());
 
 for (const toolName of ["generate_media", "generate_media_batch"])

@@ -14,6 +14,7 @@ import (
 
 	"gorm.io/gorm"
 	"yingce/backend/internal/canvas"
+	"yingce/backend/internal/canvas/contract"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
 )
@@ -64,7 +65,7 @@ func (s *Service) cloudAgentModelList(userID string, intent *ModelRequestIntent)
 	}
 	return map[string]any{
 		"source": catalog.Source, "models": items, "intent": intent,
-		"generationGuidance": "复制 generationArguments，补 prompt 和 referenceNodeIds 即可；续用草稿传 nodeId，新节点 ID/标题/连线交执行器。规格默认省略；用户本轮要求改变时传支持值与 configurationChange，其他已有配置继承。不要传 parameters、binding、count 或 image_to_image。",
+		"generationGuidance": "复制 generationArguments，补 prompt；续用草稿传 nodeId，基于原片改新版本必传 inheritFromNodeId，省略 referenceNodeIds 继承原引用，[] 清空。新节点 ID/标题/连线交执行器。只有无基线的全新创作采用模型默认；有基线时规格继承，用户本轮改规格才传支持值与 configurationChange。不要传 parameters、binding、count 或 image_to_image。",
 	}, nil
 }
 
@@ -139,6 +140,9 @@ func (s *Service) cloudAgentModelIntent(userID, canvasID, arguments string) (*Mo
 }
 
 type cloudAgentMediaArgs struct {
+	InheritFromNodeID          string                              `json:"inheritFromNodeId,omitempty"`
+	InheritanceTaskID          string                              `json:"-"`
+	InheritedOptions           *contract.Options                   `json:"-"`
 	ConfigurationChange        *cloudAgentMediaConfigurationChange `json:"configurationChange,omitempty"`
 	Prepared                   *cloudAgentPreparedMedia            `json:"-"`
 	DraftRunID                 string                              `json:"-"`
@@ -828,7 +832,13 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 		time.Now().Before(state.AutoPreparedMedia.Quote.ExpiresAt) {
 		a.Prepared = state.AutoPreparedMedia
 	}
+	if err := s.resolveCloudAgentMediaSource(run, state, call, &a); err != nil {
+		return CreateTaskRequest{}, nil, err
+	}
 	if err := s.fillCloudAgentMediaSnapshotHash(run.UserID, state.Request.CanvasID, &a); err != nil {
+		return CreateTaskRequest{}, nil, err
+	}
+	if err := s.inheritCloudAgentMediaConfiguration(run.UserID, state.Request.CanvasID, &a, call.Function.Arguments); err != nil {
 		return CreateTaskRequest{}, nil, err
 	}
 	if err := validateCloudAgentMediaShape(a, state); err != nil {
@@ -910,10 +920,10 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 	if a.ChannelID != "" {
 		config["channelId"], config["channelModelKey"], config["model"] = a.ChannelID, a.ChannelModelKey, a.ChannelModelKey
 	}
-	if a.Mode == "video" && a.VideoArkPrivateAssetUpload != nil {
-		config["videoArkPrivateAssetUpload"] = strconv.FormatBool(*a.VideoArkPrivateAssetUpload)
-	}
 	metadata := map[string]any{"nodeId": a.NodeID, "source": "cloud_agent"}
+	if a.InheritFromNodeID != "" {
+		metadata["inheritFromNodeId"] = a.InheritFromNodeID
+	}
 	if a.Mode == "audio" && len(a.AudioVoiceBindings) > 0 {
 		metadata["audioVoiceBindings"] = a.AudioVoiceBindings
 	}
@@ -998,9 +1008,6 @@ func applyCloudAgentResolvedMediaDefaults(req *CreateTaskRequest, plan *cloudAge
 	// Compare against intent, not req.Input: task admission may normalize that
 	// map in place. Never erase an explicit or inherited choice before checking.
 	requested := cloudAgentMediaOptions(plan.Args).TaskConfig()
-	if plan.Args.VideoArkPrivateAssetUpload != nil {
-		requested["videoArkPrivateAssetUpload"] = strconv.FormatBool(*plan.Args.VideoArkPrivateAssetUpload)
-	}
 	if err := validateCloudAgentResolvedMediaOptions(requested, input); err != nil {
 		return err
 	}
@@ -1188,6 +1195,9 @@ func createCloudAgentMediaNode(repo *repository.Repository, userID, canvasID str
 		return err
 	}
 	meta["status"], meta["agentDraftRunId"], meta["referenceNodeIds"] = "idle", a.DraftRunID, a.ReferenceNodeIDs
+	if a.InheritFromNodeID != "" {
+		meta["inheritFromNodeId"] = a.InheritFromNodeID
+	}
 	if a.Mode == "video" {
 		meta["videoStartFrameNodeId"], meta["videoEndFrameNodeId"] = a.VideoStartFrameNodeID, a.VideoEndFrameNodeID
 	}

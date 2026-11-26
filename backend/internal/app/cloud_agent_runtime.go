@@ -106,25 +106,28 @@ func (e *cloudAgentReadLoopError) Error() string {
 }
 
 type cloudAgentApproval struct {
-	Prepared  *cloudAgentPreparedMedia  `json:"prepared,omitempty"`
-	ModelName string                    `json:"modelName,omitempty"`
-	ID        string                    `json:"approvalId"`
-	Call      cloudAgentCall            `json:"call"`
-	CallHash  string                    `json:"callHash,omitempty"`
-	Preview   cloudAgentApprovalPreview `json:"preview"`
-	Decision  string                    `json:"decision,omitempty"`
-	Reason    string                    `json:"reason,omitempty"`
+	SourceChoices []cloudAgentMediaSourceChoice `json:"sourceChoices,omitempty"`
+	Prepared      *cloudAgentPreparedMedia      `json:"prepared,omitempty"`
+	ModelName     string                        `json:"modelName,omitempty"`
+	ID            string                        `json:"approvalId"`
+	Call          cloudAgentCall                `json:"call"`
+	CallHash      string                        `json:"callHash,omitempty"`
+	Preview       cloudAgentApprovalPreview     `json:"preview"`
+	Decision      string                        `json:"decision,omitempty"`
+	Reason        string                        `json:"reason,omitempty"`
 }
 
 type cloudAgentRuntime struct {
-	RuntimeRunID   string                   `json:"-"`
-	Request        CloudAgentRequest        `json:"request"`
-	Policy         cloudAgentPolicySnapshot `json:"policy"`
-	ParentID       string                   `json:"parentId,omitempty"`
-	Fingerprint    string                   `json:"fingerprint,omitempty"`
-	CreativeAnchor cloudAgentCreativeAnchor `json:"creativeAnchor,omitempty"`
-	TextHistory    []providerTextMessage    `json:"textHistory,omitempty"`
-	Skills         []cloudAgentSkill        `json:"skills"`
+	// 只由用户审批写入；省略来源不能解除绑定，空值表示明确独立创作。
+	MediaSourceBindings map[string]cloudAgentMediaSourceBinding `json:"mediaSourceBindings,omitempty"`
+	RuntimeRunID        string                                  `json:"-"`
+	Request             CloudAgentRequest                       `json:"request"`
+	Policy              cloudAgentPolicySnapshot                `json:"policy"`
+	ParentID            string                                  `json:"parentId,omitempty"`
+	Fingerprint         string                                  `json:"fingerprint,omitempty"`
+	CreativeAnchor      cloudAgentCreativeAnchor                `json:"creativeAnchor,omitempty"`
+	TextHistory         []providerTextMessage                   `json:"textHistory,omitempty"`
+	Skills              []cloudAgentSkill                       `json:"skills"`
 	// SkillVersions 是本轮可读技能（自动发现 + 固定）的冻结版本；SkillHints / Memory 是每次
 	// 模型请求前重新插入的冻结数据消息。
 	SkillVersions      map[string]string                     `json:"skillVersions,omitempty"`

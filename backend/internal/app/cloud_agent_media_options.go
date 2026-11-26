@@ -19,6 +19,10 @@ func (s *Service) resolveCloudAgentMediaConfiguration(a *cloudAgentMediaArgs, st
 	if err != nil {
 		return err
 	}
+	if a.InheritedOptions != nil {
+		options = *a.InheritedOptions
+	}
+	a.InheritedOptions = &options
 	if selection != nil && !a.ConfigurationChange.includes("model") {
 		a.LogicalModelID, a.ChannelID, a.ChannelModelKey = selection.LogicalModelID, selection.ChannelID, selection.ModelKey
 	}
@@ -80,7 +84,7 @@ func cloudAgentMediaDraftConfiguration(a cloudAgentMediaArgs, doc map[string]any
 		if raw, ok := meta["generationSpec"].(map[string]any); ok {
 			if storedOptions, ok := raw["options"].(map[string]any); ok {
 				for key, value := range storedOptions {
-					taskKey := map[string]string{"durationSeconds": "videoSeconds", "resolution": "vquality", "generateAudio": "videoGenerateAudio", "watermark": "videoWatermark"}[key]
+					taskKey := map[string]string{"durationSeconds": "videoSeconds", "resolution": "vquality", "generateAudio": "videoGenerateAudio", "watermark": "videoWatermark", "arkPrivateAssetUpload": "videoArkPrivateAssetUpload"}[key]
 					if taskKey == "" {
 						taskKey = key
 					}
@@ -93,7 +97,7 @@ func cloudAgentMediaDraftConfiguration(a cloudAgentMediaArgs, doc map[string]any
 				config[key] = meta[key]
 			}
 		}
-		for key, value := range map[string]any{"videoSeconds": meta["seconds"], "videoGenerateAudio": meta["generateAudio"], "videoWatermark": meta["watermark"], "audioMode": meta["audioMode"], "audioVoice": meta["audioVoice"], "audioFormat": meta["audioFormat"], "audioSpeed": meta["audioSpeed"], "audioInstructions": meta["audioInstructions"]} {
+		for key, value := range map[string]any{"videoSeconds": meta["seconds"], "videoGenerateAudio": meta["generateAudio"], "videoWatermark": meta["watermark"], "videoArkPrivateAssetUpload": meta["arkPrivateAssetUpload"], "audioMode": meta["audioMode"], "audioVoice": meta["audioVoice"], "audioFormat": meta["audioFormat"], "audioSpeed": meta["audioSpeed"], "audioInstructions": meta["audioInstructions"]} {
 			if _, exists := config[key]; !exists {
 				config[key] = value
 			}
@@ -170,6 +174,9 @@ func applyCloudAgentMediaDraftOptions(a *cloudAgentMediaArgs, options contract.O
 	}
 	if options.Watermark != nil {
 		a.VideoWatermark = options.Watermark
+	}
+	if options.ArkPrivateAssetUpload != nil {
+		a.VideoArkPrivateAssetUpload = options.ArkPrivateAssetUpload
 	}
 	if options.AudioMode != nil && a.AudioMode == "" {
 		a.AudioMode = *options.AudioMode

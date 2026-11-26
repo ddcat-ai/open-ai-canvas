@@ -22,7 +22,7 @@ import { AgentAvatarVideo } from "@/components/canvas/agent-avatar-video";
 import { AgentOrb, agentOrbStateForAvatar } from "@/components/ui/agent-orb";
 import { ArrowDown, Brain, Check, ChevronDown, Clapperboard, Download, Ellipsis, LoaderCircle, Maximize2, MessageSquarePlus, Minus, PanelRight, PictureInPicture2, Scaling, Settings2, ShieldCheck, X, Blocks } from "lucide-react";
 import { agentModifierShortcut } from "@/lib/canvas/agent-outbox";
-import { Button, Input, Popover } from "antd";
+import { Button, Input, Popover, Select } from "antd";
 import { CanvasAnchoredDropdown as Dropdown } from "./canvas-anchored-dropdown";
 import type { AgentContextPhase, AgentContextUsageView } from "@/lib/canvas/agent-context-usage";
 import { AgentActivityFeed, AgentChatMessage, AgentWorkingMessage, type CloudAgentChatMessage } from "./canvas-cloud-agent-chat-ui";
@@ -38,7 +38,7 @@ import { Kbd } from "@/components/ui/base/kbd";
 import { ThinkingLevelSlider } from "@/components/thinking-level-slider";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { LEGACY_TEXT_THINKING_CONFIG, THINKING_LEVEL_LABELS, resolveThinkingLevel, thinkingLevelsFor } from "@/lib/text-thinking";
-import { agentImageApproval, agentVideoApproval, agentApprovalModel } from "@/lib/canvas/agent-media-approval";
+import { agentImageApproval, agentVideoApproval, agentApprovalModel, agentMediaSourceChoices } from "@/lib/canvas/agent-media-approval";
 import { mediaSettingIssues } from "@/lib/media-settings";
 import { agentApprovalPresentation } from "@/lib/canvas/agent-approval-presentation";
 import { CanvasAgentImageApprovalSettings } from "./canvas-agent-image-approval-settings";
@@ -888,8 +888,11 @@ export function ApprovalCard({
 }) {
     const [showReason, setShowReason] = useState(Boolean(approval.reason));
     const [mediaSettings, setMediaSettings] = useState<AgentMediaSettings>();
-    const imageApproval = agentImageApproval(approval.detail);
-    const videoApproval = agentVideoApproval(approval.detail);
+    const [sourceChoice, setSourceChoice] = useState<string>();
+    const sourceChoices = agentMediaSourceChoices(approval.detail);
+    const sourcePending = sourceChoices.length > 0;
+    const imageApproval = sourcePending ? null : agentImageApproval(approval.detail);
+    const videoApproval = sourcePending ? null : agentVideoApproval(approval.detail);
     const effectiveConfig = useEffectiveConfig();
     const currentSettings = mediaSettings || imageApproval || videoApproval;
     const mediaMode = videoApproval ? "video" : "image";
@@ -945,7 +948,17 @@ export function ApprovalCard({
                     无法确认具体目标，继续前请重新读取画布。
                 </div>
             )}
-            {imageApproval ? (
+            {sourcePending ? (
+                <label className="flex flex-col gap-2">
+                    <span>生成来源</span>
+                    <Select aria-label="生成来源" placeholder="请选择原片版本或独立新建" value={sourceChoice} onChange={setSourceChoice} disabled={submitting} options={sourceChoices.map((choice) => ({ value: choice.nodeId, label: choice.label }))} />
+                    {sourceChoice && onFocusNode ? (
+                        <Button size="small" disabled={submitting} onClick={() => onFocusNode(sourceChoice)}>
+                            定位所选来源
+                        </Button>
+                    ) : null}
+                </label>
+            ) : imageApproval ? (
                 <CanvasAgentImageApprovalSettings initial={imageApproval} value={mediaSettings} onChange={setMediaSettings} theme={theme} disabled={submitting} />
             ) : videoApproval ? (
                 <CanvasAgentVideoApprovalSettings initial={videoApproval} value={mediaSettings} onChange={setMediaSettings} theme={theme} disabled={submitting} />
@@ -990,13 +1003,13 @@ export function ApprovalCard({
                 <button
                     type="button"
                     className="canvas-agent-approval-approve"
-                    disabled={submitting || Boolean(blockedReason) || Boolean(targetGenerating) || Boolean(settingsError)}
+                    disabled={submitting || Boolean(blockedReason) || Boolean(targetGenerating) || Boolean(settingsError) || (sourcePending && sourceChoice === undefined)}
                     onClick={() => {
-                        if (!settingsError) onApprove(mediaSettings);
+                        if (!settingsError && (!sourcePending || sourceChoice !== undefined)) onApprove(sourcePending ? { size: "", quality: "", inheritFromNodeId: sourceChoice } : mediaSettings);
                     }}
                 >
                     {submitting ? <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Check className="size-4" aria-hidden="true" />}
-                    {submitting ? "正在提交" : targetGenerating ? "已在节点中生成" : "同意执行"}
+                    {submitting ? "正在提交" : targetGenerating ? "已在节点中生成" : sourcePending ? "确认来源并查看报价" : "同意执行"}
                 </button>
             </div>
         </section>

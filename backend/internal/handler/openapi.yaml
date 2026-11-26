@@ -3437,9 +3437,13 @@ paths:
                 mediaSettings:
                   type: object
                   additionalProperties: false
-                  description: 仅 approve 图片生成审批可传；替换本次模型、画幅和质量，重新强校验，不修改提示词、引用或目标。logicalModelId 与 channelId + channelModelKey 二选一。
-                  required: [size, quality]
+                  description: 来源确认阶段传 inheritFromNodeId，空字符串表示独立新建；仅确认来源，不提交收费任务，随后返回新的规格报价审批。常规图片或视频审批可替换模型和规格，不能改变来源。logicalModelId 与 channelId + channelModelKey 二选一。
+                  anyOf:
+                    - required: [inheritFromNodeId]
+                    - required: [size, quality]
                   properties:
+                    inheritFromNodeId:
+                      type: string
                     logicalModelId:
                       type: string
                     channelId:

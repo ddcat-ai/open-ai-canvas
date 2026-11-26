@@ -42,6 +42,7 @@ type Options struct {
 	Resolution            *string `json:"resolution,omitempty" node:"vquality" task:"vquality" modes:"video"`
 	GenerateAudio         *bool   `json:"generateAudio,omitempty" node:"generateAudio" task:"videoGenerateAudio" modes:"video"`
 	Watermark             *bool   `json:"watermark,omitempty" node:"watermark" task:"videoWatermark" modes:"video"`
+	ArkPrivateAssetUpload *bool   `json:"arkPrivateAssetUpload,omitempty" node:"arkPrivateAssetUpload" task:"videoArkPrivateAssetUpload" modes:"video"`
 	AudioVoice            *string `json:"audioVoice,omitempty" node:"audioVoice" task:"audioVoice" modes:"audio"`
 	AudioMode             *string `json:"audioMode,omitempty" node:"audioMode" task:"audioMode" modes:"audio"`
 	AudioFormat           *string `json:"audioFormat,omitempty" node:"audioFormat" task:"audioFormat" modes:"audio"`

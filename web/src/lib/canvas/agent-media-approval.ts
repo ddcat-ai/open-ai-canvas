@@ -6,6 +6,12 @@ import { logicalModelIDForConfig, modelOptionName, resolveModelChannel, selectab
 export type AgentImageApproval = AgentMediaSettings & { prompt: string; referenceNodeIds: string[] };
 export type AgentVideoApproval = AgentImageApproval & { referenceTransientIds: string[]; sourceNodeId: string };
 
+/** 来源选择必须来自服务端审批，空 nodeId 是独立创作选项，不是省略。 */
+export function agentMediaSourceChoices(detail: Record<string, unknown>): { nodeId: string; label: string }[] {
+    if (!Array.isArray(detail.sourceChoices)) return [];
+    return detail.sourceChoices.filter((choice): choice is { nodeId: string; label: string } => Boolean(choice) && typeof choice === "object" && typeof choice.nodeId === "string" && typeof choice.label === "string" && choice.label.length > 0);
+}
+
 /**
  * 审批详情里只有这些字段属于后端 mediaSettings；prompt 与引用节点由服务端持有。
  * 展开完整审批对象会把 prompt 回传，被后端 DisallowUnknownFields 拒绝（json: unknown field "prompt"），

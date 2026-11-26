@@ -454,6 +454,10 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 	if state.Approval != nil && state.Approval.Decision != "" && state.Approval.CallHash != "" && state.Approval.CallHash != cloudAgentApprovalCallHash(call) {
 		return s.terminateCloudAgent(run, "审批内容与待执行操作不一致，本轮已停止")
 	}
+	if state.Approval != nil && state.Approval.Decision == "approve" && len(state.Approval.SourceChoices) > 0 {
+		// 来源已确认，继续准备新的规格报价审批；这一步仍未取得收费授权。
+		state.Approval = nil
+	}
 	allowed := cloudAgentToolAllowed(state.Request, call.Function.Name)
 	binding, _ := cloudAgentRegistry().Lookup(call.Function.Name)
 	toolPolicy := agenttool.Of(call.Function.Name)
@@ -475,6 +479,10 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 			mediaCall := cloudAgentMediaCall(call)
 			req, prepared, err := s.prepareCloudAgentMedia(run, state, mediaCall)
 			if err != nil {
+				var sourceRequired *cloudAgentMediaSourceRequired
+				if errors.As(err, &sourceRequired) {
+					return s.requestCloudAgentMediaSourceApproval(run, state, call, sourceRequired)
+				}
 				return s.cloudAgentMediaError(run, state, "admission", false, false, err)
 			}
 			mediaRequest, plan = req, prepared

@@ -288,7 +288,8 @@ func cloudAgentAllToolSchemas() []map[string]any {
 		"dryRun": map[string]any{"type": "boolean", "description": "true 只预演不写入"},
 	}, "snapshotHash")
 	add("generate_media", "媒体生成：执行器建草稿/连线、解析默认、报价审批后提交，无需预建节点。仅用户要求改规格时用configurationChange。不可覆盖成品/任务。sourceNodeId取文本设定；referenceNodeIds取媒体，角色卡含设定/三视图，勿重复。临时参考用工具ID。提交前按回执有界纠正；提交失败禁自动重提/换模型。", map[string]any{
-		"mode": map[string]any{"type": "string", "enum": cloudAgentGenerationModeNames()}, "prompt": str("完整提示词；媒体按 referenceNodeIds 各类型分别编号 @图片1/@视频1/@音频1，文本来源不计数。漏标签由服务端补齐，不推断用途"),
+		"inheritFromNodeId": str("基于原片修改时传当前画布原片节点ID，继承原任务公开规格与模型；省略referenceNodeIds继承引用，[]清空。省略来源且已有同类型生成版本时先由用户确认来源或独立创作，不能另建空草稿绕过。原片不会自动变成参考素材。"),
+		"mode":              map[string]any{"type": "string", "enum": cloudAgentGenerationModeNames()}, "prompt": str("完整提示词；媒体按 referenceNodeIds 各类型分别编号 @图片1/@视频1/@音频1，文本来源不计数。漏标签由服务端补齐，不推断用途"),
 		"audioMode":          map[string]any{"type": "string", "enum": []any{"tts", "unified_edit"}, "description": "tts禁音频引用；unified_edit必需音频；省略自动判定。"},
 		"audioVoiceBindings": map[string]any{"type": "array", "maxItems": 3, "description": "本次角色/音频绑定，均须在referenceNodeIds。", "items": map[string]any{"type": "object", "properties": map[string]any{"characterNodeId": str("角色节点真实ID"), "audioNodeId": str("参考音频节点真实ID")}, "required": []string{"characterNodeId", "audioNodeId"}, "additionalProperties": false}},
 		"logicalModelId":     str("selection.logicalModelId；与channelId/channelModelKey互斥"), "channelId": str("selection.channelId"), "channelModelKey": str("selection.channelModelKey"),
@@ -303,7 +304,7 @@ func cloudAgentAllToolSchemas() []map[string]any {
 			}, "required": []string{"fields", "userInstruction"}, "additionalProperties": false,
 		},
 		"snapshotHash": str("可省略；执行器取当前快照"), "nodeId": str("续用草稿时填真实ID；新建可省略，由执行器生成稳定ID"), "title": str("可省略；草稿保留原名，新节点使用默认名"), "sourceNodeId": str("文本/镜头提示词节点ID"), "referenceNodeIds": map[string]any{"type": "array", "maxItems": 16, "items": str("真实媒体参考ID，按引用顺序；无参考传[]")}, "referenceTransientIds": map[string]any{"type": "array", "maxItems": 4, "items": str("标注工具返回的临时参考ID")},
-	}, "mode", "prompt", "referenceNodeIds")
+	}, "mode", "prompt")
 	cloudAgentDeclareMediaModelSelection(tools[len(tools)-1], true)
 	batchProperties := func() map[string]any {
 		return map[string]any{

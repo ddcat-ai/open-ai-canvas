@@ -2339,6 +2339,10 @@
             "description": "model_list 档位；未启用时省略",
             "type": "string"
           },
+          "inheritFromNodeId": {
+            "description": "基于原片修改时传当前画布原片节点ID，继承原任务公开规格与模型；省略referenceNodeIds继承引用，[]清空。省略来源且已有同类型生成版本时先由用户确认来源或独立创作，不能另建空草稿绕过。原片不会自动变成参考素材。",
+            "type": "string"
+          },
           "logicalModelId": {
             "description": "selection.logicalModelId；与channelId/channelModelKey互斥",
             "type": "string"
@@ -2410,8 +2414,7 @@
         },
         "required": [
           "mode",
-          "prompt",
-          "referenceNodeIds"
+          "prompt"
         ],
         "type": "object"
       }

@@ -86,7 +86,7 @@ func cloudAgentMediaDependencyHash(doc map[string]any, args cloudAgentMediaArgs)
 			return "", err
 		}
 		metadata, _ := target["metadata"].(map[string]any)
-		for _, key := range []string{"locked", "taskId", "generationTaskId", "agentDraftRunId", "status"} {
+		for _, key := range []string{"locked", "taskId", "generationTaskId", "agentDraftRunId", "status", "inheritFromNodeId"} {
 			input[key] = metadata[key]
 		}
 		targetInput = map[string]any{"id": target["id"], "type": target["type"], "locked": target["locked"], "input": input, "resource": resourceProjection(metadata)}

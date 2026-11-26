@@ -497,6 +497,9 @@ func cloudAgentMediaApprovalPreview(plan *cloudAgentMediaPlan, modelName string)
 		nodeTitle = "未命名" + descriptor.Label
 	}
 	details := make([]string, 0, 6)
+	if args.InheritFromNodeID != "" {
+		details = append(details, "版本来源节点："+truncateRunes(args.InheritFromNodeID, 80))
+	}
 	if modelName != "" {
 		details = append(details, "模型："+truncateRunes(modelName, 120))
 	}

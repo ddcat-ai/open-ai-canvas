@@ -15,6 +15,7 @@ export type Options = {
     resolution?: string;
     generateAudio?: boolean;
     watermark?: boolean;
+    arkPrivateAssetUpload?: boolean;
     audioVoice?: string;
     audioMode?: string;
     audioFormat?: string;
@@ -47,157 +48,129 @@ export type GenerationSpec = {
 
 export const GENERATION_OPTION_FIELDS = [
     {
-        "kind": "string",
-        "modes": [
-            "image",
-            "video"
-        ],
-        "name": "size",
-        "node": "size",
-        "task": "size"
+        kind: "string",
+        modes: ["image", "video"],
+        name: "size",
+        node: "size",
+        task: "size",
     },
     {
-        "kind": "string",
-        "modes": [
-            "image"
-        ],
-        "name": "imageResolution",
-        "node": "imageResolution",
-        "task": "imageResolution"
+        kind: "string",
+        modes: ["image"],
+        name: "imageResolution",
+        node: "imageResolution",
+        task: "imageResolution",
     },
     {
-        "kind": "string",
-        "modes": [
-            "image"
-        ],
-        "name": "imageParameters",
-        "node": "imageParameters",
-        "task": "imageParameters"
+        kind: "string",
+        modes: ["image"],
+        name: "imageParameters",
+        node: "imageParameters",
+        task: "imageParameters",
     },
     {
-        "kind": "string",
-        "modes": [
-            "image"
-        ],
-        "name": "quality",
-        "node": "quality",
-        "task": "quality"
+        kind: "string",
+        modes: ["image"],
+        name: "quality",
+        node: "quality",
+        task: "quality",
     },
     {
-        "kind": "number",
-        "modes": [
-            "image"
-        ],
-        "name": "count",
-        "node": "count",
-        "task": "count"
+        kind: "number",
+        modes: ["image"],
+        name: "count",
+        node: "count",
+        task: "count",
     },
     {
-        "kind": "boolean",
-        "modes": [
-            "image"
-        ],
-        "name": "transparentBackground",
-        "node": "transparentBackground",
-        "task": "transparentBackground"
+        kind: "boolean",
+        modes: ["image"],
+        name: "transparentBackground",
+        node: "transparentBackground",
+        task: "transparentBackground",
     },
     {
-        "kind": "number",
-        "modes": [
-            "video"
-        ],
-        "name": "durationSeconds",
-        "node": "seconds",
-        "task": "videoSeconds"
+        kind: "number",
+        modes: ["video"],
+        name: "durationSeconds",
+        node: "seconds",
+        task: "videoSeconds",
     },
     {
-        "kind": "string",
-        "modes": [
-            "video"
-        ],
-        "name": "resolution",
-        "node": "vquality",
-        "task": "vquality"
+        kind: "string",
+        modes: ["video"],
+        name: "resolution",
+        node: "vquality",
+        task: "vquality",
     },
     {
-        "kind": "boolean",
-        "modes": [
-            "video"
-        ],
-        "name": "generateAudio",
-        "node": "generateAudio",
-        "task": "videoGenerateAudio"
+        kind: "boolean",
+        modes: ["video"],
+        name: "generateAudio",
+        node: "generateAudio",
+        task: "videoGenerateAudio",
     },
     {
-        "kind": "boolean",
-        "modes": [
-            "video"
-        ],
-        "name": "watermark",
-        "node": "watermark",
-        "task": "videoWatermark"
+        kind: "boolean",
+        modes: ["video"],
+        name: "watermark",
+        node: "watermark",
+        task: "videoWatermark",
     },
     {
-        "kind": "string",
-        "modes": [
-            "audio"
-        ],
-        "name": "audioVoice",
-        "node": "audioVoice",
-        "task": "audioVoice"
+        kind: "boolean",
+        modes: ["video"],
+        name: "arkPrivateAssetUpload",
+        node: "arkPrivateAssetUpload",
+        task: "videoArkPrivateAssetUpload",
     },
     {
-        "kind": "string",
-        "modes": [
-            "audio"
-        ],
-        "name": "audioMode",
-        "node": "audioMode",
-        "task": "audioMode"
+        kind: "string",
+        modes: ["audio"],
+        name: "audioVoice",
+        node: "audioVoice",
+        task: "audioVoice",
     },
     {
-        "kind": "string",
-        "modes": [
-            "audio"
-        ],
-        "name": "audioFormat",
-        "node": "audioFormat",
-        "task": "audioFormat"
+        kind: "string",
+        modes: ["audio"],
+        name: "audioMode",
+        node: "audioMode",
+        task: "audioMode",
     },
     {
-        "kind": "string",
-        "modes": [
-            "audio"
-        ],
-        "name": "audioSpeed",
-        "node": "audioSpeed",
-        "task": "audioSpeed"
+        kind: "string",
+        modes: ["audio"],
+        name: "audioFormat",
+        node: "audioFormat",
+        task: "audioFormat",
     },
     {
-        "kind": "string",
-        "modes": [
-            "audio"
-        ],
-        "name": "audioLanguage",
-        "node": "audioLanguage",
-        "task": "audioLanguage"
+        kind: "string",
+        modes: ["audio"],
+        name: "audioSpeed",
+        node: "audioSpeed",
+        task: "audioSpeed",
     },
     {
-        "kind": "string",
-        "modes": [
-            "audio"
-        ],
-        "name": "audioDialect",
-        "node": "audioDialect",
-        "task": "audioDialect"
+        kind: "string",
+        modes: ["audio"],
+        name: "audioLanguage",
+        node: "audioLanguage",
+        task: "audioLanguage",
     },
     {
-        "kind": "string",
-        "modes": [
-            "audio"
-        ],
-        "name": "audioInstructions",
-        "node": "audioInstructions",
-        "task": "audioInstructions"
-    }
+        kind: "string",
+        modes: ["audio"],
+        name: "audioDialect",
+        node: "audioDialect",
+        task: "audioDialect",
+    },
+    {
+        kind: "string",
+        modes: ["audio"],
+        name: "audioInstructions",
+        node: "audioInstructions",
+        task: "audioInstructions",
+    },
 ] as const;

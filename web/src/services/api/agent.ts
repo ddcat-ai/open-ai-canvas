@@ -6,6 +6,7 @@ import { assertCurrentUserSession, captureUserSession, isUserSessionInvalidated 
 export type AgentPermissionMode = "read_only" | "auto" | "request_approval";
 export type AgentReasoningMode = import("@/lib/text-thinking").ThinkingRequest;
 export type AgentMediaSettings = {
+    inheritFromNodeId?: string;
     logicalModelId?: string;
     channelId?: string;
     channelModelKey?: string;
@@ -75,6 +76,7 @@ export type AgentApprovalPreview = {
 };
 
 export type AgentApproval = {
+    sourceChoices?: { nodeId: string; label: string }[];
     modelName?: string;
     approvalId: string;
     call: { id: string; function: { name: string; arguments: string } };
