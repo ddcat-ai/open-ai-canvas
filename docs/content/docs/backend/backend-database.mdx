@@ -287,6 +287,10 @@ SQLite 写事务与 PostgreSQL 行锁串行化同一对话的修订检查；读�
 
 ## 用户分组与多币种计价（Schema 75）
 
+会员模块使用独立的 `yingce_schema_migrations` 第 5 项 `membership_cards`。新增 `topup_products.membership_days/membership_group`，会员商品类型为 `membership`；`payment_orders` 保存相同字段并在到账时写入 `membership_starts_at/membership_ends_at`。生效区间包含起点、不含终点。按用户行锁顺延时段，更新 `users.membership_until`（最后一个已购时段的终点），以 `membership_bonus` 记赠分，与支付终态同事务提交。历史用户的期限为空，`users.user_group` 始终保存基础组。开关使用 `system_settings.membership_sales`（键名，布尔 JSON 值）；缺省关闭。有关联卡、待发放订单或未到期时段的分组禁止删除。
+
+升级沿用标准数据库迁移，主线 Schema 编号不变。业务停用可关闭销售并继续履约。已售卡的数据库不能直接配旧版后端运行，旧版本不能识别会员商品；跨版本回滚需配套恢复升级前备份，并核对备份之后的支付订单。
+
 版本 75 `user_groups_pricing_currency` 新增两张表并补充 6 列，旧数据计费结果不变：
 
 | 表 / 列 | 用途 | 关键边界 |
