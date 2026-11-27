@@ -122,11 +122,13 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const editorRef = useRef<HTMLDivElement | null>(null);
     const readOnly = Boolean(props.disabled || props.readOnly);
-    const selectionPendingRef = useRef(false);
+    const selectionPendingRef = useRef<number | null>(null);
+    const mentionSessionRef = useRef(0);
     const latestEditorStateRef = useRef({ value, readOnly });
     latestEditorStateRef.current = { value, readOnly };
     useEffect(
         () => () => {
+            mentionSessionRef.current += 1;
             latestEditorStateRef.current = { value: "", readOnly: true };
         },
         [],
@@ -139,7 +141,11 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     const pendingSelectionRef = useRef<number | null>(null);
     const pendingScrollTopRef = useRef<number | null>(null);
     const lastRenderedValueRef = useRef("");
-    const [mention, setMention] = useState<MentionState | null>(null);
+    const [mention, setMentionState] = useState<MentionState | null>(null);
+    const setMention = (next: MentionState | null) => {
+        mentionSessionRef.current += 1;
+        setMentionState(next);
+    };
     const mentionKeyboardRef = useRef<MentionMenuKeyboard | null>(null);
     const [autoLinkCursor, setAutoLinkCursor] = useState<number | null>(null);
     const autoLinkSuggestionRef = useRef<HTMLButtonElement | null>(null);
@@ -384,17 +390,18 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     };
 
     const insertReference = async (reference: CanvasResourceReference) => {
-        if (readOnly || !mention || selectionPendingRef.current) return;
+        const session = mentionSessionRef.current;
+        if (readOnly || !mention || selectionPendingRef.current === session) return;
         let selected: CanvasResourceReference | undefined;
-        selectionPendingRef.current = true;
+        selectionPendingRef.current = session;
         try {
             const result = onSelectReference ? onSelectReference(reference) : reference;
             selected = result instanceof Promise ? await result : result;
         } finally {
-            selectionPendingRef.current = false;
+            if (selectionPendingRef.current === session) selectionPendingRef.current = null;
         }
-        // 素材读取期间可能继续输入、关闭面板或锁定节点，不能用旧光标覆盖新正文。
-        if (latestEditorStateRef.current.readOnly || latestEditorStateRef.current.value !== value) return;
+        // 关闭、重开或切换引用位置都会结束旧菜单会话，旧请求不能写回或抢回焦点。
+        if (mentionSessionRef.current !== session || latestEditorStateRef.current.readOnly || latestEditorStateRef.current.value !== value) return;
         if (!selected) return;
         if (mention.fromShelf) {
             const result = insertPromptReferenceAtSelection(value, mention, canvasResourceMentionToken(selected));
@@ -519,7 +526,9 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                 cursorOffset={mention.end}
                 preferredWidth={mentionMenuWidth}
                 keyboardRef={mentionKeyboardRef}
-                onQueryChange={(query) => setMention((current) => (current ? { ...current, query } : current))}
+                onQueryChange={(query) => {
+                    if (mention) setMention({ ...mention, query });
+                }}
                 onClose={closeMention}
                 onSelect={insertReference}
                 labels={mentionMenuLabels}

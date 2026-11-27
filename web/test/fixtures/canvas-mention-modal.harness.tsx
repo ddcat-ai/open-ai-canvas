@@ -102,6 +102,115 @@ test("异步素材选择期间继续输入时保留新正文，重复点击只�
     }
 });
 
+for (const action of ["关闭菜单", "关闭后移动光标", "重新打开菜单", "切换引用位置", "卸载编辑器"] as const) {
+    test(`异步选择素材期间${action}使旧请求失效`, async () => {
+        const host = document.createElement("div");
+        const outside = document.createElement("button");
+        document.body.append(host, outside);
+        const root = createRoot(host);
+        const actions = { current: null as CanvasResourceMentionTextareaActions | null };
+        const reference: CanvasResourceReference = { id: "image", nodeId: "image", kind: "image", label: "图片1", title: "参考图", active: false };
+        let finish!: (value: CanvasResourceReference) => void;
+        const pending = new Promise<CanvasResourceReference>((resolve) => {
+            finish = resolve;
+        });
+        const writes: string[] = [];
+        let unmounted = false;
+        try {
+            await act(async () =>
+                root.render(
+                    <CanvasResourceMentionTextarea
+                        value="前景远景"
+                        references={[reference]}
+                        actionsRef={actions}
+                        onSelectReference={() => pending}
+                        onChange={(next) => {
+                            writes.push(next);
+                        }}
+                    />,
+                ),
+            );
+            const editor = host.querySelector<HTMLTextAreaElement>("textarea")!;
+            editor.focus();
+            editor.setSelectionRange(2, 2);
+            await act(async () => actions.current!.openReferencePicker());
+            const item = document.querySelector<HTMLButtonElement>(".canvas-resource-mention-item")!;
+            await act(async () => item.dispatchEvent(new dom.PointerEvent("pointerdown", { bubbles: true, cancelable: true })));
+            if (action === "卸载编辑器") {
+                await act(async () => root.unmount());
+                unmounted = true;
+            } else if (action !== "切换引用位置") {
+                await act(async () => editor.dispatchEvent(new dom.KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+                expect(document.querySelector("[data-canvas-resource-mention-menu]")).toBeNull();
+            }
+            if (action === "关闭后移动光标") editor.setSelectionRange(0, 0);
+            if (action === "重新打开菜单" || action === "切换引用位置") {
+                editor.setSelectionRange(0, 0);
+                await act(async () => actions.current!.openReferencePicker());
+            }
+            await act(async () => outside.focus());
+            await act(async () => finish({ ...reference, active: true }));
+            expect(writes).toEqual([]);
+            expect(document.activeElement).toBe(outside);
+            if (!unmounted) expect(editor.selectionStart).toBe(action === "关闭菜单" ? 2 : 0);
+            if (action === "重新打开菜单" || action === "切换引用位置") expect(document.querySelector("[data-canvas-resource-mention-menu]")).not.toBeNull();
+        } finally {
+            if (!unmounted) await act(async () => root.unmount());
+            host.remove();
+            outside.remove();
+        }
+    });
+}
+
+test("关闭旧菜单后可重新异步选择素材，旧请求返回不影响新会话", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const actions = { current: null as CanvasResourceMentionTextareaActions | null };
+    const reference: CanvasResourceReference = { id: "image", nodeId: "image", kind: "image", label: "图片1", title: "参考图", active: false };
+    const finish: Array<(value: CanvasResourceReference) => void> = [];
+    const writes: string[] = [];
+    try {
+        await act(async () =>
+            root.render(
+                <CanvasResourceMentionTextarea
+                    value="前景远景"
+                    references={[reference]}
+                    actionsRef={actions}
+                    onSelectReference={() =>
+                        new Promise<CanvasResourceReference>((resolve) => {
+                            finish.push(resolve);
+                        })
+                    }
+                    onChange={(next) => {
+                        writes.push(next);
+                    }}
+                />,
+            ),
+        );
+        const editor = host.querySelector<HTMLTextAreaElement>("textarea")!;
+        editor.focus();
+        editor.setSelectionRange(2, 2);
+        const select = async () => {
+            await act(async () => actions.current!.openReferencePicker());
+            await act(async () => document.querySelector<HTMLButtonElement>(".canvas-resource-mention-item")!.dispatchEvent(new dom.PointerEvent("pointerdown", { bubbles: true, cancelable: true })));
+        };
+        await select();
+        await act(async () => editor.dispatchEvent(new dom.KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+        await select();
+        expect(finish).toHaveLength(2);
+        await act(async () => finish[0]({ ...reference, active: true }));
+        expect(writes).toEqual([]);
+        expect(document.querySelector("[data-canvas-resource-mention-menu]")).not.toBeNull();
+        await act(async () => finish[1]({ ...reference, active: true }));
+        expect(writes).toEqual([`前景 ${canvasResourceMentionToken(reference)} 远景`]);
+        expect(document.querySelector("[data-canvas-resource-mention-menu]")).toBeNull();
+    } finally {
+        await act(async () => root.unmount());
+        host.remove();
+    }
+});
+
 test("提示词预设回显当前选项，改选四视图只提交一次并收起菜单", async () => {
     const host = document.createElement("div");
     document.body.append(host);
