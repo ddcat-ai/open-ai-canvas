@@ -1,14 +1,65 @@
 .character-dressing {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.character-dressing__navigation {
+    display: flex;
+    flex-shrink: 0;
+    justify-content: center;
+    padding: 10px 24px;
+}
+
+.character-dressing__scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    padding: 8px 24px 16px;
+}
+
+.character-dressing__scroll > .ant-alert {
+    max-width: 680px;
+    margin: 0 auto 12px;
+}
+
+.character-dressing__actionbar {
+    flex-shrink: 0;
+    padding: 12px 24px max(12px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--workspace-border);
+    background: var(--workspace-surface);
+}
+
+.character-dressing__composer,
+.character-dressing__save {
+    width: 100%;
+    max-width: 680px;
+    margin: 0 auto;
+}
+
+.character-dressing__generation-tools {
     display: grid;
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-    align-items: start;
-    gap: 28px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+}
+
+.character-dressing__generation-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
 }
 
 .character-dressing__studio {
-    position: sticky;
-    top: 0;
-    padding: 20px 16px 12px;
+    width: 100%;
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 14px 20px 10px;
     border: 1px solid var(--workspace-border);
     border-radius: var(--card-radius);
     background: var(--muted);
@@ -46,19 +97,20 @@
 .character-dressing__orbit {
     position: relative;
     display: grid;
-    grid-template-columns: 90px minmax(0, 1fr) 90px;
+    grid-template-columns: 90px minmax(0, 240px) 90px;
     grid-template-rows: repeat(3, 1fr);
     align-items: center;
     justify-items: center;
+    justify-content: center;
     gap: 8px;
-    min-height: 450px;
-    padding: 20px 0 50px;
+    min-height: 330px;
+    padding: 4px 0 36px;
 }
 
 .character-dressing__portrait {
     grid-area: 1 / 2 / 4 / 3;
     width: 100%;
-    height: 292px;
+    height: 260px;
     overflow: hidden;
     border-radius: var(--card-radius);
     background: var(--workspace-surface);
@@ -174,13 +226,6 @@
     color: var(--muted-foreground);
 }
 
-.character-dressing__reference-actions {
-    display: flex;
-    position: absolute;
-    bottom: -25px;
-    gap: 4px;
-}
-
 .character-dressing__studio-footer {
     border-top: 1px solid var(--workspace-border);
     padding-top: 10px;
@@ -195,6 +240,14 @@
     flex-direction: column;
     gap: 16px;
     min-width: 0;
+}
+.character-dressing__controls {
+    width: 100%;
+    max-width: 680px;
+    margin: 0 auto;
+}
+.character-dressing__composer {
+    gap: 10px;
 }
 .character-dressing__section-heading h3 {
     display: flex;
@@ -310,16 +363,20 @@
 }
 
 @media (max-width: 767px) {
-    .character-dressing {
+    .character-dressing__scroll {
+        padding-inline: 12px;
+    }
+    .character-dressing__actionbar {
+        padding-inline: 12px;
+    }
+    .character-dressing__generation-tools {
         grid-template-columns: minmax(0, 1fr);
-        gap: 20px;
     }
     .character-dressing__studio {
-        position: static;
-        padding: 16px 10px 10px;
+        padding: 12px 10px 10px;
     }
     .character-dressing__orbit {
-        grid-template-columns: 66px minmax(0, 1fr) 66px;
+        grid-template-columns: 58px minmax(0, 240px) 58px;
         gap: 6px;
     }
     .character-dressing__slot {
@@ -327,7 +384,7 @@
         height: 56px;
     }
     .character-dressing__portrait {
-        height: 270px;
+        height: 240px;
     }
     .character-dressing__heading {
         align-items: flex-start;

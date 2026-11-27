@@ -70,7 +70,7 @@ export function CanvasCharacterReferenceModal({
         return titles;
     }, [canvasNodes]);
     return (
-        <AppModal open={open && Boolean(node)} title={null} footer={null} destroyOnHidden width="min(1120px, calc(100vw - 32px))" onCancel={onClose} flush>
+        <AppModal open={open && Boolean(node)} title={null} footer={null} destroyOnHidden centered styles={{ wrapper: { overflow: "hidden" } }} width="min(1120px, calc(100vw - 32px))" onCancel={onClose} flush>
             {node?.metadata?.sharedCharacter ? (
                 <SharedCharacterStudio node={node} />
             ) : node?.metadata?.characterAssetId ? (
@@ -274,9 +274,9 @@ function CharacterStudio({
             ) : null}
             <section className="flex min-h-0 flex-col">
                 <CharacterTabs value={tab} onChange={setTab} />
-                <div ref={tabPanelRef} id={`character-tab-panel-${tab}`} role="tabpanel" aria-labelledby={`character-tab-${tab}`} className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-7 pb-8 pt-6">
+                <div ref={tabPanelRef} id={`character-tab-panel-${tab}`} role="tabpanel" aria-labelledby={`character-tab-${tab}`} className={`min-h-0 flex-1 ${tab === "dressing" ? "overflow-hidden" : "thin-scrollbar overflow-y-auto px-7 pb-8 pt-6"}`}>
                     {detail ? (
-                        <div hidden={tab !== "dressing"}>
+                        <div hidden={tab !== "dressing"} className="h-full">
                             <CharacterDressingPanel
                                 detail={detail}
                                 outfit={activeOutfit}
