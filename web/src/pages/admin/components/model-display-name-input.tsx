@@ -9,8 +9,7 @@ export function ModelDisplayNameInput({ onSearch, onFocus, onOpenChange, placeho
     const { references } = useAdminContext();
     const [search, setSearch] = useState("");
     const order = useConfigStore((state) => state.config.displayGroupOrder);
-    const options = useMemo(() => [...new Set([...(order ?? []), "未分类", ...references.channels.flatMap((item) => item.modelDisplayNames ?? [])])]
-        .sort(displayGroupComparator(order ?? [])).map((value) => ({ value })), [order, references.channels]);
+    const options = useMemo(() => [...new Set([...(order ?? []), "未分类", ...references.channels.flatMap((item) => item.modelDisplayNames ?? [])])].sort(displayGroupComparator(order ?? [])).map((value) => ({ value })), [order, references.channels]);
     return (
         <AutoComplete
             {...props}

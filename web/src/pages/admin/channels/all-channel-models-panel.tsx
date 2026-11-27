@@ -93,7 +93,17 @@ export function AllChannelModelsPanel({
         let name = "";
         modal.confirm({
             title: "新建模型分组",
-            content: <input className="ant-input w-full" aria-label="分组名称" maxLength={100} placeholder="请输入分组名称" onChange={(event) => { name = event.target.value; }} />,
+            content: (
+                <input
+                    className="ant-input w-full"
+                    aria-label="分组名称"
+                    maxLength={100}
+                    placeholder="请输入分组名称"
+                    onChange={(event) => {
+                        name = event.target.value;
+                    }}
+                />
+            ),
             okText: "创建",
             cancelText: "取消",
             onOk: async () => {
@@ -224,7 +234,13 @@ export function AllChannelModelsPanel({
                 }
                 return true;
             })
-            .sort((left, right) => (left.displayName?.trim() || "未分类").localeCompare(right.displayName?.trim() || "未分类", "zh-CN") || (left.sortOrder ?? 0) - (right.sortOrder ?? 0) || left.modelKey.localeCompare(right.modelKey) || left.channelName.localeCompare(right.channelName, "zh-CN"));
+            .sort(
+                (left, right) =>
+                    (left.displayName?.trim() || "未分类").localeCompare(right.displayName?.trim() || "未分类", "zh-CN") ||
+                    (left.sortOrder ?? 0) - (right.sortOrder ?? 0) ||
+                    left.modelKey.localeCompare(right.modelKey) ||
+                    left.channelName.localeCompare(right.channelName, "zh-CN"),
+            );
     }, [capability, channelFilter, groupFilter, health, items, keyword, status]);
 
     const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
@@ -325,15 +341,32 @@ export function AllChannelModelsPanel({
     return (
         <div className="admin-all-models">
             <div className="flex flex-wrap items-center gap-2 py-3" role="group" aria-label="模型展示分组">
-                <Button size="small" type={!groupFilter ? "primary" : "default"} onClick={() => { setSelectedIds([]); updateFilter({ displayGroup: "" }); }}>
+                <Button
+                    size="small"
+                    type={!groupFilter ? "primary" : "default"}
+                    onClick={() => {
+                        setSelectedIds([]);
+                        updateFilter({ displayGroup: "" });
+                    }}
+                >
                     全部分组 ({items.length})
                 </Button>
                 {groupNames.map((group) => (
-                    <Button key={group} size="small" type={groupFilter === group ? "primary" : "default"} onClick={() => { setSelectedIds([]); updateFilter({ displayGroup: group }); }}>
+                    <Button
+                        key={group}
+                        size="small"
+                        type={groupFilter === group ? "primary" : "default"}
+                        onClick={() => {
+                            setSelectedIds([]);
+                            updateFilter({ displayGroup: group });
+                        }}
+                    >
                         {group} ({items.filter((item) => (item.displayName?.trim() || "未分类") === group).length})
                     </Button>
                 ))}
-                <Button size="small" onClick={createGroup}>新建分组</Button>
+                <Button size="small" onClick={createGroup}>
+                    新建分组
+                </Button>
             </div>
             <AdminDataTable
                 toolbar={
@@ -372,7 +405,9 @@ export function AllChannelModelsPanel({
                             options={[{ label: "全部渠道", value: "all" }, ...channels.map((channel) => ({ label: channel.name, value: channel.id }))]}
                             onChange={(value) => updateFilter({ modelChannel: value })}
                         />
-                        <Button size="small" disabled={!groupFilter} title={groupFilter ? "调整当前组的模型顺序" : "请先选择一个分组"} icon={<ListOrdered className="size-3.5" />} onClick={() => setSortingGroup(groupFilter)}>组内排序</Button>
+                        <Button size="small" disabled={!groupFilter} title={groupFilter ? "调整当前组的模型顺序" : "请先选择一个分组"} icon={<ListOrdered className="size-3.5" />} onClick={() => setSortingGroup(groupFilter)}>
+                            组内排序
+                        </Button>
                         <Button size="small" icon={<ListOrdered className="size-3.5" />} onClick={() => setOrderOpen(true)}>
                             目录排序
                         </Button>
@@ -392,7 +427,12 @@ export function AllChannelModelsPanel({
                             value={undefined}
                             disabled={loading || Boolean(loadError) || Boolean(movingGroup)}
                             options={groupNames.map((group) => ({ label: group, value: group }))}
-                            onChange={(value) => void moveItemsToGroup(items.filter((item) => selectedIds.includes(item.id)), String(value))}
+                            onChange={(value) =>
+                                void moveItemsToGroup(
+                                    items.filter((item) => selectedIds.includes(item.id)),
+                                    String(value),
+                                )
+                            }
                         />
                         <Button size="small" disabled={loading || Boolean(loadError)} onClick={() => setBatchEditItems(items.filter((item) => selectedIds.includes(item.id)))}>
                             批量修改
