@@ -15,6 +15,7 @@ import (
 	agenttool "yingce/backend/internal/agent/tool"
 	"yingce/backend/internal/canvas/contract"
 	"yingce/backend/internal/canvas/layout"
+	"yingce/backend/internal/canvas/mediatool"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
 )
@@ -223,6 +224,10 @@ func cloudAgentMediaBatchItemArgs(doc map[string]any, args cloudAgentMediaBatchA
 	}
 	if stringValue(node["type"]) != args.Mode {
 		return cloudAgentMediaArgs{}, cloudAgentFieldError(field("nodeId"), "invalid_value", "占位节点类型与本批生成模式不一致；图片、视频、音频请分批")
+	}
+	metadata, _ := node["metadata"].(map[string]any)
+	if _, processing := mediatool.Lookup(firstNonEmpty(stringValue(metadata["operation"]), stringValue(metadata["videoEditOperation"]))); processing {
+		return cloudAgentMediaArgs{}, cloudAgentFieldError(field("nodeId"), "unsupported_value", "视频处理暂不支持批量提交，请逐项调用 generate_media")
 	}
 	if reason, issue := cloudAgentMediaTargetIssue(node, args.Mode); reason != "" {
 		return cloudAgentMediaArgs{}, cloudAgentFieldError(field("nodeId"), reason, issue+"；请把它移出本批")

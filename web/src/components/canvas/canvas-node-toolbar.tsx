@@ -67,10 +67,8 @@ type CanvasNodeToolbarProps = {
     onExtractAudioFromVideo: (node: CanvasNodeData) => void;
     onRemakeVideo?: (node: CanvasNodeData) => void;
     onTrimVideoSegments: (node: CanvasNodeData) => void;
-    onEnhanceVideo?: (node: CanvasNodeData) => void;
-    onDepthVideo?: (node: CanvasNodeData) => void;
-    onUpscaleVideo?: (node: CanvasNodeData) => void;
-    onRemoveVideoSubtitles?: (node: CanvasNodeData) => void;
+    onProcessVideo?: (node: CanvasNodeData, operation: string) => void;
+    canProcessVideo?: (operation: string) => boolean;
     onVersions?: (node: CanvasNodeData) => void;
     onAdoptToDrama?: (node: CanvasNodeData) => void;
     onRefreshFromDrama?: (node: CanvasNodeData) => void;
@@ -144,10 +142,8 @@ export function CanvasNodeToolbar({
     onExtractAudioFromVideo,
     onRemakeVideo,
     onTrimVideoSegments,
-    onEnhanceVideo,
-    onDepthVideo,
-    onUpscaleVideo,
-    onRemoveVideoSubtitles,
+    onProcessVideo,
+    canProcessVideo,
     onVersions,
     onAdoptToDrama,
     onRefreshFromDrama,
@@ -344,10 +340,8 @@ export function CanvasNodeToolbar({
         onNodeExtractAudioFromVideo: onExtractAudioFromVideo,
         onNodeRemakeVideo: onRemakeVideo,
         onNodeTrimVideoSegments: onTrimVideoSegments,
-        onNodeEnhanceVideo: onEnhanceVideo,
-        onNodeDepthVideo: onDepthVideo,
-        onNodeUpscaleVideo: onUpscaleVideo,
-        onNodeRemoveVideoSubtitles: onRemoveVideoSubtitles,
+        onNodeProcessVideo: onProcessVideo,
+        canProcessVideo,
         onNodeReversePrompt: onReversePrompt,
         onNodeToggleFreeResize: onToggleFreeResize,
         onNodeDownloadSubtitles: onDownloadSubtitles,

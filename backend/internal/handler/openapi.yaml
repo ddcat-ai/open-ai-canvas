@@ -3454,6 +3454,20 @@ paths:
                       type: string
                     quality:
                       type: string
+                    processingParameters:
+                      type: object
+                      additionalProperties: false
+                      description: 视频处理公开参数；按当前操作及模型能力重新准入、报价和审批，分辨率仍使用 quality。
+                      properties:
+                        fps:
+                          type: integer
+                        bitrateLevel:
+                          type: string
+                          enum: [low, medium, high]
+                        bitrate:
+                          type: integer
+                          minimum: 10
+                          maximum: 150000
       responses:
         "200":
           description: 信封 data.accepted

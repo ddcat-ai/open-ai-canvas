@@ -12,6 +12,7 @@ import (
 
 	"yingce/backend/internal/canvas/capability"
 	"yingce/backend/internal/canvas/layout"
+	"yingce/backend/internal/canvas/mediatool"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
 )
@@ -497,6 +498,20 @@ func cloudAgentMediaApprovalPreview(plan *cloudAgentMediaPlan, modelName string)
 		nodeTitle = "未命名" + descriptor.Label
 	}
 	details := make([]string, 0, 6)
+	if definition, processing := mediatool.Lookup(args.Operation); processing {
+		details = append(details, "操作："+definition.Label, "源视频节点："+strings.Join(args.ReferenceNodeIDs, "、"))
+		if parameters := args.ProcessingParameters; parameters != nil {
+			if parameters.FPS != nil {
+				details = append(details, fmt.Sprintf("输出帧率：%d fps", *parameters.FPS))
+			}
+			if parameters.BitrateLevel != nil {
+				details = append(details, "码率档位："+*parameters.BitrateLevel)
+			}
+			if parameters.Bitrate != nil {
+				details = append(details, fmt.Sprintf("精确码率：%d kbps", *parameters.Bitrate))
+			}
+		}
+	}
 	if args.InheritFromNodeID != "" {
 		details = append(details, "版本来源节点："+truncateRunes(args.InheritFromNodeID, 80))
 	}

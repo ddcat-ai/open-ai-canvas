@@ -1,5 +1,7 @@
 package app
 
+import "yingce/backend/internal/canvas/mediatool"
+
 // cloudAgentVideoOperation 按参考素材在所选模型声明的操作里挑一个：普通参考图与首尾帧是不同角色，
 // 普通图优先 reference_to_video，模型只支持 image_to_video 时沿用原来的首帧语义。
 // 首尾帧由调用方提前确定为 image_to_video，不经过这里。operations 为空表示模型未限制操作，与 MatchCapability 一致。
@@ -32,10 +34,21 @@ func cloudAgentVideoOperation(operations []string, defaultOperation string, imag
 // cloudAgentVideoCatalogMatches 让 Agent 的模型目录只列出能处理当前参考素材的视频模型。
 // 目录查询不知道首尾帧，按普通参考判断；之后传首尾帧时仍由 CreateTask 的统一准入校验。
 func cloudAgentVideoCatalogMatches(intent *ModelRequestIntent, operations []string, defaultOperation string) bool {
+	if intent != nil {
+		if _, ok := mediatool.Lookup(intent.Operation); ok {
+			return containsCapabilityString(operations, intent.Operation)
+		}
+	}
 	return intent == nil || intent.Capability != "video" || cloudAgentVideoOperation(operations, defaultOperation, intent.Inputs["image"], intent.Inputs["video"], intent.Inputs["audio"]) != ""
 }
 
 func (s *Service) resolveCloudAgentMediaOperation(a cloudAgentMediaArgs, refs map[string]any) (string, error) {
+	if a.Operation != "" {
+		if _, ok := mediatool.Lookup(a.Operation); !ok || a.Mode != "video" {
+			return "", cloudAgentFieldError("operation", "unsupported_value", "未知处理操作")
+		}
+		return a.Operation, nil
+	}
 	if a.Mode != "video" {
 		return cloudAgentMediaOperation(a.Mode, refs), nil
 	}

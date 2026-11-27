@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"yingce/backend/internal/canvas/mediatool"
 
 	"yingce/backend/internal/model"
 	protocolcontract "yingce/backend/internal/protocol"
@@ -617,7 +618,7 @@ func CapabilitySpecFromModelCapabilityConfig(config *ModelCapabilityConfig, capa
 		if video.Processing != nil {
 			// 处理类模型的 videoSeconds 是服务端测得的源时长，fpsBand 只用于价格档选择。
 			spec.Options["videoSeconds"] = numericRange(1, float64(videoProcessingMaxSourceSeconds(video)), 1)
-			if video.DefaultOperation == VideoProcessingOperationEnhance {
+			if definition, registered := mediatool.Lookup(video.DefaultOperation); registered && definition.Parameters["fps"].Type != "" {
 				spec.Options["fpsBand"] = anyValues(videoProcessingFPSBands)
 			}
 		}

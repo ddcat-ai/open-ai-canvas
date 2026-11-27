@@ -2,9 +2,10 @@ import type { AgentMediaSettings } from "@/services/api/agent";
 import { isCanvasNodeGenerating } from "@/lib/canvas/canvas-node-task-state";
 import type { CanvasNodeData } from "@/types/canvas";
 import { logicalModelIDForConfig, modelOptionName, resolveModelChannel, selectableModelsByCapability, type AiConfig } from "@/stores/use-config-store";
+import { mediaToolForOperation, validateProcessingParameters, type MediaToolOperation } from "./media-tool-contract";
 
 export type AgentImageApproval = AgentMediaSettings & { prompt: string; referenceNodeIds: string[] };
-export type AgentVideoApproval = AgentImageApproval & { referenceTransientIds: string[]; sourceNodeId: string };
+export type AgentVideoApproval = AgentImageApproval & { referenceTransientIds: string[]; sourceNodeId: string; operation?: MediaToolOperation };
 
 /** 来源选择必须来自服务端审批，空 nodeId 是独立创作选项，不是省略。 */
 export function agentMediaSourceChoices(detail: Record<string, unknown>): { nodeId: string; label: string }[] {
@@ -30,6 +31,7 @@ export function agentMediaSettings(value: AgentMediaSettings): AgentMediaSetting
         videoGenerateAudio: value.videoGenerateAudio,
         videoWatermark: value.videoWatermark,
         videoArkPrivateAssetUpload: value.videoArkPrivateAssetUpload,
+        ...(value.processingParameters ? { processingParameters: value.processingParameters } : {}),
     };
 }
 
@@ -69,6 +71,7 @@ export function agentVideoApproval(detail: Record<string, unknown>): AgentVideoA
             referenceNodeIds: Array.isArray(args.referenceNodeIds) ? args.referenceNodeIds.filter((id: unknown): id is string => typeof id === "string") : [],
             referenceTransientIds: Array.isArray(args.referenceTransientIds) ? args.referenceTransientIds.filter((id: unknown): id is string => typeof id === "string") : [],
             sourceNodeId: typeof args.sourceNodeId === "string" ? args.sourceNodeId : "",
+            ...(mediaToolForOperation(args.operation) ? { operation: args.operation as MediaToolOperation, processingParameters: validateProcessingParameters(args.operation, args.processingParameters || {}) } : {}),
         };
     } catch {
         return null;
@@ -115,11 +118,17 @@ export function agentApprovalMatchesSettings(argumentsValue: unknown, settings: 
     const detail = { toolName: batch ? "generate_media_batch" : "generate_media", arguments: args };
     const approved = agentImageApproval(detail) || agentVideoApproval(detail);
     if (!approved) return false;
-    return (["logicalModelId", "channelId", "channelModelKey", "size", "quality", "durationSeconds", "videoGenerateAudio", "videoWatermark", "videoArkPrivateAssetUpload"] as const).every((key) => {
-        const left = approved[key];
-        const right = settings[key];
-        return (left === undefined ? "" : left) === (right === undefined ? "" : right);
-    });
+    const approvedParameters = (approved.processingParameters || {}) as Record<string, unknown>;
+    const editedParameters = (settings.processingParameters || {}) as Record<string, unknown>;
+    const processingKeys = new Set([...Object.keys(approvedParameters), ...Object.keys(editedParameters)]);
+    return (
+        [...processingKeys].every((key) => approvedParameters[key] === editedParameters[key]) &&
+        (["logicalModelId", "channelId", "channelModelKey", "size", "quality", "durationSeconds", "videoGenerateAudio", "videoWatermark", "videoArkPrivateAssetUpload"] as const).every((key) => {
+            const left = approved[key];
+            const right = settings[key];
+            return (left === undefined ? "" : left) === (right === undefined ? "" : right);
+        })
+    );
 }
 
 export function agentApprovalModelSelection(config: AiConfig, model: string): Pick<AgentMediaSettings, "logicalModelId" | "channelId" | "channelModelKey"> {

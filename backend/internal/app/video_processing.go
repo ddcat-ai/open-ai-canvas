@@ -9,10 +9,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"strconv"
 	"strings"
 
+	"yingce/backend/internal/canvas/mediatool"
 	"yingce/backend/internal/model"
 )
 
@@ -49,6 +51,124 @@ type videoProcessingAdmission struct {
 	Prompt string
 }
 
+// preparePublicVideoProcessingIntent 在路由前确认资源事实，防止逻辑模型以客户端自报时长选路和报价。
+func (s *Service) preparePublicVideoProcessingIntent(userID string, input map[string]any) (string, error) {
+	metadata, _ := input["metadata"].(map[string]any)
+	operation := stringValue(metadata["operation"])
+	if operation == "" {
+		operation = stringValue(metadata["videoEditOperation"])
+	}
+	definition, registered := mediatool.Lookup(operation)
+	if !registered {
+		if metadata["processingParameters"] != nil || stringValue(metadata["operation"]) != "" {
+			return "", BadAuthRequest("未知媒体处理操作")
+		}
+		return "", nil
+	}
+	if stringValue(input["mode"]) != definition.Mode {
+		return "", BadAuthRequest("视频处理必须使用 video 模式")
+	}
+	parameters := &mediatool.Parameters{}
+	if raw, exists := metadata["processingParameters"]; exists {
+		encoded, err := json.Marshal(raw)
+		if err != nil {
+			return "", BadAuthRequest("处理参数无效")
+		}
+		decoder := json.NewDecoder(strings.NewReader(string(encoded)))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(parameters); err != nil {
+			return "", BadAuthRequest("处理参数无效")
+		}
+	}
+	if err := mediatool.ValidateParameters(operation, parameters); err != nil {
+		return "", BadAuthRequest(err.Error())
+	}
+	config, _ := input["config"].(map[string]any)
+	if config == nil {
+		config = map[string]any{}
+		input["config"] = config
+	}
+	for _, key := range []string{"size", "videoGenerateAudio", "videoWatermark", "videoArkPrivateAssetUpload"} {
+		if value, exists := config[key]; exists && value != nil && value != "" {
+			return "", BadAuthRequest("视频处理不接受普通生成参数: " + key)
+		}
+	}
+	if metadata["videoStartFrameNodeId"] != nil || metadata["videoEndFrameNodeId"] != nil {
+		return "", BadAuthRequest("视频处理不接受首尾帧")
+	}
+	if _, allowed := definition.Parameters["resolution"]; !allowed && stringValue(config["vquality"]) != "" {
+		return "", BadAuthRequest("此处理操作不接受分辨率参数")
+	}
+	videos := creationMaps(input["referenceVideos"])
+	if len(videos) != 1 || lenAnySlice(input["referenceImages"]) > 0 || lenAnySlice(input["referenceAudios"]) > 0 {
+		return "", BadAuthRequest("视频处理需要且只能提交一个源视频，不接受图片或音频")
+	}
+	key := strings.TrimPrefix(stringValue(videos[0]["storageKey"]), "resource:")
+	if key == "" || key == stringValue(videos[0]["storageKey"]) {
+		return "", BadAuthRequest("源视频需先保存到资源库后再处理")
+	}
+	resource, err := s.repo.ResourceForUser(userID, key)
+	if err != nil || resource.Status != model.ResourceStatusReady || !strings.HasPrefix(strings.ToLower(resource.MimeType), "video/") || resource.DurationMs <= 0 {
+		return "", BadAuthRequest("源视频不存在、无权访问、尚未就绪或缺少可信时长")
+	}
+	seconds := int((resource.DurationMs + 999) / 1000)
+	config["videoSeconds"] = strconv.Itoa(seconds)
+	if _, acceptsFPS := definition.Parameters["fps"]; !acceptsFPS {
+		delete(config, "fpsBand")
+	} else if parameters.FPS != nil {
+		config["fpsBand"] = videoFPSBand(float64(*parameters.FPS))
+	} else {
+		// 尚未选中具体渠道时不能猜帧率档，逻辑路由需按各候选模型的默认帧率报价。
+		delete(config, "fpsBand")
+	}
+	if options, ok := input["capabilityOptions"].(map[string]any); ok {
+		options["videoSeconds"] = seconds
+		if _, acceptsFPS := definition.Parameters["fps"]; acceptsFPS {
+			options["fpsBand"] = config["fpsBand"]
+		} else {
+			delete(options, "fpsBand")
+		}
+	}
+	videos[0]["durationMs"], videos[0]["bytes"], videos[0]["width"], videos[0]["height"] = resource.DurationMs, resource.Size, resource.Width, resource.Height
+	metadata["operation"], metadata["videoEditOperation"], metadata["processingParameters"] = operation, operation, parameters
+	input["prompt"] = definition.Label
+	return operation, nil
+}
+
+// 处理默认值依赖实际渠道；先按候选渠道解析，再做价格筛选，选中后冻结同一意图。
+func (s *Service) resolveVideoProcessingRouteDefaults(intent ModelRequestIntent, channelModel model.ChannelModel) (ModelRequestIntent, error) {
+	definition, registered := mediatool.Lookup(intent.Operation)
+	if !registered {
+		return intent, nil
+	}
+	profile, err := normalizedChannelModelCapability(&channelModel, s.protocolRegistry())
+	if err != nil {
+		return intent, err
+	}
+	if profile == nil || profile.Video == nil || profile.Video.Processing == nil {
+		return intent, BadAuthRequest("所选模型不是视频处理模型")
+	}
+	intent.Options = maps.Clone(intent.Options)
+	if intent.Options == nil {
+		intent.Options = map[string]any{}
+	}
+	video := profile.Video
+	if _, acceptsResolution := definition.Parameters["resolution"]; acceptsResolution && stringValue(intent.Options["vquality"]) == "" && video.DefaultResolution != "" {
+		intent.Options["vquality"] = video.DefaultResolution
+	}
+	if _, acceptsFPS := definition.Parameters["fps"]; acceptsFPS && stringValue(intent.Options["fpsBand"]) == "" {
+		band := "le30"
+		if video.Processing.FPSPolicy == VideoProcessingFPSUserSelect {
+			if len(video.Processing.FPSOptions) == 0 {
+				return intent, BadAuthRequest("视频处理未配置可选帧率")
+			}
+			band = videoFPSBand(float64(video.Processing.FPSOptions[0]))
+		}
+		intent.Options["fpsBand"] = band
+	}
+	return intent, nil
+}
+
 // prepareVideoProcessingTask 识别系统渠道的视频处理模型并重写任务输入。
 // 非处理模型返回 (nil, nil)，任务按普通生成链路继续。
 func (s *Service) prepareVideoProcessingTask(userID string, input map[string]any) (*videoProcessingAdmission, error) {
@@ -81,6 +201,17 @@ func (s *Service) prepareVideoProcessingTask(userID string, input map[string]any
 	}
 	profile := capabilityConfig.Video
 	processing := profile.Processing
+	operation := stringValue(metadata["operation"])
+	if operation != "" && (profile.DefaultOperation != operation || !containsString(profile.Operations, operation)) {
+		return nil, BadAuthRequest("所选模型不支持此视频处理操作")
+	}
+	if operation == "" {
+		operation = profile.DefaultOperation
+	}
+	definition, registered := mediatool.Lookup(operation)
+	if !registered {
+		return nil, BadAuthRequest("所选处理操作尚未注册")
+	}
 
 	videos, _ := input["referenceVideos"].([]any)
 	if len(videos) != 1 {
@@ -144,8 +275,34 @@ func (s *Service) prepareVideoProcessingTask(userID string, input map[string]any
 	if options == nil {
 		options = map[string]any{}
 	}
+	if public, exists := metadata["processingParameters"]; exists {
+		encoded, _ := json.Marshal(public)
+		var parameters mediatool.Parameters
+		if json.Unmarshal(encoded, &parameters) != nil {
+			return nil, BadAuthRequest("处理参数无效")
+		}
+		if err := mediatool.ValidateParameters(operation, &parameters); err != nil {
+			return nil, BadAuthRequest(err.Error())
+		}
+		options = map[string]any{}
+		if parameters.FPS != nil {
+			if processing.FPSPolicy == VideoProcessingFPSKeepSource {
+				return nil, BadAuthRequest("此模型保持源帧率，不接受 fps")
+			}
+			options["fps"] = *parameters.FPS
+		}
+		if parameters.BitrateLevel != nil {
+			options["bitrate_level"] = *parameters.BitrateLevel
+		}
+		if parameters.Bitrate != nil {
+			options["bitrate"] = *parameters.Bitrate
+		}
+		if processing.FPSPolicy == VideoProcessingFPSUserSelect && parameters.FPS == nil && len(processing.FPSOptions) > 0 {
+			options["fps"] = processing.FPSOptions[0]
+		}
+	}
 	band := ""
-	inputOnly := isDepth || isComfly
+	inputOnly := len(definition.Parameters) == 0
 	if inputOnly {
 		// 单视频工作流不接收增强参数或客户端指定的回调、存储位置与源地址覆盖。
 		options = map[string]any{}
@@ -159,6 +316,20 @@ func (s *Service) prepareVideoProcessingTask(userID string, input map[string]any
 	metadata["providerOptions"] = map[string]any{protocolID: options}
 	metadata[videoProcessingMetadataKey] = true
 	metadata["videoEditOperation"] = profile.DefaultOperation
+	metadata["operation"] = operation
+	public := mediatool.Parameters{}
+	if fps, ok := numericScalar(options["fps"]); ok {
+		value := int(fps)
+		public.FPS = &value
+	}
+	if level, ok := options["bitrate_level"].(string); ok {
+		public.BitrateLevel = &level
+	}
+	if bitrate, ok := numericScalar(options["bitrate"]); ok {
+		value := int(bitrate)
+		public.Bitrate = &value
+	}
+	metadata["processingParameters"] = public
 
 	config["videoSeconds"] = strconv.Itoa(seconds)
 	config["fpsBand"] = band

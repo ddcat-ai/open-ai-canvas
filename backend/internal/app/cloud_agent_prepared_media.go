@@ -163,6 +163,8 @@ func cloudAgentResolvedMediaHash(task *model.Task) (string, error) {
 	}
 	config, _ := input["config"].(map[string]any)
 	public := map[string]any{}
+	metadata, _ := input["metadata"].(map[string]any)
+	public["providerOptions"], public["processingParameters"], public["operation"] = metadata["providerOptions"], metadata["processingParameters"], metadata["operation"]
 	if values, exists := config["imageParameters"]; exists {
 		public["imageParameters"] = values
 	}

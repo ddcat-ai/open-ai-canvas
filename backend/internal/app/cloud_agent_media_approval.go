@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"yingce/backend/internal/canvas/mediatool"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
 )
@@ -15,6 +16,7 @@ import (
 // Only user-editable media options cross the approval boundary. Targets,
 // references, prompt, snapshot and generation mode remain server-authored.
 type CloudAgentMediaSettings struct {
+	ProcessingParameters *mediatool.Parameters `json:"processingParameters,omitempty"`
 	// 非 nil 仅用于来源确认阶段；空字符串是用户明确选择独立创作。
 	InheritFromNodeID          *string `json:"inheritFromNodeId,omitempty"`
 	LogicalModelID             string  `json:"logicalModelId,omitempty"`
@@ -117,6 +119,9 @@ func applyCloudAgentMediaApprovalSettings(args *cloudAgentMediaArgs, settings Cl
 	args.ConfigurationChange = nil
 	args.Size, args.ImageResolution, args.Quality = settings.Size, settings.ImageResolution, settings.Quality
 	args.ImageParameters = settings.ImageParameters
+	if args.Operation != "" {
+		args.ProcessingParameters = settings.ProcessingParameters
+	}
 	if args.Mode == "video" {
 		if settings.DurationSeconds != nil {
 			if *settings.DurationSeconds < 0 {

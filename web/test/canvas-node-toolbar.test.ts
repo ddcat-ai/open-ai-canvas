@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { buildImageToolbarTools, getNineGridMenuItems } from "@/components/canvas/canvas-image-toolbar-tools";
 import { resolveNodeToolbarPlacement, resolveToolbarTools, type ToolContext, type ToolbarHandlers } from "@/lib/canvas/tool-registry";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
+import { videoProcessingTools } from "@/lib/canvas/media-tool-contract";
 
 function createNodeContext(node: CanvasNodeData): ToolContext {
     return {
@@ -28,17 +29,17 @@ function createNodeContext(node: CanvasNodeData): ToolContext {
 }
 
 describe("canvas node toolbar model", () => {
-    for (const [toolId, handler] of [
-        ["depthVideo", "onNodeDepthVideo"],
-        ["upscaleVideo", "onNodeUpscaleVideo"],
-        ["removeVideoSubtitles", "onNodeRemoveVideoSubtitles"],
-    ] as const)
+    for (const { id: toolId, operation } of videoProcessingTools)
         test(`${toolId} is offered only for available, non-loading videos and runs lazily`, () => {
             const node: CanvasNodeData = { id: "video", type: CanvasNodeType.Video, title: "视频", position: { x: 0, y: 0 }, width: 720, height: 405, metadata: { storageKey: "resource:video" } };
             const ctx = createNodeContext(node);
             expect(resolveToolbarTools("node-hover", ctx, null).some((tool) => tool.id === toolId)).toBe(false);
             const received: CanvasNodeData[] = [];
-            ctx.handlers[handler] = (source) => received.push(source);
+            ctx.handlers.onNodeProcessVideo = (source, selectedOperation) => {
+                expect(selectedOperation).toBe(operation);
+                received.push(source);
+            };
+            ctx.handlers.canProcessVideo = (selectedOperation) => selectedOperation === operation;
             const tool = resolveToolbarTools("node-hover", ctx, null).find((tool) => tool.id === toolId)!;
             expect(tool).toBeDefined();
             expect(received).toEqual([]);

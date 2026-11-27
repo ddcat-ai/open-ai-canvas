@@ -8,6 +8,70 @@ import (
 	"yingce/backend/internal/canvas/contract"
 )
 
+// 处理草稿先恢复操作与参数，再执行来源确认，防止省略字段退化为普通视频生成。
+// 审批编辑不经过这里，用户在报价卡上的修改不能被旧草稿覆盖。
+func (s *Service) restoreCloudAgentProcessingDraft(userID, canvasID string, a *cloudAgentMediaArgs) error {
+	if a.Prepared != nil {
+		metadata, _ := a.Prepared.Input["metadata"].(map[string]any)
+		if a.Operation == "" {
+			a.Operation = stringValue(metadata["operation"])
+		}
+		if a.ProcessingParameters == nil && metadata["processingParameters"] != nil {
+			encoded, err := json.Marshal(metadata["processingParameters"])
+			if err != nil || json.Unmarshal(encoded, &a.ProcessingParameters) != nil {
+				return BadAuthRequest("已批准的处理参数无法恢复，请重新审批")
+			}
+		}
+		return nil
+	}
+	project, err := s.repo.CanvasProjectForUser(userID, canvasID)
+	if err != nil {
+		return err
+	}
+	doc, err := creationDocument(project.PayloadJSON)
+	if err != nil {
+		return err
+	}
+	nodes, err := creationObjects(doc["nodes"])
+	if err != nil {
+		return err
+	}
+	node := nodes[a.NodeID]
+	if node == nil {
+		return nil
+	}
+	metadata, _ := node["metadata"].(map[string]any)
+	if metadata["generationSpec"] == nil {
+		return nil
+	}
+	encoded, err := json.Marshal(metadata["generationSpec"])
+	if err != nil {
+		return BadAuthRequest("草稿生成合同无效")
+	}
+	spec, err := contract.Decode(encoded)
+	if err != nil {
+		return BadAuthRequest("草稿生成合同无效")
+	}
+	if spec.Operation == "" {
+		return nil
+	}
+	if spec.Mode != a.Mode || (a.Operation != "" && a.Operation != spec.Operation) {
+		return cloudAgentFieldError("operation", "conflict", "处理操作与当前草稿不一致，请新建对应处理草稿")
+	}
+	a.Operation = spec.Operation
+	if a.ProcessingParameters == nil {
+		a.ProcessingParameters = spec.ProcessingParameters
+	}
+	if a.ReferenceNodeIDs == nil {
+		for _, reference := range spec.ReferenceBindings {
+			if reference.MediaType == "video" && reference.NodeID != "" {
+				a.ReferenceNodeIDs = append(a.ReferenceNodeIDs, reference.NodeID)
+			}
+		}
+	}
+	return nil
+}
+
 // Resolve configuration separately from content, graph planning and billed
 // execution. User changes, persisted settings and optional LLM hints have
 // different authority; only the last category may be normalized away.

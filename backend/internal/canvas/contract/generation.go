@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+	"yingce/backend/internal/canvas/mediatool"
 )
 
 //go:generate go run ./generate
@@ -64,13 +65,15 @@ type ReferenceBinding struct {
 }
 
 type GenerationSpec struct {
-	Version           int                `json:"version"`
-	Mode              string             `json:"mode" enum:"image,video,audio"`
-	Prompt            string             `json:"prompt"`
-	ModelSelection    *ModelSelection    `json:"modelSelection,omitempty"`
-	Options           Options            `json:"options"`
-	ReferenceBindings []ReferenceBinding `json:"referenceBindings"`
-	TextInputMode     string             `json:"textInputMode" enum:"prompt-only,append-sources"`
+	Operation            string                `json:"operation,omitempty"`
+	ProcessingParameters *mediatool.Parameters `json:"processingParameters,omitempty"`
+	Version              int                   `json:"version"`
+	Mode                 string                `json:"mode" enum:"image,video,audio"`
+	Prompt               string                `json:"prompt"`
+	ModelSelection       *ModelSelection       `json:"modelSelection,omitempty"`
+	Options              Options               `json:"options"`
+	ReferenceBindings    []ReferenceBinding    `json:"referenceBindings"`
+	TextInputMode        string                `json:"textInputMode" enum:"prompt-only,append-sources"`
 }
 
 type FieldError struct{ Path, Message string }
@@ -95,6 +98,16 @@ func (s ModelSelection) Validate() error {
 }
 
 func (s GenerationSpec) Validate() error {
+	if s.Operation != "" {
+		if s.Mode != "video" {
+			return invalid("generationSpec.operation", "媒体处理只适用于视频")
+		}
+		if err := mediatool.ValidateParameters(s.Operation, s.ProcessingParameters); err != nil {
+			return invalid("generationSpec.processingParameters", err.Error())
+		}
+	} else if s.ProcessingParameters != nil {
+		return invalid("generationSpec.operation", "处理参数必须指定操作")
+	}
 	if s.Version != GenerationVersion {
 		return invalid("generationSpec.version", "生成合同版本不受支持")
 	}
@@ -287,6 +300,12 @@ func (s GenerationSpec) NodeMetadata() (map[string]any, error) {
 		return nil, err
 	}
 	result := map[string]any{"generationSpec": stored, "prompt": s.Prompt, "composerContent": s.Prompt}
+	if s.Operation != "" {
+		result["operation"], result["videoEditOperation"] = s.Operation, s.Operation
+		if s.ProcessingParameters != nil {
+			result["processingParameters"] = s.ProcessingParameters
+		}
+	}
 	value, typ := reflect.ValueOf(s.Options), reflect.TypeOf(s.Options)
 	for i := 0; i < typ.NumField(); i++ {
 		if value.Field(i).IsNil() {

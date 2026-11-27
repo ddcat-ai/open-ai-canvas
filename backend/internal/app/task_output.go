@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"yingce/backend/internal/canvas/contract"
+	"yingce/backend/internal/canvas/mediatool"
 	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/workbench"
@@ -47,19 +48,22 @@ type TaskSummary struct {
 }
 
 type TaskClientContext struct {
-	NodeID           string `json:"nodeId,omitempty"`
-	AssetTitle       string `json:"assetTitle,omitempty"`
-	ConversationID   string `json:"conversationId,omitempty"`
-	MessageID        string `json:"messageId,omitempty"`
-	BatchID          string `json:"batchId,omitempty"`
-	BatchIndex       int    `json:"batchIndex,omitempty"`
-	BatchCount       int    `json:"batchCount,omitempty"`
-	DomainProjectID  string `json:"domainProjectId,omitempty"`
-	ChapterID        string `json:"chapterId,omitempty"`
-	ChapterOperation string `json:"chapterOperation,omitempty"`
-	ShotID           string `json:"shotId,omitempty"`
-	WorkflowStepID   string `json:"workflowStepId,omitempty"`
-	ArtifactType     string `json:"artifactType,omitempty"`
+	Operation            string                `json:"operation,omitempty"`
+	ProcessingParameters *mediatool.Parameters `json:"processingParameters,omitempty"`
+	Resolution           string                `json:"resolution,omitempty"`
+	NodeID               string                `json:"nodeId,omitempty"`
+	AssetTitle           string                `json:"assetTitle,omitempty"`
+	ConversationID       string                `json:"conversationId,omitempty"`
+	MessageID            string                `json:"messageId,omitempty"`
+	BatchID              string                `json:"batchId,omitempty"`
+	BatchIndex           int                   `json:"batchIndex,omitempty"`
+	BatchCount           int                   `json:"batchCount,omitempty"`
+	DomainProjectID      string                `json:"domainProjectId,omitempty"`
+	ChapterID            string                `json:"chapterId,omitempty"`
+	ChapterOperation     string                `json:"chapterOperation,omitempty"`
+	ShotID               string                `json:"shotId,omitempty"`
+	WorkflowStepID       string                `json:"workflowStepId,omitempty"`
+	ArtifactType         string                `json:"artifactType,omitempty"`
 }
 
 // TaskBillingSummary 是任务列表展示的计费摘要。冻结额与实收分列：只有已结算订单才有实收。
@@ -191,6 +195,19 @@ func taskClientContext(raw string) *TaskClientContext {
 	metadata := input.Metadata
 	title := []rune(strings.TrimSpace(metadata.AssetTitle))
 	context := &TaskClientContext{NodeID: metadata.NodeID, AssetTitle: string(title[:min(len(title), 200)])}
+	if _, processing := mediatool.Lookup(metadata.Operation); processing {
+		var public struct {
+			Metadata struct {
+				ProcessingParameters *mediatool.Parameters `json:"processingParameters"`
+			} `json:"metadata"`
+			Config struct {
+				Resolution string `json:"vquality"`
+			} `json:"config"`
+		}
+		if json.Unmarshal([]byte(raw), &public) == nil {
+			context.Operation, context.ProcessingParameters, context.Resolution = metadata.Operation, public.Metadata.ProcessingParameters, public.Config.Resolution
+		}
+	}
 	if metadata.Source == "create-page" && metadata.ConversationID != "" && metadata.MessageID != "" {
 		context.ConversationID = metadata.ConversationID
 		context.MessageID = metadata.MessageID

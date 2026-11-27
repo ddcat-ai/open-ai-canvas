@@ -1,6 +1,7 @@
 import { decodeChannelModel, encodeChannelModel, type AiConfig } from "@/stores/use-config-store";
 import type { CanvasNodeData, CanvasNodeMetadata } from "@/types/canvas";
 import { GENERATION_CONTRACT_VERSION, GENERATION_LIMITS, GENERATION_OPTION_FIELDS, type GenerationSpec, type ModelSelection, type Options, type ReferenceBinding } from "./generation-contract.generated";
+import { mediaToolForOperation, validateProcessingParameters } from "./media-tool-contract";
 
 export type { GenerationSpec, ModelSelection, ReferenceBinding } from "./generation-contract.generated";
 
@@ -35,7 +36,7 @@ function optionValue(value: unknown, kind: string, path: string) {
 
 export function validateGenerationSpec(value: unknown): GenerationSpec {
     const raw = object(value, "generationSpec");
-    allowKeys(raw, ["version", "mode", "prompt", "modelSelection", "options", "referenceBindings", "textInputMode"], "generationSpec");
+    allowKeys(raw, ["version", "mode", "prompt", "modelSelection", "options", "referenceBindings", "textInputMode", "operation", "processingParameters"], "generationSpec");
     if (raw.version !== GENERATION_CONTRACT_VERSION) fieldError("version", "合同版本不受支持");
     const mode = typeof raw.mode === "string" ? canvasGenerationMode(raw.mode) : undefined;
     if (!mode) fieldError("mode", "不支持的生成模式");
@@ -90,7 +91,13 @@ export function validateGenerationSpec(value: unknown): GenerationSpec {
         orders.add(ref.order);
         return ref as unknown as ReferenceBinding;
     });
-    return { version: GENERATION_CONTRACT_VERSION, mode, prompt: raw.prompt, options, modelSelection, referenceBindings, textInputMode: raw.textInputMode } as GenerationSpec;
+    const operation = raw.operation;
+    let processingParameters;
+    if (operation !== undefined) {
+        if (mode !== "video" || !mediaToolForOperation(operation)) fieldError("operation", "不支持的处理操作");
+        processingParameters = validateProcessingParameters(operation, raw.processingParameters ?? {});
+    } else if (raw.processingParameters !== undefined) fieldError("processingParameters", "处理参数必须指定操作");
+    return { version: GENERATION_CONTRACT_VERSION, mode, prompt: raw.prompt, options, modelSelection, referenceBindings, textInputMode: raw.textInputMode, ...(operation ? { operation, processingParameters } : {}) } as GenerationSpec;
 }
 
 /** The single compatibility boundary for the existing flat canvas wire format. */
@@ -148,6 +155,7 @@ export function readNodeGenerationSpec(node: Pick<CanvasNodeData, "type" | "meta
         ...(modelSelection ? { modelSelection } : {}),
         referenceBindings: stored?.referenceBindings || [],
         textInputMode: stored?.textInputMode || (rawStored?.textInputMode === "prompt-only" || rawStored?.textInputMode === "append-sources" ? rawStored.textInputMode : mode === "video" ? "prompt-only" : "append-sources"),
+        ...(stored?.operation ? { operation: stored.operation, processingParameters: stored.processingParameters } : {}),
     });
 }
 
@@ -206,6 +214,10 @@ export function generationSpecMetadata(spec: GenerationSpec): CanvasNodeMetadata
     // model is always projected, including undefined. This clears a stale
     // physical-channel mirror when the canonical contract selects a logical model.
     const result: Record<string, unknown> = { generationSpec: spec, composerContent: spec.prompt, model: undefined };
+    if (spec.operation) {
+        result.videoEditOperation = spec.operation;
+        result.processingParameters = spec.processingParameters;
+    }
     for (const field of GENERATION_OPTION_FIELDS) {
         if (!(field.modes as readonly string[]).includes(spec.mode)) continue;
         const value = spec.options[field.name as keyof Options];

@@ -18,6 +18,7 @@ export type AgentMediaSettings = {
     videoGenerateAudio?: boolean;
     videoWatermark?: boolean;
     videoArkPrivateAssetUpload?: boolean;
+    processingParameters?: import("@/lib/canvas/media-tool-contract").ProcessingParameters;
 };
 export type AgentProfileScope = "user" | "project" | "canvas";
 

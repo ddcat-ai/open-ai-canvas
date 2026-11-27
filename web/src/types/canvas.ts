@@ -559,7 +559,8 @@ export type CanvasNodeMetadata = {
     /** 相对深度视频任务参数，供结果节点重试使用。 */
     videoDepth?: { sourceNodeId: string; model: string };
     /** 单视频处理结果保留操作和模型，刷新后重试仍使用原处理合同。 */
-    videoProcessingTool?: { sourceNodeId: string; model: string; operation: "upscale" | "remove_subtitles" };
+    videoProcessingTool?: { sourceNodeId: string; operation: import("@/lib/canvas/media-tool-contract").MediaToolOperation } & import("@/lib/canvas/canvas-video-processing").VideoProcessingParams;
+    processingParameters?: import("@/lib/canvas/media-tool-contract").ProcessingParameters;
     videoEditOperation?: CanvasVideoEditOperation;
     videoReferenceMode?: CanvasVideoReferenceMode;
     videoRemake?: boolean;

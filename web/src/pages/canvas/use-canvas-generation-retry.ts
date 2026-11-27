@@ -4,7 +4,8 @@ import { useCallback, type Dispatch, type SetStateAction } from "react";
 import { App } from "antd";
 
 import { buildNodeGenerationContext, hydrateNodeGenerationContext } from "@/components/canvas/canvas-node-generation";
-import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
+import { nodeGenerationPrompt, resolveGenerationSelection } from "@/lib/canvas/generation-contract";
+import { mediaToolForOperation } from "@/lib/canvas/media-tool-contract";
 import { imageLayerProviderMetadata, layerDecompositionConfig, supportsExperimentalLayerExtraction, supportsLayerDecomposition } from "@/lib/canvas/canvas-image-layers";
 import { imageLayerOutputSize, imageLayerRemovalPrompt } from "@/lib/canvas/canvas-image-layer-plan";
 import { extractImageLayerFromSource } from "@/services/canvas-image-layer-source";
@@ -40,7 +41,6 @@ import { buildPortraitTexturePrompt } from "@/lib/canvas/canvas-portrait-texture
 import { resolveCanvasStyleExecution } from "@/lib/canvas/canvas-style-execution";
 import { generationFailureMetadata, unchangedModeratedPrompt } from "@/lib/generation-error";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
-import { videoEnhanceTaskInput } from "@/lib/canvas/canvas-video-enhance";
 import { videoProcessingTaskInput, listVideoProcessingModels, VIDEO_PROCESSING_LABELS } from "@/lib/canvas/canvas-video-processing";
 import { videoProcessingSourceReference } from "@/lib/canvas/canvas-video-processing";
 import { navigateToSettings } from "@/lib/settings-navigation";
@@ -292,9 +292,21 @@ export function useCanvasGenerationRetry({
                 return;
             }
             // 处理节点按保存的参数重建请求，不能落入普通视频生成。
+            const processingSpec = node.metadata?.generationSpec;
+            const processingTool = mediaToolForOperation(processingSpec?.operation);
+            const canonicalProcessing =
+                processingSpec && processingTool
+                    ? {
+                          operation: processingTool.operation,
+                          sourceNodeId: processingSpec.referenceBindings.find((reference) => reference.mediaType === "video")?.nodeId || "",
+                          model: resolveGenerationSelection(effectiveConfig, processingSpec.modelSelection) || node.metadata?.model || "",
+                          resolution: processingSpec.options.resolution,
+                          ...processingSpec.processingParameters,
+                      }
+                    : undefined;
             const videoEnhance = node.metadata?.videoEnhance;
             const videoDepth = node.metadata?.videoDepth;
-            const inputOnlyProcessing = node.metadata?.videoProcessingTool || (videoDepth ? { ...videoDepth, operation: "depth" as const } : undefined);
+            const inputOnlyProcessing = canonicalProcessing || node.metadata?.videoProcessingTool || (videoDepth ? { ...videoDepth, operation: "depth" as const } : undefined);
             const videoProcessing = inputOnlyProcessing || videoEnhance;
             if (videoProcessing) {
                 const operation = inputOnlyProcessing?.operation || "enhance";
@@ -315,7 +327,9 @@ export function useCanvasGenerationRetry({
                 let retryTaskId: string | undefined;
                 try {
                     const inputOptions = { config: effectiveConfig, source: videoProcessingSourceReference(sourceVideoNode), sourceNodeId: sourceVideoNode.id, projectId, nodeId: node.id, signal: controller.signal };
-                    const input = inputOnlyProcessing ? videoProcessingTaskInput({ ...inputOptions, operation: inputOnlyProcessing.operation, params: inputOnlyProcessing }) : videoEnhanceTaskInput({ ...inputOptions, params: videoEnhance! });
+                    const { sourceNodeId: _sourceNodeId, ...savedParameters } = videoProcessing;
+                    const { operation: _operation, ...params } = savedParameters as typeof savedParameters & { operation?: string };
+                    const input = videoProcessingTaskInput({ ...inputOptions, operation, params });
                     await runCanvasGenerationTaskToConsumer(
                         { ...input, ...retryContext },
                         {

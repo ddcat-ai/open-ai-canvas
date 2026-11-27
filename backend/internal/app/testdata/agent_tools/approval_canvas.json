@@ -1480,7 +1480,7 @@
   },
   {
     "function": {
-      "description": "按 mode 和真实 referenceNodeIds 筛选当前模型、能力和价格；空列表不可生成。同条件复用，变化再查。复制 selection，不猜ID；规格默认交执行器解析。",
+      "description": "按 mode、operation 和真实 referenceNodeIds 筛选模型、能力和价格；处理操作引用单个源视频。复制 selection，不猜ID。",
       "name": "model_list",
       "parameters": {
         "additionalProperties": false,
@@ -1497,6 +1497,15 @@
               "audio",
               "image",
               "video"
+            ],
+            "type": "string"
+          },
+          "operation": {
+            "enum": [
+              "enhance",
+              "depth",
+              "upscale",
+              "remove_subtitles"
             ],
             "type": "string"
           },
@@ -2359,6 +2368,42 @@
             "description": "续用草稿时填真实ID；新建可省略，由执行器生成稳定ID",
             "type": "string"
           },
+          "operation": {
+            "description": "视频处理显式指定操作；referenceNodeIds 只传一个源视频，prompt可省略，不传普通生成画幅/音频/帧参数",
+            "enum": [
+              "enhance",
+              "depth",
+              "upscale",
+              "remove_subtitles"
+            ],
+            "type": "string"
+          },
+          "processingParameters": {
+            "additionalProperties": false,
+            "properties": {
+              "bitrate": {
+                "description": "单位 kbps",
+                "maximum": 150000,
+                "minimum": 10,
+                "title": "精确码率",
+                "type": "integer"
+              },
+              "bitrateLevel": {
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "title": "码率档位",
+                "type": "string"
+              },
+              "fps": {
+                "title": "帧率",
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
           "prompt": {
             "description": "完整提示词；媒体按 referenceNodeIds 各类型分别编号 @图片1/@视频1/@音频1，文本来源不计数。漏标签由服务端补齐，不推断用途",
             "type": "string"
@@ -2413,8 +2458,7 @@
           }
         },
         "required": [
-          "mode",
-          "prompt"
+          "mode"
         ],
         "type": "object"
       }

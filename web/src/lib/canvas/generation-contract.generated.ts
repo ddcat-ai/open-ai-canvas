@@ -4,6 +4,12 @@ export const GENERATION_LIMITS = { nodeTitle: 240, prompt: 16000, canvasOperatio
 
 export type ModelSelection = { kind: "logical"; logicalModelId: string; channelId?: never; modelKey?: never } | { kind: "channel"; channelId: string; modelKey: string; logicalModelId?: never };
 
+export type Parameters = {
+    fps?: number;
+    bitrateLevel?: string;
+    bitrate?: number;
+};
+
 export type Options = {
     size?: string;
     imageResolution?: string;
@@ -37,6 +43,8 @@ export type ReferenceBinding = {
 };
 
 export type GenerationSpec = {
+    operation?: string;
+    processingParameters?: Parameters;
     version: number;
     mode: "image" | "video" | "audio";
     prompt: string;

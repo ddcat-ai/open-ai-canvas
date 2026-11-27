@@ -8,6 +8,7 @@ import (
 
 	"gorm.io/gorm"
 	"yingce/backend/internal/canvas/contract"
+	"yingce/backend/internal/canvas/mediatool"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
 )
@@ -35,6 +36,10 @@ func cloudAgentMediaSourceBindingKey(state *cloudAgentRuntime, call cloudAgentCa
 
 // 焦点和提示词不能证明修改对象；存在可继承版本时，省略来源必须进入用户确认。
 func (s *Service) resolveCloudAgentMediaSource(run *model.CloudAgentExecution, state *cloudAgentRuntime, call cloudAgentCall, a *cloudAgentMediaArgs) error {
+	// 显式处理源是媒体引用，不代表请求继承其他成品的生成版本。
+	if a.Operation != "" && a.InheritFromNodeID == "" {
+		return nil
+	}
 	if source, confirmed := state.MediaSourceBindings[cloudAgentMediaSourceBindingKey(state, call)]; confirmed {
 		if a.InheritFromNodeID != "" && a.InheritFromNodeID != source.NodeID {
 			return cloudAgentFieldError("inheritFromNodeId", "conflict", "来源与用户已确认的当前调用不一致，请重新申请生成")
@@ -266,6 +271,19 @@ func (s *Service) inheritCloudAgentMediaConfiguration(userID, canvasID string, a
 	if stringValue(metadata["nodeId"]) != a.InheritFromNodeID {
 		return fail()
 	}
+	if _, processing := mediatool.Lookup(task.Operation); processing {
+		if a.Operation != "" && a.Operation != task.Operation {
+			return fail()
+		}
+		a.Operation = task.Operation
+		if a.ProcessingParameters == nil {
+			encoded, _ := json.Marshal(metadata["processingParameters"])
+			a.ProcessingParameters = &mediatool.Parameters{}
+			if json.Unmarshal(encoded, a.ProcessingParameters) != nil {
+				return fail()
+			}
+		}
+	}
 	config, ok := input["config"].(map[string]any)
 	if !ok {
 		return fail()
@@ -274,7 +292,7 @@ func (s *Service) inheritCloudAgentMediaConfiguration(userID, canvasID string, a
 	if err != nil {
 		return fail()
 	}
-	if (a.Mode == "video" && (options.Size == nil || options.DurationSeconds == nil)) || (a.Mode == "image" && options.Size == nil) {
+	if (a.Mode == "video" && ((options.Size == nil && a.Operation == "") || options.DurationSeconds == nil)) || (a.Mode == "image" && options.Size == nil) {
 		return fail()
 	}
 	if !a.ConfigurationChange.includes("model") {

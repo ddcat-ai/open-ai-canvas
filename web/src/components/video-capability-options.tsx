@@ -6,6 +6,7 @@ import type { VideoOutputLimit } from "@/lib/model-protocols";
 import { formatVideoResolutionLabel, VIDEO_RESOLUTION_CAPABILITY_OPTIONS } from "@/lib/video-generation-options";
 import { ModelCapabilityPreview } from "./model-capability-preview";
 import { VideoProfileControls } from "./video-settings-panel";
+import { videoProcessingTools } from "@/lib/canvas/media-tool-contract";
 
 const ratios = ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16", "21:9"];
 
@@ -21,7 +22,7 @@ const inputRoleLabels: Record<string, string> = {
     reference_audio: "参考音频",
 };
 
-const operationLabels = new Map([
+const operationLabels = new Map<string, string>([
     ["text_to_video", "文生视频"],
     ["image_to_video", "图生视频"],
     ["reference_to_video", "全模态参考"],
@@ -31,10 +32,7 @@ const operationLabels = new Map([
     ["replace_element", "元素替换"],
     ["camera_motion", "运镜调整"],
     ["style_transfer", "风格迁移"],
-    ["enhance", "画质增强"],
-    ["depth", "相对深度"],
-    ["upscale", "视频超分"],
-    ["remove_subtitles", "去字幕"],
+    ...videoProcessingTools.map((tool): [string, string] => [tool.operation, tool.label]),
 ]);
 
 export function VideoOperationOptions({ profile, suggested, disabled, update }: { profile: VideoCapabilityConfig; suggested?: string[]; disabled: boolean; update: (patch: Partial<VideoCapabilityConfig>) => void }) {

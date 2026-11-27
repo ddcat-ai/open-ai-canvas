@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 	"yingce/backend/internal/canvas"
 	"yingce/backend/internal/canvas/contract"
+	"yingce/backend/internal/canvas/mediatool"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
 )
@@ -58,6 +59,12 @@ func (s *Service) cloudAgentModelList(userID string, intent *ModelRequestIntent)
 	for _, item := range items {
 		selection := item["selection"].(map[string]any)
 		arguments := map[string]any{"mode": normalizeCapability(stringValue(item["capability"]))}
+		if intent != nil && intent.Operation != "" {
+			if definition, ok := mediatool.Lookup(intent.Operation); ok {
+				arguments["operation"] = definition.Operation
+				item["tool"] = definition
+			}
+		}
 		for key, value := range selection {
 			arguments[key] = value
 		}
@@ -74,6 +81,7 @@ func (s *Service) cloudAgentModelList(userID string, intent *ModelRequestIntent)
 func (s *Service) cloudAgentModelIntent(userID, canvasID, arguments string) (*ModelRequestIntent, error) {
 	var a struct {
 		Mode               string                        `json:"mode"`
+		Operation          string                        `json:"operation"`
 		AudioMode          string                        `json:"audioMode"`
 		AudioVoiceBindings []cloudAgentAudioVoiceBinding `json:"audioVoiceBindings"`
 		ReferenceNodeIDs   []string                      `json:"referenceNodeIds"`
@@ -125,6 +133,16 @@ func (s *Service) cloudAgentModelIntent(userID, canvasID, arguments string) (*Mo
 		// 查询目录时尚未选择模型；先按真实输入筛选，再按各模型的操作合同匹配。
 		operation = ""
 	}
+	if a.Operation != "" {
+		definition, ok := mediatool.Lookup(a.Operation)
+		if !ok || a.Mode != definition.Mode {
+			return nil, BadAuthRequest("未知或不适用的媒体处理操作")
+		}
+		if lenAnySlice(refs["referenceVideos"]) != definition.Input.Count || lenAnySlice(refs["referenceImages"])+lenAnySlice(refs["referenceAudios"]) != 0 {
+			return nil, BadAuthRequest("视频处理需要且只能引用一个源视频")
+		}
+		operation = a.Operation
+	}
 	intent := ModelRequestIntentFromTaskInput(refs, "canvas_"+a.Mode, operation)
 	if a.Mode == "audio" {
 		mode := a.AudioMode
@@ -140,6 +158,8 @@ func (s *Service) cloudAgentModelIntent(userID, canvasID, arguments string) (*Mo
 }
 
 type cloudAgentMediaArgs struct {
+	Operation                  string                              `json:"operation,omitempty"`
+	ProcessingParameters       *mediatool.Parameters               `json:"processingParameters,omitempty"`
 	InheritFromNodeID          string                              `json:"inheritFromNodeId,omitempty"`
 	InheritanceTaskID          string                              `json:"-"`
 	InheritedOptions           *contract.Options                   `json:"-"`
@@ -654,7 +674,21 @@ func validateCloudAgentMediaShape(a cloudAgentMediaArgs, state *cloudAgentRuntim
 			return cloudAgentFieldError(fmt.Sprintf("referenceTransientIds[%d]", i), "invalid_value", cloudAgentSafeToolError(err))
 		}
 	}
-	if strings.TrimSpace(a.Prompt) == "" {
+	if a.Operation != "" {
+		definition, ok := mediatool.Lookup(a.Operation)
+		if !ok || definition.Mode != a.Mode {
+			return cloudAgentFieldError("operation", "unsupported_value", "未知或不适用的媒体处理操作")
+		}
+		if err := mediatool.ValidateParameters(a.Operation, a.ProcessingParameters); err != nil {
+			return cloudAgentFieldError("processingParameters", "invalid_value", err.Error())
+		}
+		if a.Size != "" || a.VideoGenerateAudio != nil || a.VideoWatermark != nil || a.VideoArkPrivateAssetUpload != nil || a.VideoStartFrameNodeID != "" || a.VideoEndFrameNodeID != "" || a.SourceNodeID != "" || len(a.ReferenceTransientIDs) > 0 {
+			return cloudAgentFieldError("operation", "invalid_combination", "视频处理只接受一个源视频及工具声明的公开参数")
+		}
+	} else if a.ProcessingParameters != nil {
+		return cloudAgentFieldError("operation", "required", "处理参数必须指定处理操作")
+	}
+	if strings.TrimSpace(a.Prompt) == "" && a.Operation == "" {
 		return cloudAgentFieldError("prompt", "required", "生成提示词不能为空，请补充完整提示词")
 	}
 	if strings.TrimSpace(a.Title) == "" || utf8.RuneCountInString(a.Title) > 240 {
@@ -832,6 +866,11 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 		time.Now().Before(state.AutoPreparedMedia.Quote.ExpiresAt) {
 		a.Prepared = state.AutoPreparedMedia
 	}
+	if state.Approval == nil || a.Prepared != nil {
+		if err := s.restoreCloudAgentProcessingDraft(run.UserID, state.Request.CanvasID, &a); err != nil {
+			return CreateTaskRequest{}, nil, err
+		}
+	}
 	if err := s.resolveCloudAgentMediaSource(run, state, call, &a); err != nil {
 		return CreateTaskRequest{}, nil, err
 	}
@@ -921,6 +960,9 @@ func (s *Service) prepareCloudAgentMedia(run *model.CloudAgentExecution, state *
 		config["channelId"], config["channelModelKey"], config["model"] = a.ChannelID, a.ChannelModelKey, a.ChannelModelKey
 	}
 	metadata := map[string]any{"nodeId": a.NodeID, "source": "cloud_agent"}
+	if a.Operation != "" {
+		metadata["operation"], metadata["processingParameters"] = a.Operation, a.ProcessingParameters
+	}
 	if a.InheritFromNodeID != "" {
 		metadata["inheritFromNodeId"] = a.InheritFromNodeID
 	}
@@ -1008,6 +1050,9 @@ func applyCloudAgentResolvedMediaDefaults(req *CreateTaskRequest, plan *cloudAge
 	// Compare against intent, not req.Input: task admission may normalize that
 	// map in place. Never erase an explicit or inherited choice before checking.
 	requested := cloudAgentMediaOptions(plan.Args).TaskConfig()
+	if plan.Args.Operation != "" {
+		delete(requested, "videoSeconds")
+	}
 	if err := validateCloudAgentResolvedMediaOptions(requested, input); err != nil {
 		return err
 	}
@@ -1049,6 +1094,16 @@ func applyCloudAgentResolvedMediaDefaults(req *CreateTaskRequest, plan *cloudAge
 		}
 	}
 	plan.Args.Prepared = nil
+	if plan.Args.Operation != "" {
+		metadata, _ := input["metadata"].(map[string]any)
+		encoded, _ := json.Marshal(metadata["processingParameters"])
+		parameters := &mediatool.Parameters{}
+		if err := json.Unmarshal(encoded, parameters); err != nil {
+			return err
+		}
+		plan.Args.ProcessingParameters = parameters
+		plan.Args.Prompt = stringValue(input["prompt"])
+	}
 	req.Input = input
 	req.Prompt = stringValue(input["prompt"])
 	return nil

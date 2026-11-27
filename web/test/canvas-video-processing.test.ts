@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import { listVideoProcessingModels, videoProcessingTaskInput, videoProcessingQuoteRequest, videoProcessingSourceError } from "@/lib/canvas/canvas-video-processing";
+import { listVideoProcessingModels, videoProcessingTaskInput, videoProcessingQuoteRequest, videoProcessingSourceError, videoProcessingFields } from "@/lib/canvas/canvas-video-processing";
+import { videoProcessingTools, validateProcessingParameters } from "@/lib/canvas/media-tool-contract";
+import { validateGenerationSpec, readNodeGenerationSpec, generationSpecMetadata } from "@/lib/canvas/generation-contract";
+import { agentVideoApproval, agentMediaSettings, agentApprovalMatchesSettings } from "@/lib/canvas/agent-media-approval";
 import { defaultModelCapabilityConfig } from "@/lib/model-capabilities";
 import { defaultConfig, createModelChannel, encodeChannelModel } from "@/stores/use-config-store";
 import { prepareBackendGenerationTask } from "@/services/api/generation-task";
@@ -48,4 +51,61 @@ test("single-video processing validates source duration and size before confirma
     expect(videoProcessingSourceError({ ...source, metadata: {} }, 180, "upscale")).toContain("为空");
     expect(videoProcessingSourceError({ ...source, metadata: { ...source.metadata, durationMs: 180_001 } }, 180, "upscale")).toContain("180 秒");
     expect(videoProcessingSourceError({ ...source, metadata: { ...source.metadata, bytes: 100 * 1024 * 1024 + 1 } }, 180, "remove_subtitles", 100 * 1024 * 1024)).toContain("100 MiB");
+});
+
+test("增强表单参数按共享定义与当前模型帧率配置收窄", () => {
+    const protocol = "volcengine-mediakit-video-enhance";
+    const profile = defaultModelCapabilityConfig(protocol);
+    const enhanced = { ...defaultConfig, channels: [createModelChannel({ id: "enhance", scope: "system", models: ["enhance"], modelCosts: [{ model: "enhance", protocol, capability: "video", capabilityConfig: profile }] })] };
+    const model = encodeChannelModel("enhance", "enhance");
+    const fields = videoProcessingFields(enhanced, model, "enhance");
+    expect(Object.keys(fields)).toContain("resolution");
+    expect(Object.keys(fields)).toContain("bitrate");
+    expect(fields.fps).toBeUndefined();
+    profile.video!.processing = { ...profile.video!.processing!, fpsPolicy: "user_select", fpsOptions: [30, 60] };
+    expect(videoProcessingFields(enhanced, model, "enhance").fps?.enum).toEqual([30, 60]);
+    expect(videoProcessingFields(config, encodeChannelModel("upscale", "upscale"), "upscale")).toEqual({});
+    expect(() => validateProcessingParameters("upscale", { fps: 60 })).toThrow();
+    expect(() => validateProcessingParameters("enhance", { bitrate: 0 })).toThrow();
+    expect(() => validateProcessingParameters("enhance", { bitrateLevel: "other" })).toThrow();
+});
+
+test("所有注册操作的任务规格能保存、读取并用于 Agent 审批", () => {
+    for (const tool of videoProcessingTools) {
+        const model = encodeChannelModel("upscale", "upscale");
+        const params = { model, ...(tool.operation === "enhance" ? { resolution: "1080p", fps: 60, bitrateLevel: "medium" } : {}) };
+        const input = videoProcessingTaskInput({
+            config,
+            params,
+            operation: tool.operation,
+            source: { id: "source", name: "source.mp4", type: "video/mp4", storageKey: "resource:source", durationMs: 12500 },
+            sourceNodeId: "source",
+            projectId: "canvas",
+            nodeId: "result",
+        });
+        const spec = validateGenerationSpec(JSON.parse(JSON.stringify(input.metadata.generationSpec)));
+        expect(spec.operation).toBe(tool.operation);
+        expect(spec.referenceBindings[0]?.nodeId).toBe("source");
+        expect(readNodeGenerationSpec({ type: CanvasNodeType.Video, metadata: generationSpecMetadata(spec) })).toEqual(spec);
+        const approval = agentVideoApproval({
+            toolName: "generate_media",
+            arguments: { mode: "video", operation: tool.operation, prompt: tool.label, processingParameters: spec.processingParameters, quality: spec.options.resolution, referenceNodeIds: ["source"] },
+        });
+        expect(approval?.operation).toBe(tool.operation);
+        expect(agentMediaSettings(approval!).processingParameters).toEqual(spec.processingParameters);
+    }
+    expect(() =>
+        validateGenerationSpec({
+            ...videoProcessingTaskInput({ config, params: { model: encodeChannelModel("upscale", "upscale") }, operation: "upscale", source: { id: "s", name: "s", type: "video/mp4" }, sourceNodeId: "s", projectId: "c", nodeId: "n" }).metadata
+                .generationSpec,
+            operation: "unknown",
+        }),
+    ).toThrow();
+});
+
+test("恢复审批按处理参数值核对，不因字段序列化顺序误判", () => {
+    const args = { mode: "video", prompt: "增强", operation: "enhance", quality: "1080p", processingParameters: { fps: 60, bitrate: 1000 } };
+    const settings = { size: "", quality: "1080p", processingParameters: { bitrate: 1000, fps: 60 } };
+    expect(agentApprovalMatchesSettings(args, settings)).toBe(true);
+    expect(agentApprovalMatchesSettings(args, { ...settings, processingParameters: { bitrate: 1000, fps: 30 } })).toBe(false);
 });

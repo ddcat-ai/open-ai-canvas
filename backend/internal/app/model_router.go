@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"yingce/backend/internal/canvas/mediatool"
 
 	"yingce/backend/internal/model"
 )
@@ -215,6 +216,10 @@ func (s *Service) ResolveLogicalModel(access *userGroupAccess, logicalModelID st
 		return nil, BadAuthRequest("当前模型暂时无法满足这组输入和参数")
 	}
 	selected := weightedRoute(eligible)
+	intent, err = s.resolveVideoProcessingRouteDefaults(intent, selected.ChannelModel)
+	if err != nil {
+		return nil, err
+	}
 	var priceTier *model.ChannelModelPriceTier
 	if cached.Model.PricePolicy == "channel" {
 		priceTier = channelModelPriceTierForIntent(selected.ChannelModel, intent, selected.CapabilitySpec)
@@ -235,10 +240,14 @@ func (s *Service) eligibleLogicalRoutes(access *userGroupAccess, routes []cached
 		if access != nil && !access.allowsChannel(route.ChannelModel.ChannelID) {
 			continue
 		}
-		if match := MatchCapability(route.CapabilitySpec, intent); !match.Matched {
+		candidateIntent, err := s.resolveVideoProcessingRouteDefaults(intent, route.ChannelModel)
+		if err != nil {
 			continue
 		}
-		if requirePriceTier && channelModelPriceTierForIntent(route.ChannelModel, intent, route.CapabilitySpec) == nil {
+		if match := MatchCapability(route.CapabilitySpec, candidateIntent); !match.Matched {
+			continue
+		}
+		if requirePriceTier && channelModelPriceTierForIntent(route.ChannelModel, candidateIntent, route.CapabilitySpec) == nil {
 			continue
 		}
 		if route.Route.Priority > maxPriority {
@@ -342,7 +351,7 @@ func skuSelectorForIntent(intent ModelRequestIntent) map[string]string {
 		// 价格档按实际参考素材归类。供应商执行仍可使用 reference_to_video、extend
 		// 等细分操作；计价时视频参考优先归为视频生视频，其余图片参考无论数量
 		// 都归为图生视频。
-		if selector["operation"] == VideoProcessingOperationEnhance || selector["operation"] == VideoProcessingOperationDepth || selector["operation"] == VideoProcessingOperationUpscale || selector["operation"] == VideoProcessingOperationRemoveSubtitles {
+		if _, processing := mediatool.Lookup(selector["operation"]); processing {
 			// 处理任务保留自身 operation，使用独立价格档。
 		} else if intent.Inputs["video"] > 0 {
 			selector["operation"] = "video_to_video"

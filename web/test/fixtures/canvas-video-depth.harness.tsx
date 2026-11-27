@@ -186,11 +186,7 @@ for (const operation of ["depth", "upscale", "remove_subtitles"] as const)
             expect(snapshot.nodes).toHaveLength(2);
             expect(snapshot.nodes[0]).toEqual(source);
             const result = snapshot.nodes[1]!;
-            expect(result.metadata).toMatchObject(
-                operation === "depth"
-                    ? { videoDepth: { sourceNodeId: source.id }, videoEditOperation: operation, taskId: "depth-task" }
-                    : { videoProcessingTool: { sourceNodeId: source.id, operation }, videoEditOperation: operation, taskId: "depth-task" },
-            );
+            expect(result.metadata).toMatchObject({ generationSpec: { operation, referenceBindings: [{ nodeId: source.id, mediaType: "video" }] }, videoEditOperation: operation, taskId: "depth-task" });
             expect(snapshot.connections).toMatchObject([{ fromNodeId: source.id, toNodeId: result.id }]);
             expect(consumed).toEqual([result.id]);
         } finally {
