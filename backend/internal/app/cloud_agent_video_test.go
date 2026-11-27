@@ -266,6 +266,16 @@ func TestCloudAgentVideoCacheAndAdmission(t *testing.T) {
 		t.Fatal("历史帧未计入模型上限")
 	}
 	state.Canonical = canonicalAgentRequest{}
+	// 不改资源身份与就绪状态，仅更新时间也必须使旧缓存和待发送帧失效。
+	if err := db.Model(&model.Resource{}).Where("id = ?", "video-source").UpdateColumn("updated_at", time.Now().Add(time.Hour)).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.prepareCloudAgentVideoInspection(context.Background(), "user", "agent-canvas", &state, call); err == nil {
+		t.Fatal("资源版本变化后仍复用旧缓存")
+	}
+	if _, err := s.cloudAgentImageReferences("user", state.Request, &canonical); err == nil {
+		t.Fatal("发送前未拒绝旧版本视频帧")
+	}
 	if err := db.Model(&model.Resource{}).Where("id = ?", "video-source").Update("status", "failed").Error; err != nil {
 		t.Fatal(err)
 	}
