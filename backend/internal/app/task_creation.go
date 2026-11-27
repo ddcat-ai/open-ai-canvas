@@ -713,6 +713,19 @@ func (s *Service) resolveSystemChannelModelSelection(access *userGroupAccess, in
 	input["capabilityOptions"] = capabilityOptionsFromConfig(channelModel.Capability, nextConfig, declaredOptions)
 
 	intent := ModelRequestIntentFromTaskInput(input, taskType, operation)
+	if _, processing := mediatool.Lookup(intent.Operation); processing {
+		// 报价与真实任务共用渠道默认值，保持源帧率时也必须解析出一致的计价档。
+		intent, err = s.resolveVideoProcessingRouteDefaults(intent, *channelModel)
+		if err != nil {
+			return input, err
+		}
+		input["capabilityOptions"] = maps.Clone(intent.Options)
+		for _, key := range []string{"vquality", "fpsBand"} {
+			if value, exists := intent.Options[key]; exists {
+				nextConfig[key] = value
+			}
+		}
+	}
 	if capabilitySpec != nil && normalizeCapability(intent.Capability) == "image" {
 		intent = normalizeImageSizeIntent(*capabilitySpec, intent)
 		input["capabilityOptions"] = maps.Clone(intent.Options)
