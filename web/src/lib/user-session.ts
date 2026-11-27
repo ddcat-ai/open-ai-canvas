@@ -190,6 +190,9 @@ export function refreshSystemChannels(): Promise<void> {
             } else {
                 useConfigStore.getState().mergeSystemChannels(channels);
             }
+            if (Array.isArray(catalog.displayGroupOrder)) {
+                useConfigStore.getState().updateConfig("displayGroupOrder", catalog.displayGroupOrder);
+            }
             catalogInitialConfig = undefined;
             useModelCatalogStore.setState({ status: "ready" });
         } catch (error) {
@@ -274,6 +277,7 @@ export function systemChannelModelChannels(channels: PublicChannelCatalog[]): Mo
                     channelModelId: model.id,
                     channelId: channel.id,
                     modelKey: model.modelKey,
+                    sortOrder: model.sortOrder ?? 0,
                     logicalPriceTiers,
                     availability: model.availability,
                     available: model.available,

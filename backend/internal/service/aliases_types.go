@@ -232,6 +232,7 @@ type (
 	LoginRequest                           = app.LoginRequest
 	ModelCapabilityConfig                  = app.ModelCapabilityConfig
 	ModelCatalogResponse                   = app.ModelCatalogResponse
+	ModelGroupOrderRequest                 = app.ModelGroupOrderRequest
 	ModelCatalogSource                     = app.ModelCatalogSource
 	ModelError                             = app.ModelError
 	ModelErrorCode                         = app.ModelErrorCode

@@ -19,6 +19,8 @@ type ChannelCatalogDiff struct {
 	Added          []string   `json:"added"`
 	Retained       []string   `json:"retained"`
 	Missing        []string   `json:"missing"`
+	Disabled       []string   `json:"disabled"`
+	Unavailable    []string   `json:"unavailable"`
 	FirstRead      bool       `json:"firstRead"`
 	BaselineReset  bool       `json:"baselineReset"`
 	ReadAt         time.Time  `json:"readAt"`
@@ -90,13 +92,14 @@ func (s *Service) ReadAdminChannelCatalog(ctx context.Context, actor *model.User
 	if err != nil {
 		return nil, err
 	}
+	started := time.Now().UTC()
 	models, err := s.FetchChannelModels(ctx, actor, ChannelModelsRequest{BaseURL: channel.BaseURL, APIKey: channel.APIKey, APIFormat: channel.APIFormat, ProxyURL: channel.ProxyURL, Headers: headers})
 	if err != nil {
 		return nil, err
 	}
 	models = uniqueNonEmpty(models)
 	sort.Strings(models)
-	result := &ChannelCatalogDiff{Models: models, Added: []string{}, Retained: []string{}, Missing: []string{}, ReadAt: time.Now().UTC()}
+	result := &ChannelCatalogDiff{Models: models, Added: []string{}, Retained: []string{}, Missing: []string{}, Disabled: []string{}, Unavailable: []string{}, ReadAt: time.Now().UTC()}
 	err = s.repo.Transaction(func(repo *repository.Repository) error {
 		if err := s.checkCatalogSource(repo, channel); err != nil {
 			return err
@@ -108,6 +111,9 @@ func (s *Service) ReadAdminChannelCatalog(ctx context.Context, actor *model.User
 		result.FirstRead = previous == nil
 		old := map[string]bool{}
 		if previous != nil {
+			if previous.ReadAt.After(started) {
+				return BadAuthRequest("同一 Key 的模型目录已刷新，请重新读取")
+			}
 			result.PreviousReadAt = &previous.ReadAt
 			result.BaselineReset = previous.SourceDigest != channelCatalogDigest(*channel)
 			if !result.BaselineReset {
@@ -120,7 +126,9 @@ func (s *Service) ReadAdminChannelCatalog(ctx context.Context, actor *model.User
 				}
 			}
 		}
+		available := make(map[string]bool, len(models))
 		for _, name := range models {
+			available[name] = true
 			if old[name] {
 				result.Retained = append(result.Retained, name)
 				delete(old, name)
@@ -132,11 +140,39 @@ func (s *Service) ReadAdminChannelCatalog(ctx context.Context, actor *model.User
 			result.Missing = append(result.Missing, name)
 		}
 		sort.Strings(result.Missing)
+		{
+			items, err := repo.ChannelModels(channelID, true)
+			if err != nil {
+				return err
+			}
+			for _, item := range items {
+				upstream := firstNonEmpty(item.ProviderModelKey, item.ModelKey)
+				removed := !available[upstream]
+				for _, tier := range item.PriceTiers {
+					if tier.Enabled && !available[firstNonEmpty(tier.ProviderModelKey, upstream)] {
+						removed = true
+					}
+				}
+				if removed {
+					result.Unavailable = append(result.Unavailable, item.ModelKey)
+					if !item.Enabled {
+						continue
+					}
+					if err := repo.SetChannelModelEnabled(channelID, item.ID, false); err != nil {
+						return err
+					}
+					result.Disabled = append(result.Disabled, item.ModelKey)
+				}
+			}
+		}
 		encoded, err := json.Marshal(models)
 		if err != nil {
 			return err
 		}
 		return repo.Save(&model.ChannelCatalogSnapshot{ChannelID: channelID, SourceDigest: channelCatalogDigest(*channel), ModelsJSON: string(encoded), ReadAt: result.ReadAt})
 	})
+	if err == nil && len(result.Disabled) > 0 {
+		s.invalidateRouteCatalog()
+	}
 	return result, err
 }

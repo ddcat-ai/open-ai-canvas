@@ -462,6 +462,8 @@ export type ChannelCatalogDiff = {
     added: string[];
     retained: string[];
     missing: string[];
+    disabled?: string[];
+    unavailable?: string[];
     firstRead: boolean;
     baselineReset: boolean;
     readAt: string;
@@ -504,6 +506,10 @@ export function createAdminChannelModel(channelId: string, input: ChannelModelMu
 
 export function updateAdminChannelModel(channelId: string, id: string, input: ChannelModelMutation) {
     return http.patch<{ model: ChannelModel }>(`/admin/channels/${encodeURIComponent(channelId)}/models/${encodeURIComponent(id)}`, input);
+}
+
+export function saveDisplayGroupModelOrder(group: string, ids: string[], expected: Record<string, number>) {
+    return http.put<{ saved: boolean }>("/admin/channel-models/group-order", { group, ids, expected });
 }
 
 export function updateAdminChannelModelSort(channelId: string, id: string, sortOrder: number) {
@@ -576,6 +582,7 @@ export type BatchChannelModelChanges = {
     protocolRelease?: string;
     displayName?: string;
     description?: string;
+    icon?: string;
     enabled?: boolean;
     /** 价格档的“可供用户使用”开关，应用于全部价格档，与模型启用独立。 */
     pricingEnabled?: boolean;

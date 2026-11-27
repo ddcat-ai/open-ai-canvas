@@ -1,6 +1,6 @@
 import { App, Button, Grid, Space } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { Pencil, Power, Search } from "lucide-react";
+import { ListOrdered, Pencil, Power, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 
@@ -8,7 +8,9 @@ import { ModelIcon } from "@/components/model-picker";
 import { Select } from "@/components/ui/base/select";
 import { type ModelProtocolDefinition } from "@/lib/model-protocols";
 import { fetchPluginProviderCatalog } from "@/services/api/plugin-catalog";
-import { listAdminAllChannelModels, setAdminChannelModelEnabled, type AdminChannelModelHealth, type AdminChannelModelListItem } from "@/services/api/wallet";
+import { listAdminAllChannelModels, setAdminChannelModelEnabled, updateAdminAllChannelModels, type AdminChannelModelHealth, type AdminChannelModelListItem, type BatchChannelModelUpdate } from "@/services/api/wallet";
+import { cn } from "@/lib/utils";
+import { useAdminContext } from "../admin-context";
 import type { ModelChannel } from "@/stores/use-config-store";
 import { AdminBatchBar, AdminDataTable, AdminStatusBadge, AdminTableEmpty, PaginationBar } from "../components/admin-ui";
 import { AdminSearchInput } from "../components/admin-search-input";
@@ -19,6 +21,10 @@ import { opensModelParameters } from "../components/channel-model-editor-form";
 import { ChannelModelHealthCell, channelModelHealthKey } from "../components/channel-model-health";
 import { ChannelModelRepriceDialog } from "../components/channel-model-reprice-dialog";
 import { ChannelModelBatchEditDialog } from "../components/channel-model-batch-edit-dialog";
+import { ModelGroupOrderDialog } from "./model-group-order-dialog";
+import { GroupModelOrderDialog } from "./group-model-order-dialog";
+import { useConfigStore } from "@/stores/use-config-store";
+import { saveModelGroupOrder } from "@/services/api/model-group-order";
 
 type StatusFilter = "all" | "enabled" | "disabled" | "unhealthy";
 
@@ -54,6 +60,7 @@ export function AllChannelModelsPanel({
     const capability = searchParams.get("capability") || "all";
     const status = (searchParams.get("modelStatus") as StatusFilter) || "all";
     const channelFilter = searchParams.get("modelChannel") || "all";
+    const groupFilter = searchParams.get("displayGroup") || "";
     const [items, setItems] = useState<AdminChannelModelListItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
@@ -68,6 +75,88 @@ export function AllChannelModelsPanel({
     const [protocols, setProtocols] = useState<ModelProtocolDefinition[]>([]);
     const [protocolLoading, setProtocolLoading] = useState(true);
     const [protocolError, setProtocolError] = useState("");
+    // 拖动模型行时浮出已有分组，放到哪个分组就更新哪个模型的展示名（一级目录）。
+    const [dragItems, setDragItems] = useState<AdminChannelModelListItem[]>([]);
+    const [hoverGroup, setHoverGroup] = useState("");
+    const [movingGroup, setMovingGroup] = useState("");
+    const [orderOpen, setOrderOpen] = useState(false);
+    const [sortingGroup, setSortingGroup] = useState("");
+    const groupOrder = useConfigStore((state) => state.config.displayGroupOrder);
+    const { references } = useAdminContext();
+    const groupNames = useMemo(() => {
+        const names = Array.from(new Set([...(groupOrder ?? []), "未分类", ...items.map((item) => item.displayName?.trim() || "未分类"), ...references.channels.flatMap((channel) => channel.modelDisplayNames ?? [])]));
+        const ranks = new Map((groupOrder ?? []).map((name, index) => [name, index]));
+        return names.sort((left, right) => (ranks.get(left) ?? Infinity) - (ranks.get(right) ?? Infinity) || left.localeCompare(right, "zh-CN"));
+    }, [groupOrder, items, references.channels]);
+
+    const createGroup = () => {
+        let name = "";
+        modal.confirm({
+            title: "新建模型分组",
+            content: (
+                <input
+                    className="ant-input w-full"
+                    aria-label="分组名称"
+                    maxLength={100}
+                    placeholder="请输入分组名称"
+                    onChange={(event) => {
+                        name = event.target.value;
+                    }}
+                />
+            ),
+            okText: "创建",
+            cancelText: "取消",
+            onOk: async () => {
+                const group = name.trim();
+                if (!group || groupNames.includes(group)) {
+                    message.error(group ? "该分组已存在" : "请输入分组名称");
+                    throw new Error("分组名称无效");
+                }
+                const result = await saveModelGroupOrder([...groupNames, group]);
+                useConfigStore.getState().updateConfig("displayGroupOrder", result.order);
+                setSelectedIds([]);
+                updateFilter({ displayGroup: group });
+                message.success("分组已创建");
+            },
+        });
+    };
+
+    const startDrag = (event: React.DragEvent, item: AdminChannelModelListItem) => {
+        const picked = selectedIds.includes(item.id) && selectedIds.length > 1 ? items.filter((entry) => selectedIds.includes(entry.id)) : [item];
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", item.id);
+        setDragItems(picked);
+    };
+
+    const endDrag = () => {
+        setDragItems([]);
+        setHoverGroup("");
+    };
+
+    const moveItemsToGroup = async (targetItems: AdminChannelModelListItem[], group: string) => {
+        if (targetItems.length === 0 || movingGroup) return;
+        setMovingGroup(group);
+        try {
+            const updates: BatchChannelModelUpdate[] = targetItems.map((item) => ({
+                modelId: item.id,
+                priceVersion: item.priceVersion,
+                capabilityVersion: item.capabilityVersion ?? 0,
+                updatedAt: item.updatedAt,
+                changes: { displayName: group },
+            }));
+            await updateAdminAllChannelModels(updates);
+            message.success(`已把 ${targetItems.length} 个模型移到「${group}」`);
+            endDrag();
+            setSelectedIds([]);
+            await refreshSavedModels();
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "移动分组失败");
+        } finally {
+            setMovingGroup("");
+        }
+    };
+
+    const moveToGroup = (group: string) => moveItemsToGroup(dragItems, group);
 
     const refreshSavedModels = async () => {
         setSelectedIds([]);
@@ -133,6 +222,7 @@ export function AllChannelModelsPanel({
         const query = keyword.trim().toLowerCase();
         return items
             .filter((item) => {
+                if (groupFilter && (item.displayName?.trim() || "未分类") !== groupFilter) return false;
                 if (query && !`${item.modelKey} ${item.providerModelKey} ${item.displayName} ${item.channelLabel || ""}`.toLowerCase().includes(query)) return false;
                 if (capability !== "all" && item.capability !== capability) return false;
                 if (channelFilter !== "all" && item.channelId !== channelFilter) return false;
@@ -144,8 +234,14 @@ export function AllChannelModelsPanel({
                 }
                 return true;
             })
-            .sort((left, right) => (left.displayName || left.modelKey).localeCompare(right.displayName || right.modelKey, "zh-CN") || left.modelKey.localeCompare(right.modelKey) || left.channelName.localeCompare(right.channelName, "zh-CN"));
-    }, [capability, channelFilter, health, items, keyword, status]);
+            .sort(
+                (left, right) =>
+                    (left.displayName?.trim() || "未分类").localeCompare(right.displayName?.trim() || "未分类", "zh-CN") ||
+                    (left.sortOrder ?? 0) - (right.sortOrder ?? 0) ||
+                    left.modelKey.localeCompare(right.modelKey) ||
+                    left.channelName.localeCompare(right.channelName, "zh-CN"),
+            );
+    }, [capability, channelFilter, groupFilter, health, items, keyword, status]);
 
     const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
     const enabledCount = filtered.filter((item) => item.enabled && item.channelEnabled).length;
@@ -240,10 +336,38 @@ export function AllChannelModelsPanel({
         },
     ];
 
-    const hasFilters = Boolean(keyword || capability !== "all" || status !== "all" || channelFilter !== "all");
+    const hasFilters = Boolean(keyword || capability !== "all" || status !== "all" || channelFilter !== "all" || groupFilter);
 
     return (
         <div className="admin-all-models">
+            <div className="flex flex-wrap items-center gap-2 py-3" role="group" aria-label="模型展示分组">
+                <Button
+                    size="small"
+                    type={!groupFilter ? "primary" : "default"}
+                    onClick={() => {
+                        setSelectedIds([]);
+                        updateFilter({ displayGroup: "" });
+                    }}
+                >
+                    全部分组 ({items.length})
+                </Button>
+                {groupNames.map((group) => (
+                    <Button
+                        key={group}
+                        size="small"
+                        type={groupFilter === group ? "primary" : "default"}
+                        onClick={() => {
+                            setSelectedIds([]);
+                            updateFilter({ displayGroup: group });
+                        }}
+                    >
+                        {group} ({items.filter((item) => (item.displayName?.trim() || "未分类") === group).length})
+                    </Button>
+                ))}
+                <Button size="small" onClick={createGroup}>
+                    新建分组
+                </Button>
+            </div>
             <AdminDataTable
                 toolbar={
                     <AdminSearchInput
@@ -281,13 +405,35 @@ export function AllChannelModelsPanel({
                             options={[{ label: "全部渠道", value: "all" }, ...channels.map((channel) => ({ label: channel.name, value: channel.id }))]}
                             onChange={(value) => updateFilter({ modelChannel: value })}
                         />
+                        <Button size="small" disabled={!groupFilter} title={groupFilter ? "调整当前组的模型顺序" : "请先选择一个分组"} icon={<ListOrdered className="size-3.5" />} onClick={() => setSortingGroup(groupFilter)}>
+                            组内排序
+                        </Button>
+                        <Button size="small" icon={<ListOrdered className="size-3.5" />} onClick={() => setOrderOpen(true)}>
+                            目录排序
+                        </Button>
                     </>
                 }
                 toolbarActive={hasFilters}
-                onReset={() => updateFilter({ q: "", capability: "", modelStatus: "", modelChannel: "" })}
+                onReset={() => updateFilter({ q: "", capability: "", modelStatus: "", modelChannel: "", displayGroup: "" })}
                 trailing={<span className="text-xs text-foreground/50 tabular-nums">{loading ? "读取中…" : `${filtered.length} 个模型 · ${enabledCount} 个可用`}</span>}
                 batchActions={
                     <AdminBatchBar count={selectedIds.length} onClear={() => setSelectedIds([])}>
+                        <Select
+                            aria-label="批量移动到一级目录"
+                            className="w-44"
+                            showSearch
+                            optionFilterProp="label"
+                            placeholder={movingGroup ? "移动中…" : "移动到分组"}
+                            value={undefined}
+                            disabled={loading || Boolean(loadError) || Boolean(movingGroup)}
+                            options={groupNames.map((group) => ({ label: group, value: group }))}
+                            onChange={(value) =>
+                                void moveItemsToGroup(
+                                    items.filter((item) => selectedIds.includes(item.id)),
+                                    String(value),
+                                )
+                            }
+                        />
                         <Button size="small" disabled={loading || Boolean(loadError)} onClick={() => setBatchEditItems(items.filter((item) => selectedIds.includes(item.id)))}>
                             批量修改
                         </Button>
@@ -314,6 +460,12 @@ export function AllChannelModelsPanel({
                     dataSource: paged,
                     pagination: false,
                     scroll: { x: 1440 },
+                    onRow: (item) => ({
+                        draggable: true,
+                        onDragStart: (event) => startDrag(event, item),
+                        onDragEnd: endDrag,
+                        title: "拖动到右下角分组即可归类",
+                    }),
                 }}
                 empty={
                     loadError ? (
@@ -339,6 +491,45 @@ export function AllChannelModelsPanel({
                         }}
                     />
                 }
+            />
+            {dragItems.length > 0 ? (
+                <div className="fixed bottom-6 right-6 z-[60] flex max-h-[60vh] w-64 flex-col gap-2 overflow-auto rounded-lg border bg-background p-3 shadow-lg" role="dialog" aria-label="移动到一级目录">
+                    <div className="model-group-dock-title">
+                        移动到一级目录 · <strong>{dragItems.length}</strong> 个模型
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 overflow-auto">
+                        {groupNames.map((group) => (
+                            <button
+                                key={group}
+                                type="button"
+                                className={cn("rounded-full border border-dashed px-2 py-1 text-xs", hoverGroup === group && "border-solid border-primary bg-primary/10 text-primary")}
+                                disabled={Boolean(movingGroup)}
+                                onDragOver={(event) => {
+                                    event.preventDefault();
+                                    setHoverGroup(group);
+                                }}
+                                onDragLeave={() => setHoverGroup((current) => (current === group ? "" : current))}
+                                onDrop={(event) => {
+                                    event.preventDefault();
+                                    void moveToGroup(group);
+                                }}
+                            >
+                                {movingGroup === group ? "保存中…" : group}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="model-group-dock-hint">拖到目录上松开；按住 Shift 可多选后一起拖</div>
+                </div>
+            ) : null}
+            {sortingGroup && <GroupModelOrderDialog group={sortingGroup} onClose={() => setSortingGroup("")} onSaved={refreshSavedModels} />}
+            <ModelGroupOrderDialog
+                open={orderOpen}
+                groups={groupNames}
+                initialOrder={groupOrder ?? []}
+                onClose={() => setOrderOpen(false)}
+                onSaved={(order) => {
+                    useConfigStore.getState().updateConfig("displayGroupOrder", order);
+                }}
             />
             {batchEditItems.length > 0 && (
                 <ChannelModelBatchEditDialog

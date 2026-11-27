@@ -3,9 +3,28 @@ package app
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
 )
+
+func (s *Service) SaveDisplayGroupModelOrder(actor *model.User, group string, ids []string, expected map[string]int) error {
+	if err := s.RequireAdmin(actor); err != nil {
+		return err
+	}
+	group = strings.TrimSpace(group)
+	if group == "" || len(ids) == 0 || len(ids) > 10000 || len(ids) != len(expected) {
+		return BadAuthRequest("请重新加载完整分组")
+	}
+	err := s.repo.SaveDisplayGroupModelOrder(group, ids, expected)
+	if errors.Is(err, repository.ErrChannelOrderChanged) {
+		return NewAppError(http.StatusConflict, err.Error())
+	}
+	if err == nil {
+		s.invalidateRouteCatalog()
+	}
+	return err
+}
 
 type ChannelOrderItem struct {
 	ID      string `json:"id"`

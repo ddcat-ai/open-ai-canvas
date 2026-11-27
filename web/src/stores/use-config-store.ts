@@ -129,6 +129,7 @@ export type ModelChannel = {
         channelModelId?: string;
         channelId?: string;
         modelKey?: string;
+        sortOrder?: number;
     }>;
 };
 
@@ -174,6 +175,7 @@ export type AiConfig = {
     videoModels: string[];
     textModels: string[];
     audioModels: string[];
+    displayGroupOrder: string[];
     quality: string;
     imageResolution: string;
     imageParameters?: string;
@@ -230,6 +232,7 @@ export const defaultConfig: AiConfig = {
     videoModels: [],
     textModels: [],
     audioModels: [],
+    displayGroupOrder: [],
     quality: "auto",
     imageResolution: "auto",
     size: "1:1",
