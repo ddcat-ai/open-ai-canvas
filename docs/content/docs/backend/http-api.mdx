@@ -43,6 +43,11 @@ description: 信封、错误码与 OpenAPI
 
 冲突期间不允许提交视频。显式保存核对后的非空正文可解除冲突，AI 重写为可选。重新撰写完成时如有手写稿，返回 `promptStatus=review`，新稿位于 `generated`，手写稿继续作为 `videoPrompt` 展示；保存非空正文表示确认手写稿，清空覆盖值表示采用 AI 新稿。参考资产换号不解除未确认的对白冲突。
 
+## 视频处理报价
+
+视频处理报价的 `ModelRequestIntent.processingParameters` 沿用共享处理参数合同，`fps` 用于校验候选渠道允许的精确帧率，`bitrateLevel`、`bitrate` 分别表示码率档位与精确码率。分辨率仍放在 `options.vquality`。服务端根据实际渠道解析默认参数和 `fpsBand`，画布报价、逻辑选路与任务准入使用相同口径；省略帧率时，保持源帧率模型按 `le30` 档报价，可选帧率模型使用后台首选帧率。
+
+
 ## 图片用量计费
 
 渠道模型价格档可提交 `billingMode=image_usage` 与 `imagePricing={inputPriceMicrocredits,freeInputImages,outputTiers:[{maxPixels,unitPriceMicrocredits}]}`。仅图片模型可启用；输出上限递增且含边界，最后一档可用 0 表示不限。成本规则为管理员专用 `costPricing.imagePricing`。目录只发布换算后的售价规则。

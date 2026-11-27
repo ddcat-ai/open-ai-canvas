@@ -5955,6 +5955,8 @@ components:
         operation:
           type: string
           description: 可选生成操作，必须符合所选模型的能力合同
+        processingParameters:
+          $ref: "#/components/schemas/MediaProcessingParameters"
         inputs:
           type: object
           description: 按素材类型统计的参考数量，如 image、video、audio；另受所选模型的数量上限约束
@@ -5979,6 +5981,20 @@ components:
             format: int64
             minimum: 1
             maximum: 3600000
+    MediaProcessingParameters:
+      type: object
+      additionalProperties: false
+      description: 视频处理公开参数；精确帧率用于候选渠道校验，计价档由服务端解析。分辨率沿用当前接口的规格字段。
+      properties:
+        fps:
+          type: integer
+        bitrateLevel:
+          type: string
+          enum: [low, medium, high]
+        bitrate:
+          type: integer
+          minimum: 10
+          maximum: 150000
     ImagePricing:
       type: object
       required: [inputPriceMicrocredits, freeInputImages, outputTiers]

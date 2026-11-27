@@ -80,16 +80,18 @@ export function videoProcessingTaskInput(options: { config: AiConfig; params: Vi
 }
 
 export function videoProcessingQuoteRequest(config: AiConfig, params: VideoProcessingParams, operation: VideoProcessingOperation, sourceDurationMs?: number): ModelQuoteRequest | undefined {
-    const channel = resolveModelChannel(config, params.model);
-    if (channel.scope !== "system" || !params.model || !sourceDurationMs || sourceDurationMs <= 0) return undefined;
+    const { model, resolution, ...processingParameters } = params;
+    const channel = resolveModelChannel(config, model);
+    if (channel.scope !== "system" || !model || !sourceDurationMs || sourceDurationMs <= 0) return undefined;
     return {
         channelId: channel.id,
-        modelKey: modelOptionName(params.model),
+        modelKey: modelOptionName(model),
         intent: {
             capability: "video",
             operation,
             inputs: { video: 1 },
-            options: { videoSeconds: Math.ceil(sourceDurationMs / 1000), ...(params.resolution ? { vquality: params.resolution } : {}), ...(params.fps ? { fpsBand: params.fps <= 30 ? "le30" : params.fps <= 60 ? "le60" : "le120" } : {}) },
+            processingParameters: validateProcessingParameters(operation, processingParameters),
+            options: { videoSeconds: Math.ceil(sourceDurationMs / 1000), ...(resolution ? { vquality: resolution } : {}), ...(params.fps ? { fpsBand: params.fps <= 30 ? "le30" : params.fps <= 60 ? "le60" : "le120" } : {}) },
         },
     };
 }

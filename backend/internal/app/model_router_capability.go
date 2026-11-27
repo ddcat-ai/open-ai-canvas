@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"yingce/backend/internal/canvas/mediatool"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/protocol"
 )
@@ -54,6 +55,8 @@ type ModelRequestIntent struct {
 	Operation  string         `json:"operation,omitempty"`
 	Inputs     map[string]int `json:"inputs,omitempty"`
 	Options    map[string]any `json:"options,omitempty"`
+	// 处理参数与普通生成选项分开；精确帧率用于选路，fpsBand 仅用于计价。
+	ProcessingParameters *mediatool.Parameters `json:"processingParameters,omitempty"`
 	// ReferenceVideoDurationsMs 仅用于报价：按顺序给出参考视频时长，长度须等于 inputs.video。
 	// 真实任务不读取它，按秒计费的参考视频时长始终由后端实测。
 	ReferenceVideoDurationsMs []int64 `json:"referenceVideoDurationsMs,omitempty"`
@@ -66,6 +69,13 @@ func ModelRequestIntentFromTaskInput(input map[string]any, taskType string, oper
 		capability = capabilityFromTaskType(taskType)
 	}
 	intent := ModelRequestIntent{Capability: capability, Operation: strings.TrimSpace(operation), Inputs: map[string]int{}, Options: map[string]any{}}
+	if metadata, ok := input["metadata"].(map[string]any); ok && metadata["processingParameters"] != nil {
+		// 写路径已由处理准入校验，报价路径已由公开意图解码及校验。
+		encoded, err := json.Marshal(metadata["processingParameters"])
+		if err == nil {
+			_ = json.Unmarshal(encoded, &intent.ProcessingParameters)
+		}
+	}
 	for inputType, key := range map[string]string{"image": "referenceImages", "video": "referenceVideos", "audio": "referenceAudios"} {
 		if values, ok := input[key].([]any); ok {
 			intent.Inputs[inputType] = len(values)

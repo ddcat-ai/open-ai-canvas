@@ -153,6 +153,16 @@ func (s *Service) resolveVideoProcessingRouteDefaults(intent ModelRequestIntent,
 		intent.Options = map[string]any{}
 	}
 	video := profile.Video
+	if err := mediatool.ValidateParameters(intent.Operation, intent.ProcessingParameters); err != nil {
+		return intent, BadAuthRequest(err.Error())
+	}
+	if parameters := intent.ProcessingParameters; parameters != nil && parameters.FPS != nil {
+		if video.Processing.FPSPolicy != VideoProcessingFPSUserSelect || !containsInt(video.Processing.FPSOptions, *parameters.FPS) {
+			return intent, BadAuthRequest("请选择后台允许的输出帧率")
+		}
+		// 同一计价档可能包含多个帧率，必须先校验真实输出帧率再筛选价格。
+		intent.Options["fpsBand"] = videoFPSBand(float64(*parameters.FPS))
+	}
 	if _, acceptsResolution := definition.Parameters["resolution"]; acceptsResolution && stringValue(intent.Options["vquality"]) == "" && video.DefaultResolution != "" {
 		intent.Options["vquality"] = video.DefaultResolution
 	}

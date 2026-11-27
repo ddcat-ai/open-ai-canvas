@@ -62,8 +62,10 @@ test("增强表单参数按共享定义与当前模型帧率配置收窄", () =>
     expect(Object.keys(fields)).toContain("resolution");
     expect(Object.keys(fields)).toContain("bitrate");
     expect(fields.fps).toBeUndefined();
+    expect(videoProcessingQuoteRequest(enhanced, { model, resolution: "1080p" }, "enhance", 12500)?.intent.processingParameters).toEqual({});
     profile.video!.processing = { ...profile.video!.processing!, fpsPolicy: "user_select", fpsOptions: [30, 60] };
     expect(videoProcessingFields(enhanced, model, "enhance").fps?.enum).toEqual([30, 60]);
+    expect(videoProcessingQuoteRequest(enhanced, { model, resolution: "1080p", fps: 60, bitrate: 16000 }, "enhance", 12500)?.intent).toMatchObject({ processingParameters: { fps: 60, bitrate: 16000 }, options: { fpsBand: "le60" } });
     expect(videoProcessingFields(config, encodeChannelModel("upscale", "upscale"), "upscale")).toEqual({});
     expect(() => validateProcessingParameters("upscale", { fps: 60 })).toThrow();
     expect(() => validateProcessingParameters("enhance", { bitrate: 0 })).toThrow();
