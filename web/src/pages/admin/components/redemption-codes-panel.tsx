@@ -7,24 +7,26 @@ import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { formatCredits } from "@/constant/credits";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { ApiError } from "@/services/api/request";
-import { createAdminRedeemBatch, disableAdminRedeemBatch, listAdminRedeemBatches, type AdminRedeemCode, type RedeemBatch } from "@/services/api/wallet";
+import { createAdminRedeemBatch, disableAdminRedeemBatch, listAdminRedeemBatches, redeemCapabilityLabel, type AdminRedeemCode, type RedeemAllowedCapability, type RedeemBatch } from "@/services/api/wallet";
 import { AdminDataTable, AdminRowActions, AdminStatusBadge, AdminTableEmpty, type AdminStatusTone } from "./admin-ui";
 import { Select } from "@/components/ui/base/select";
 import { BatchStatusDistribution, CreateRedeemBatchDrawer, GeneratedCodesModal, RedeemBatchCodesModal } from "./redemption-codes-modals";
 
-export type RedeemFormValues = { amount?: number | null; count?: number | null; note?: string; expiresAt?: string };
+export type RedeemFormValues = { amount?: number | null; count?: number | null; note?: string; onePerUser?: boolean; allowedCapability?: RedeemAllowedCapability; expiresAt?: string };
 export type PendingRedeemBatch = {
     amountMicrocredits: number;
     count: number;
     totalMicrocredits: number;
     note?: string;
+    onePerUser: boolean;
+    allowedCapability: RedeemAllowedCapability;
     expiresAt?: string;
 };
 type BatchValidity = "all" | "active" | "expired";
 export type DetailStatus = "all" | "available" | "redeemed" | "expired" | "disabled";
 
 export const MICRO_CREDITS_PER_CREDIT = 1_000_000;
-export const DEFAULT_CREATE_VALUES: RedeemFormValues = { amount: 10, count: 10 };
+export const DEFAULT_CREATE_VALUES: RedeemFormValues = { amount: 10, count: 10, onePerUser: false, allowedCapability: "" };
 export const GENERATED_PREVIEW_LIMIT = 200;
 export const DETAIL_STATUS_LABELS: Record<DetailStatus, string> = {
     all: "全部状态",
@@ -136,7 +138,15 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
             }
             expiresAt = timestamp.toISOString();
         }
-        setPendingCreate({ amountMicrocredits, count, totalMicrocredits, note: values.note?.trim() || undefined, expiresAt });
+        setPendingCreate({
+            amountMicrocredits,
+            count,
+            totalMicrocredits,
+            note: values.note?.trim() || undefined,
+            onePerUser: Boolean(values.onePerUser),
+            allowedCapability: values.allowedCapability || "",
+            expiresAt,
+        });
     };
 
     const createBatch = async () => {
@@ -148,6 +158,8 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
                 amountMicrocredits: pendingCreate.amountMicrocredits,
                 count: pendingCreate.count,
                 note: pendingCreate.note,
+                onePerUser: pendingCreate.onePerUser,
+                allowedCapability: pendingCreate.allowedCapability,
                 expiresAt: pendingCreate.expiresAt,
             });
             setPendingCreate(null);
@@ -209,7 +221,11 @@ export default function RedemptionCodesPanel({ createOpen, onCreateOpenChange, o
             width: 240,
             render: (_, batch) => (
                 <div className="min-w-0">
-                    <div className="truncate font-medium">{batch.note || "未备注批次"}</div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="truncate font-medium">{batch.note || "未备注批次"}</span>
+                        {batch.allowedCapability ? <AdminStatusBadge label={redeemCapabilityLabel(batch.allowedCapability)} tone={batch.allowedCapability === "image" ? "warning" : "info"} /> : null}
+                        {batch.onePerUser ? <AdminStatusBadge label="限兑 1 次" tone="info" /> : null}
+                    </div>
                     <div className="mt-0.5 text-xs text-foreground/45">{formatTime(batch.createdAt)}</div>
                 </div>
             ),
@@ -387,6 +403,8 @@ export const emptyBatchSummary: RedeemBatch = {
     id: "",
     amountMicrocredits: 0,
     count: 0,
+    onePerUser: false,
+    allowedCapability: "",
     createdBy: "",
     createdAt: "",
     availableCount: 0,

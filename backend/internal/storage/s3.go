@@ -175,7 +175,7 @@ func signedS3ObjectURL(setting Settings, objectKey string, signing objectURLSign
 	req.Handlers.Sign.Swap(awsv4.SignRequestHandler.Name, request.NamedHandler{Name: awsv4.SignRequestHandler.Name, Fn: func(r *request.Request) {
 		awsv4.SignSDKRequestWithCurrentTime(r, func() time.Time { return signedAt }, func(s *awsv4.Signer) { s.DisableURIPathEscaping = true })
 	}})
-	value, err := req.Presign(signing.ExpiresAt.Sub(signedAt))
+	value, err := req.Presign(sigV4PresignTTL(signedAt, signing.ExpiresAt))
 	if err != nil {
 		return "", fmt.Errorf("%s 下载地址签名失败：%w", s3ServiceName(setting), err)
 	}

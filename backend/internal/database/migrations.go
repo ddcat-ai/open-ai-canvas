@@ -13,7 +13,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 111
+const CurrentSchemaVersion int64 = 112
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -398,7 +398,40 @@ var schemaMigrations = []migration{
 		}
 		return reconcileAgentStorageUsage(tx)
 	}},
-	{version: 111, name: "admin_assistant", checksum: "sha256:admin-assistant-v111-20261124", apply: migrateAdminAssistant},
+	{version: 111, name: "redeem_batch_limits_and_capability_pools", checksum: "sha256:redeem-batch-limits-and-capability-pools-v111-20261125", apply: migrateRedeemBatchLimitsAndCapabilityPools},
+	{version: 112, name: "admin_assistant", checksum: "sha256:admin-assistant-v112-20261127", apply: migrateAdminAssistant},
+}
+
+func migrateRedeemBatchLimitsAndCapabilityPools(tx *gorm.DB) error {
+	for _, change := range []struct {
+		entity  any
+		columns []string
+	}{
+		{&model.RedeemBatch{}, []string{"one_per_user", "allowed_capability"}},
+		{&model.CreditAccount{}, []string{"image_available_microcredits", "image_reserved_microcredits", "video_available_microcredits", "video_reserved_microcredits"}},
+		{&model.BillingOrder{}, []string{"image_reserved_microcredits", "video_reserved_microcredits", "image_actual_microcredits", "video_actual_microcredits"}},
+	} {
+		if !tx.Migrator().HasTable(change.entity) {
+			if err := tx.AutoMigrate(change.entity); err != nil {
+				return err
+			}
+			continue
+		}
+		for _, column := range change.columns {
+			if !tx.Migrator().HasColumn(change.entity, column) {
+				if err := tx.Migrator().AddColumn(change.entity, column); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if !tx.Migrator().HasTable(&model.RedeemCode{}) {
+		return tx.AutoMigrate(&model.RedeemCode{})
+	}
+	if !tx.Migrator().HasIndex(&model.RedeemCode{}, "idx_redeem_codes_batch_status_user") {
+		return tx.Migrator().CreateIndex(&model.RedeemCode{}, "idx_redeem_codes_batch_status_user")
+	}
+	return nil
 }
 
 func migrateAPILogGenerationContent(tx *gorm.DB) error {

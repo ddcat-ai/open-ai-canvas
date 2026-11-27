@@ -65,14 +65,19 @@ export function createUserColumns({
             key: "credits",
             title: "可用积分",
             dataIndex: "availableMicrocredits",
-            width: 120,
+            width: 150,
             align: "right",
-            render: (value, user) => (
-                <div className="tabular-nums">
-                    <div>{formatCredits(value)}</div>
-                    {user.reservedMicrocredits ? <div className="text-xs text-foreground/45">冻结 {formatCredits(user.reservedMicrocredits)}</div> : null}
-                </div>
-            ),
+            render: (value, user) => {
+                const reservedTotal = user.reservedMicrocredits + (user.imageReservedMicrocredits || 0) + (user.videoReservedMicrocredits || 0);
+                return (
+                    <div className="tabular-nums">
+                        <div>{formatCredits(value)}</div>
+                        {(user.imageAvailableMicrocredits || 0) > 0 ? <div className="text-xs text-amber-500/85">仅图片 {formatCredits(user.imageAvailableMicrocredits || 0)}</div> : null}
+                        {(user.videoAvailableMicrocredits || 0) > 0 ? <div className="text-xs text-sky-500/85">仅视频 {formatCredits(user.videoAvailableMicrocredits || 0)}</div> : null}
+                        {reservedTotal ? <div className="text-xs text-foreground/45">冻结 {formatCredits(reservedTotal)}</div> : null}
+                    </div>
+                );
+            },
         },
         {
             key: "recharged",

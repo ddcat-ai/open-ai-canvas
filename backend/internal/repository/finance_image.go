@@ -55,33 +55,25 @@ func settleImageBillingOrder(tx *gorm.DB, order model.BillingOrder, providerRequ
 	if actual > reserved || (billingChargeLimitApplies(order) && actual > order.ChargeLimitMicrocredits) || int64(len(order.ImageUsage.Outputs)) > order.ImageMaxOutputImages || order.ImageUsage.InputImages > order.ImageInputImages {
 		return errors.New("图片实际费用或用量超过本次预留上限，需人工核对")
 	}
-	refund := reserved - actual
-	updated := billingAccountQuery(tx, order).
-		Where("reserved_microcredits >= ?", reserved).
-		Updates(map[string]any{"available_microcredits": gorm.Expr("available_microcredits + ?", refund), "reserved_microcredits": gorm.Expr("reserved_microcredits - ?", reserved), "version": gorm.Expr("version + 1"), "updated_at": time.Now()})
-	if updated.Error != nil {
-		return updated.Error
-	}
-	if updated.RowsAffected != 1 {
-		return errors.New("预留积分不足以完成图片结算")
-	}
-	var account model.CreditAccount
-	if err := billingAccountQuery(tx, order).First(&account).Error; err != nil {
+	settlement, err := settleOrderPools(tx, order, reserved, actual, false, "预留积分不足以完成图片结算", "预留积分不足以完成图片结算")
+	if err != nil {
 		return err
 	}
+	account := settlement.Account
+	refund := settlement.TotalRefund
 	now := time.Now()
-	updates := map[string]any{"status": model.BillingStatusSettled, "quantity": len(order.ImageUsage.Outputs), "actual_amount_microcredits": actual, "uncapped_amount_microcredits": actual, "refunded_amount_microcredits": refund, "settled_at": &now, "updated_at": now}
+	updates := map[string]any{"status": model.BillingStatusSettled, "quantity": len(order.ImageUsage.Outputs), "actual_amount_microcredits": actual, "uncapped_amount_microcredits": actual, "refunded_amount_microcredits": refund, "image_actual_microcredits": settlement.Actual.Image, "video_actual_microcredits": settlement.Actual.Video, "settled_at": &now, "updated_at": now}
 	if providerRequestID != "" {
 		updates["provider_request_id"] = providerRequestID
 	}
 	if err := updateBillingOrderState(tx, order, updates); err != nil {
 		return err
 	}
-	if err := tx.Create(&model.CreditLedgerEntry{ID: newRepositoryID(), UserID: order.UserID, Type: model.CreditLedgerConsume, AmountMicrocredits: -actual, ReservedDeltaMicrocredits: -reserved, AvailableAfterMicrocredits: account.AvailableMicrocredits, ReservedAfterMicrocredits: account.ReservedMicrocredits, BillingOrderID: order.ID, Model: order.Model, ChannelID: order.ChannelID, Scene: order.Scene, Note: "图片按实际输入张数及逐张输出像素结算"}).Error; err != nil {
+	if err := tx.Create(&model.CreditLedgerEntry{ID: newRepositoryID(), UserID: order.UserID, Type: model.CreditLedgerConsume, AmountMicrocredits: -actual, ReservedDeltaMicrocredits: -settlement.OrderReserved.General, AvailableAfterMicrocredits: account.AvailableMicrocredits, ReservedAfterMicrocredits: account.ReservedMicrocredits, BillingOrderID: order.ID, Model: order.Model, ChannelID: order.ChannelID, Scene: order.Scene, Note: "图片按实际输入张数及逐张输出像素结算"}).Error; err != nil {
 		return err
 	}
 	if refund > 0 {
-		return tx.Create(&model.CreditLedgerEntry{ID: newRepositoryID(), UserID: order.UserID, Type: model.CreditLedgerRefund, AmountMicrocredits: refund, AvailableDeltaMicrocredits: refund, AvailableAfterMicrocredits: account.AvailableMicrocredits, ReservedAfterMicrocredits: account.ReservedMicrocredits, BillingOrderID: order.ID, Model: order.Model, ChannelID: order.ChannelID, Scene: order.Scene, Note: "图片实际费用低于预留，差额退回"}).Error
+		return tx.Create(&model.CreditLedgerEntry{ID: newRepositoryID(), UserID: order.UserID, Type: model.CreditLedgerRefund, AmountMicrocredits: refund, AvailableDeltaMicrocredits: settlement.Refund.General, AvailableAfterMicrocredits: account.AvailableMicrocredits, ReservedAfterMicrocredits: account.ReservedMicrocredits, BillingOrderID: order.ID, Model: order.Model, ChannelID: order.ChannelID, Scene: order.Scene, Note: "图片实际费用低于预留，差额退回"}).Error
 	}
 	return nil
 }
