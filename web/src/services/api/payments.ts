@@ -26,9 +26,11 @@ export type PaymentMethod = {
 export type TopupSaleStrategy = "unlimited" | "periodic" | "inventory" | "timed";
 
 /** credits 发放积分；storage 扩容账号文件容量，storageDurationDays 为 0 表示永久。 */
-export type TopupProductKind = "credits" | "storage";
+export type TopupProductKind = "credits" | "storage" | "membership";
 
 export type TopupProduct = {
+    membershipGroup?: string;
+    membershipDays?: number;
     id: string;
     name: string;
     description?: string;
@@ -59,6 +61,10 @@ export type TopupProduct = {
 export type PaymentOrderStatus = "created" | "pending" | "closing" | "closed" | "credited" | "create_failed";
 
 export type PaymentOrder = {
+    membershipGroup?: string;
+    membershipDays?: number;
+    membershipStartsAt?: string;
+    membershipEndsAt?: string;
     id: string;
     userId?: string;
     merchantOrderNo: string;
@@ -124,7 +130,7 @@ export function listTopupProducts() {
     return http.get<{ products: TopupProduct[] }>("/payments/products");
 }
 
-export function createPaymentOrder(input: { productId: string; providerId: string; method?: string; idempotencyKey: string }) {
+export function createPaymentOrder(input: { productId: string; providerId: string; method?: string; idempotencyKey: string; membershipVersion?: string }) {
     return http.post<{ order: PaymentOrder }>("/payments/orders", input);
 }
 
