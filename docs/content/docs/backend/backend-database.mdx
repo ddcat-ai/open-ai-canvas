@@ -5,6 +5,12 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 浏览器 Agent（Yingce migration 5）
+
+新增 `client_failures`，联合主键 `(user_id,event_id)`，保存 run_id、step_id、固定 code/phase、build_commit、http_status、epoch、occurred_at、created_at、frames_json。按 user_id/run_id/code/created_at 查询，事件正文仅允许受限元数据。每用户最多 2000 条，保留 14 天，启动与每小时清理。请求重传仅确认相同内容的已存事件。
+
+浏览器控制信息使用现有 `cloud_agent_executions.state_json.browser`，包含 owner、epoch、leaseUntil、sequence、finalAnswer、pending；执行模式在 request.executionMode 冻结。模型任务、工具游标、步骤确认与检查点继续使用既有 Revision CAS、事件及回执，无独立浏览器工作流表。服务端 Worker 与 browser 会话可同时存在。
+
 ## 兑换码单账号限兑与能力池（Schema 111）
 
 版本 111 `redeem_batch_limits_and_capability_pools` 为 `redeem_batches` 增加非空布尔列 `one_per_user`（默认 `false`）和 `allowed_capability`（默认 `''` 无限制，可选 `'image'` / `'video'`），为 `redeem_codes` 增加复合索引 `idx_redeem_codes_batch_status_user`（`batch_id`、`status`、`redeemed_by`）。开启单账号限兑后同一用户在同一批次下仅能成功核销 1 个兑换码；历史批次默认保持不限次数。

@@ -117,6 +117,7 @@ type cloudAgentApproval struct {
 }
 
 type cloudAgentRuntime struct {
+	Browser        *browserAgentRuntime     `json:"browser,omitempty"`
 	RuntimeRunID   string                   `json:"-"`
 	Request        CloudAgentRequest        `json:"request"`
 	Policy         cloudAgentPolicySnapshot `json:"policy"`

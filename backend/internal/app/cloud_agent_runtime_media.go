@@ -135,7 +135,7 @@ func (s *Service) enqueueCloudAgentTask(run *model.CloudAgentExecution, state *c
 	}
 	s.storageMu.Lock()
 	defer s.storageMu.Unlock()
-	err = s.repo.MutateCloudAgent(run.UserID, run.ID, run.Revision, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
+	err = s.mutatePreparedCloudAgent(run, state, func(current *model.CloudAgentExecution, repo *repository.Repository) error {
 		if media != nil {
 			canvas, err := repo.CanvasProjectForUser(run.UserID, state.Request.CanvasID)
 			if err != nil {
@@ -191,6 +191,9 @@ func (s *Service) enqueueCloudAgentTask(run *model.CloudAgentExecution, state *c
 			state.event(run.ID, "generation_task_created", map[string]any{"toolName": toolName, "taskId": task.ID, "nodeId": media.Args.NodeID, "title": media.Args.Title, "mode": media.Args.Mode, "canvasId": state.Request.CanvasID, "referenceNodeIds": media.Args.ReferenceNodeIDs, "text": "媒体节点与引用连线已创建，生成任务已提交"})
 		} else {
 			state.ActiveTaskID = task.ID
+			if state.Request.ExecutionMode == "browser" && state.Browser != nil && state.Browser.Pending != nil && req.Operation == cloudAgentStepOperation {
+				state.Browser.Pending.Attempts++
+			}
 			// 压缩调用不是本轮的一步：压完还要用压缩后的上下文继续步进，步数不该被它占掉。
 			if state.ContextCompaction != nil && req.Operation == cloudAgentContextCompactionOperation {
 				state.ContextCompaction.Status = "running"

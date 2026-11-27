@@ -5,6 +5,13 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 浏览器 Agent 执行与失败上报
+
+- 后台开关：`internal/platform/runtime_policy.go`、`pages/admin/settings/runtime-policy-settings-page.tsx`；能力与创建：`internal/handler/agent.go`、`internal/app/cloud_agent.go`、`services/api/agent.ts`。
+- 执行协议与恢复：`internal/app/browser_agent.go`、`internal/handler/browser_agent.go`、`internal/app/cloud_agent_pi_coordinator.go`；现有模型、工具和压缩执行器保留。
+- 浏览器：`services/agent/browser-agent.worker.ts`、`browser-agent-loop.ts`、`browser-agent-host.ts`，由 `components/layout/client-root-init.tsx` 管理登录生命周期。
+- 日志：`services/diagnostics/browser-agent-failures.ts` 与 `browser-agent-failure-queue.ts`；后端 `internal/app/client_failure.go`、`internal/repository/client_failure.go`、`internal/model/client_failure.go`，Yingce migration 5 建表。
+
 ## 团队空间
 
 - `web/src/router.tsx` 为个人和团队挂载相同的 `pages/canvas`、`pages/create`、`pages/assets`；`lib/workspace-routes.ts` 选择 API 前缀，`lib/user-scope.ts` 隔离本地缓存。`pages/teams` 只负责空间、成员、邀请和钱包。

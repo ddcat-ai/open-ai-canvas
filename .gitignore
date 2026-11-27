@@ -47,6 +47,7 @@ docs/content/docs/canvas/*
 docs/content/docs/overview/*
 !docs/content/docs/overview/creative-agent-design.mdx
 !docs/content/docs/overview/ecommerce-platform-rules.mdx
+!docs/content/docs/overview/browser-agent-deployment.mdx
 # Screenshots in the channel configuration guide use isolated sample data.
 !docs/public/
 docs/public/*

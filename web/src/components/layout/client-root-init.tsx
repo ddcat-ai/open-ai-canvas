@@ -10,11 +10,14 @@ import { fetchPluginRuntimeState, setUserPluginEnabled } from "@/services/api/pl
 import { usePluginStore } from "@/stores/use-plugin-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { appQueryClient } from "@/lib/query-client";
+import { startBrowserAgentHost } from "@/services/agent/browser-agent-host";
+import { startBrowserAgentFailureUpload } from "@/services/diagnostics/browser-agent-failures";
 
 export function ClientRootInit({ children }: { children: ReactNode }) {
     const { t } = useTranslation();
     const config = useConfigStore((state) => state.config);
     const userId = useUserStore((state) => state.user?.id || "");
+    const userHydrated = useUserStore((state) => state.hydrated);
     const { message } = App.useApp();
     const handledConfigParams = useRef(false);
     const updateConfig = useConfigStore((state) => state.updateConfig);
@@ -22,15 +25,19 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
     const setPluginStates = usePluginStore((state) => state.setPluginStates);
     const pluginStoreHydrated = usePluginStore((state) => state.hydrated);
 
-    useEffect(() => () => {
-        usePluginStore.getState().setRuntimeStatuses({});
-        usePluginStore.getState().setPluginStates({});
-    }, []);
+    useEffect(
+        () => () => {
+            usePluginStore.getState().setRuntimeStatuses({});
+            usePluginStore.getState().setPluginStates({});
+        },
+        [],
+    );
 
     useEffect(() => {
         if (!userId || !pluginStoreHydrated) return;
         let cancelled = false;
-        void appQueryClient.fetchQuery({ queryKey: ["plugin-runtime", userId], queryFn: fetchPluginRuntimeState, staleTime: 30_000 })
+        void appQueryClient
+            .fetchQuery({ queryKey: ["plugin-runtime", userId], queryFn: fetchPluginRuntimeState, staleTime: 30_000 })
             .then(async (runtime) => {
                 if (cancelled || useUserStore.getState().user?.id !== userId) return;
                 const statuses = { ...runtime.statuses };
@@ -71,6 +78,16 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
     useEffect(() => {
         setDiagnosticUserScope(userId);
     }, [userId]);
+
+    useEffect(() => {
+        if (!userId || !userHydrated) return;
+        const stopUpload = startBrowserAgentFailureUpload();
+        const stopHost = startBrowserAgentHost();
+        return () => {
+            stopHost();
+            stopUpload();
+        };
+    }, [userId, userHydrated]);
 
     useEffect(() => {
         const interactiveSelector = 'button, [role="button"], a, [class*="card"], [class*="Card"]';

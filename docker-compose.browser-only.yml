@@ -1,0 +1,10 @@
+# 与 docker-compose.deploy.yml 叠加；保留 Go 任务 Worker，停用 Node Agent 服务。
+services:
+  yingce-agent:
+    profiles: [server-agent]
+  backend:
+    environment:
+      CANVAS_AGENT_BROWSER_ONLY: "true"
+      YINGCE_AGENT_URL: ""
+    depends_on:
+      yingce-agent: !reset null

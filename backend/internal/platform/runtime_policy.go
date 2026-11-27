@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 	"yingce/backend/internal/kernel"
@@ -80,15 +81,16 @@ type RuntimeStoragePolicy struct {
 }
 
 type RuntimeTaskPolicy struct {
-	WorkerConcurrency        int `json:"workerConcurrency"`
-	ChannelConcurrency       int `json:"channelConcurrency"`
-	ActiveTaskLimit          int `json:"activeTaskLimit"`
-	ImageTimeoutMinutes      int `json:"imageTimeoutMinutes"`
-	TextTimeoutMinutes       int `json:"textTimeoutMinutes"`
-	AudioTimeoutMinutes      int `json:"audioTimeoutMinutes"`
-	VideoTimeoutMinutes      int `json:"videoTimeoutMinutes"`
-	StoryboardTimeoutMinutes int `json:"storyboardTimeoutMinutes"`
-	DefaultTimeoutMinutes    int `json:"defaultTimeoutMinutes"`
+	BrowserAgentEnabled      bool `json:"browserAgentEnabled"`
+	WorkerConcurrency        int  `json:"workerConcurrency"`
+	ChannelConcurrency       int  `json:"channelConcurrency"`
+	ActiveTaskLimit          int  `json:"activeTaskLimit"`
+	ImageTimeoutMinutes      int  `json:"imageTimeoutMinutes"`
+	TextTimeoutMinutes       int  `json:"textTimeoutMinutes"`
+	AudioTimeoutMinutes      int  `json:"audioTimeoutMinutes"`
+	VideoTimeoutMinutes      int  `json:"videoTimeoutMinutes"`
+	StoryboardTimeoutMinutes int  `json:"storyboardTimeoutMinutes"`
+	DefaultTimeoutMinutes    int  `json:"defaultTimeoutMinutes"`
 	// AgentStepMaxOutputTokens 是画布 Agent 单步模型调用的输出上限（思考 + 正文 + 工具调用参数）。
 	// 0 表示不限制输出，此时单步最坏耗时只由 AgentStepTimeoutSeconds 兜底。
 	AgentStepMaxOutputTokens int `json:"agentStepMaxOutputTokens"`
@@ -131,10 +133,11 @@ type RuntimePolicySetting struct {
 
 type PublicRuntimePolicySetting struct {
 	RuntimePolicySetting
-	Configured bool      `json:"configured"`
-	UpdatedBy  string    `json:"updatedBy"`
-	CreatedAt  time.Time `json:"createdAt"`
-	UpdatedAt  time.Time `json:"updatedAt"`
+	BrowserAgentOnly bool      `json:"browserAgentOnly"`
+	Configured       bool      `json:"configured"`
+	UpdatedBy        string    `json:"updatedBy"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
 }
 
 type PublicRuntimeLimits struct {
@@ -144,11 +147,22 @@ type PublicRuntimeLimits struct {
 	RecycleBinRetentionDays int   `json:"recycleBinRetentionDays"`
 }
 
+// BrowserAgentOnly is a deployment constraint, independent of saved admin policy.
+func BrowserAgentOnly() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("CANVAS_AGENT_BROWSER_ONLY")), "true")
+}
+
 // DefaultRuntimePolicy returns the effective baseline policy, including
-// deployment-level environment overrides. It is exported so composition-root
-// compatibility code and domain tests do not need to reach into platform's
-// private implementation.
+// deployment-level environment overrides.
 func DefaultRuntimePolicy() RuntimePolicySetting {
+	value := defaultRuntimePolicy()
+	if BrowserAgentOnly() {
+		value.Task.BrowserAgentEnabled = true
+	}
+	return value
+}
+
+func defaultRuntimePolicy() RuntimePolicySetting {
 	return RuntimePolicySetting{
 		Resource: RuntimeResourcePolicy{
 			AgentHistoryQuota:       model.AgentHistoryQuota{AgentHistoryMB: model.DefaultAgentHistoryMB, AgentHistoryGlobalMB: model.DefaultAgentHistoryGlobalMB},
@@ -172,6 +186,7 @@ func DefaultRuntimePolicy() RuntimePolicySetting {
 			ErrorBodyKB:                 1,
 		},
 		Task: RuntimeTaskPolicy{
+			BrowserAgentEnabled:      strings.EqualFold(strings.TrimSpace(os.Getenv("CANVAS_BROWSER_AGENT_ENABLED")), "true"),
 			WorkerConcurrency:        defaultWorkerConcurrencyLimit(),
 			ChannelConcurrency:       defaultChannelConcurrencyLimit(),
 			ActiveTaskLimit:          5,
@@ -221,7 +236,8 @@ func selfUseRuntimePolicy() RuntimePolicySetting {
 		RecycleBinRetentionDays: 0,
 	}
 	value.Task = RuntimeTaskPolicy{
-		WorkerConcurrency: maxRuntimeConcurrency, ChannelConcurrency: maxRuntimeConcurrency, ActiveTaskLimit: maxRuntimeConcurrency,
+		BrowserAgentEnabled: value.Task.BrowserAgentEnabled,
+		WorkerConcurrency:   maxRuntimeConcurrency, ChannelConcurrency: maxRuntimeConcurrency, ActiveTaskLimit: maxRuntimeConcurrency,
 		ImageTimeoutMinutes: maxRuntimeTimeoutMinutes, TextTimeoutMinutes: maxRuntimeTimeoutMinutes,
 		AudioTimeoutMinutes: maxRuntimeTimeoutMinutes, VideoTimeoutMinutes: maxRuntimeTimeoutMinutes,
 		StoryboardTimeoutMinutes: maxRuntimeTimeoutMinutes, DefaultTimeoutMinutes: maxRuntimeTimeoutMinutes,
@@ -309,12 +325,19 @@ func (s *Service) UpdateRuntimePolicySetting(actor *model.User, value RuntimePol
 	if err := s.requireAdmin(actor); err != nil {
 		return nil, err
 	}
+	if BrowserAgentOnly() && !value.Task.BrowserAgentEnabled {
+		return nil, kernel.NewAppError(409, "当前部署仅使用浏览器 Worker，不能关闭浏览器 Agent")
+	}
 	if err := validateRuntimePolicy(value); err != nil {
 		return nil, err
 	}
-	current, before, err := s.readRuntimePolicy()
+	current, before, err := s.readStoredRuntimePolicy()
 	if err != nil {
 		return nil, err
+	}
+	// The locked deployment switch must not overwrite the coexistence preference.
+	if BrowserAgentOnly() {
+		value.Task.BrowserAgentEnabled = before.Task.BrowserAgentEnabled
 	}
 	encoded, err := json.Marshal(value)
 	if err != nil {
@@ -362,15 +385,23 @@ func (s *Service) ResetRuntimePolicySetting(actor *model.User) (*PublicRuntimePo
 }
 
 func (s *Service) readRuntimePolicy() (*model.SystemSetting, RuntimePolicySetting, error) {
+	setting, value, err := s.readStoredRuntimePolicy()
+	if BrowserAgentOnly() {
+		value.Task.BrowserAgentEnabled = true
+	}
+	return setting, value, err
+}
+
+func (s *Service) readStoredRuntimePolicy() (*model.SystemSetting, RuntimePolicySetting, error) {
 	setting, err := s.repo.SystemSettingOptional(runtimePolicySettingKey)
 	if err != nil {
 		return nil, RuntimePolicySetting{}, err
 	}
 	if setting == nil {
-		value := DefaultRuntimePolicy()
+		value := defaultRuntimePolicy()
 		return nil, value, validateRuntimePolicy(value)
 	}
-	value := DefaultRuntimePolicy()
+	value := defaultRuntimePolicy()
 	value.Resource.AgentHistoryGlobalMB = 0
 	if strings.TrimSpace(setting.ValueJSON) == "" || json.Unmarshal([]byte(setting.ValueJSON), &value) != nil {
 		return nil, RuntimePolicySetting{}, errors.New("资源与请求策略配置格式无效")
@@ -512,7 +543,10 @@ func validateRuntimePolicy(value RuntimePolicySetting) error {
 func ValidateRuntimePolicy(value RuntimePolicySetting) error { return validateRuntimePolicy(value) }
 
 func publicRuntimePolicy(setting *model.SystemSetting, value RuntimePolicySetting) *PublicRuntimePolicySetting {
-	result := &PublicRuntimePolicySetting{RuntimePolicySetting: value, Configured: setting != nil}
+	if BrowserAgentOnly() {
+		value.Task.BrowserAgentEnabled = true
+	}
+	result := &PublicRuntimePolicySetting{RuntimePolicySetting: value, Configured: setting != nil, BrowserAgentOnly: BrowserAgentOnly()}
 	if setting != nil {
 		result.UpdatedBy = setting.UpdatedBy
 		result.CreatedAt = setting.CreatedAt

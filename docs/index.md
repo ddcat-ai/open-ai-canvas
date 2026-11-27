@@ -7,10 +7,13 @@
 用户要求部署服务器时，默认使用官方 Release 镜像、`docker-compose.deploy.yml` 和 Host Updater。本地 SQLite 构建与自定义 Compose 不属于后台在线更新管理范围。
 
 - [Docker 部署](content/docs/overview/docker.mdx)：默认服务器方案、Compose 选择与已有部署核对。
+- [仅浏览器 Agent 部署](content/docs/overview/browser-agent-deployment.mdx)：停用 Node Agent 容器、受管安装与更新、浏览器运行边界。
 - [在线更新与安全回退](content/docs/backend/system-update.mdx)：受管部署条件、安装、备份、迁移和回退。
 - [本地开发](content/docs/backend/local-development.mdx)：宿主机与热更新开发环境。
 
 ## 设计沉淀
+
+- [Agent 浏览器 Worker 与服务端共存](design/browser-agent-worker.md)：默认关闭的环境变量与后台开关、单步授权、断线续跑和失败日志自动上报；已实现并进行本地联调。
 
 - [短剧拆镜与段间连续性调研](design/short-drama-shot-continuity-research.md)：对照制作台、同类产品和公开 Skill，区分同镜续拍、同场换镜与换场，附真实样片回查方法（调研建议，未实施）。
 

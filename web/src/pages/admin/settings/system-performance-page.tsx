@@ -229,10 +229,10 @@ export default function SystemPerformancePage() {
                     }}>保存上限</Button></span></>}>
                         <FactGrid>
                             <Fact label="服务" value={agent.name} />
-                            <Fact label="运行位置" value={agent.mode === "remote" ? "独立服务" : "后端进程"} />
+                            <Fact label="运行位置" value={agent.mode === "browser" ? "浏览器 Worker" : agent.mode === "remote" ? "独立服务" : "后端进程"} />
                             <Fact label="地址" value={agent.endpoint} mono />
-                            <Fact label="进行中 / 上限" value={`${formatNumber(agent.active)} / ${formatNumber(agent.limit)}`} />
-                            <Fact label="排队" value={formatNumber(agent.queued)} />
+                            {agent.mode !== "browser" && <Fact label="进行中 / 上限" value={`${formatNumber(agent.active)} / ${formatNumber(agent.limit)}`} />}
+                            {agent.mode !== "browser" && <Fact label="排队" value={formatNumber(agent.queued)} />}
                             <Fact label="已保存上限" value={formatNumber(agent.configuredLimit)} />
                             <Fact label="说明" value={agent.statusMessage || "同一台机器提高上限即可，不需要再启动容器。"} />
                         </FactGrid>

@@ -5,6 +5,14 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 浏览器 Agent 与客户端失败日志
+
+`GET /agent/capabilities` 增加 `browserAgentEnabled`。`POST /agent/runs` 与续轮请求支持 `executionMode: server|browser`，省略保留服务端路径。浏览器模式默认关闭，可由 `CANVAS_BROWSER_AGENT_ENABLED=true` 或后台「资源与策略 → 画布 Agent」开启；后台保存值优先。关闭时新 browser 请求返回 409 `browser_agent_disabled`，在途会话继续按原模式恢复。
+
+新增本人会话发现 `GET /agent/browser-runs`、状态 `GET /agent/runs/:id/runtime/state`、执行权 `POST .../runtime/claim`、续租 `POST .../runtime/heartbeat`、单步 `POST .../runtime/step`。写请求包含 `protocolVersion:1`、owner、epoch；step 必须带服务端 nextAction 返回的 stepId。所有执行事实、工具参数与模型历史仍由后端校验，旧步骤重传不创建下一步。连接状态独立于审批、待输入等业务状态。
+
+`POST /agent/client-failures` 接受 `{events:[...]}`，仅允许固定错误码、阶段、时间、构建、HTTP 状态和 run/step/epoch；不得传原始错误、提示词、URL 或密钥。每批最多 20 条、64 KiB，返回 `{acceptedEventIds:[...]}`，客户端仅删除已确认事件。启动错误可不带 runId。本人查询 `GET /agent/client-failures?runId=...`，管理员查询 `GET /admin/agent/client-failures?userId=...&runId=...`，均最多 200 条、最近 14 天。字段合同见 OpenAPI。
+
 ## 团队空间
 
 以下接口均在 `/api` 下，使用登录 Cookie。`teamId`、`membershipId`、素材 ID 只用于定位；操作权限由服务端根据当前账号及其有效成员关系决定。成员不能访问其他团队或冒用所有者，待处理邀请不授予读取权限。
@@ -790,7 +798,7 @@ operations 的结构化配额在提交事务内实时统计账号的素材/画�
 
 ## 云端 Agent
 
-所有 `/agent` 路径都需要登录 Cookie。`GET /agent/capabilities` 返回当前版本（2）、权限模式、上下文范围、技能和工具清单；跨轮历史仍按可恢复事实和发送预算整理，不把某个固定字节数当作模型窗口。Agent 运行由服务端任务 Worker 驱动，浏览器断开不会停止运行。
+所有 `/agent` 路径都需要登录 Cookie。`GET /agent/capabilities` 返回当前版本（2）、权限模式、上下文范围、技能和工具清单，以及 `browserAgentEnabled`、`browserAgentOnly`。跨轮历史仍按可恢复事实和发送预算整理，不把某个固定字节数当作模型窗口。服务端模式由后台驱动，浏览器断开不会停止；浏览器模式关闭所有页面后暂停后续编排，已接受步骤与生成任务仍继续执行。仅浏览器部署强制启用浏览器模式，对 `executionMode: server` 或省略模式的创建及续轮请求返回 409、`reason: server_agent_disabled`；不会启动远程或嵌入式 Node。管理端资源与策略响应的顶层 `browserAgentOnly` 表示部署锁定，关闭 `task.browserAgentEnabled` 的写请求在该模式下被拒绝。
 
 文本模型能力合同包含 `contextWindowTokens`（输入加输出的总上下文窗口）和 `maxOutputTokens`（输出/推理上限）。Agent 每轮根据实际执行的渠道模型计算输入预算，并预留工具 schema、协议包装和恢复空间；逻辑模型按候选文本线路取安全交集，旧配置或能力解析失败回退 128K / 16K。1M 模型可通过后台能力配置使用更大输入预算。前后端的 Token 估算用于提前压缩和拒绝病态请求，最终仍以上游 tokenizer 和响应为准。运行 checkpoint 的 512KB 持久化上限只约束恢复状态，不限制模型上下文窗口。
 

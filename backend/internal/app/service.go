@@ -219,6 +219,20 @@ func (s *Service) StartWorker() {
 	s.startInspirationFeedWorker()
 	s.startConsumptionReportWorker()
 	s.startFeishuFeedbackWorker()
+	s.runWorkerLoop(func(ctx context.Context) {
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for {
+			if err := s.repo.PurgeClientFailures(time.Now().Add(-14 * 24 * time.Hour)); err != nil {
+				slog.Warn("client failure retention cleanup failed", "error", err)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	})
 	go s.syncAgentSessionLimit()
 	s.runWorkerLoop(func(ctx context.Context) {
 		ticker := time.NewTicker(3 * time.Second)

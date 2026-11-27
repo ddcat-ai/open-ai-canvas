@@ -2,11 +2,13 @@ package app
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 
 	agentruntime "yingce/backend/internal/agent/runtime"
 	"yingce/backend/internal/agent/yingceagent"
+	"yingce/backend/internal/platform"
 )
 
 // These aliases keep the app coordinator's request shape stable while the
@@ -33,6 +35,9 @@ type cloudAgentPiProcessRequest struct {
 }
 
 func runCloudAgentPi(ctx context.Context, request cloudAgentPiProcessRequest, bridge cloudAgentPiBridge) error {
+	if platform.BrowserAgentOnly() {
+		return errors.New("当前部署仅支持浏览器 Worker，服务端 Agent 已停用")
+	}
 	runtimeRequest := agentruntime.ProcessRequest{
 		BridgeURL: request.BridgeURL, BridgeToken: request.BridgeToken,
 		SessionJSONL: request.SessionJSONL,

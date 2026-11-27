@@ -16,7 +16,8 @@ func TestSplitOfficialMigrationLedger(t *testing.T) {
 				t.Fatal(err)
 			}
 			var custom []yingceSchemaMigration
-			if err = db.Order("version").Find(&custom).Error; err != nil {
+			// Only these four migrations ever used the legacy upstream ledger.
+			if err = db.Where("version <= ?", 4).Order("version").Find(&custom).Error; err != nil {
 				t.Fatal(err)
 			}
 			if err = db.Exec("DELETE FROM schema_migrations WHERE version >= 78").Error; err != nil {
@@ -51,7 +52,7 @@ func TestSplitOfficialMigrationLedger(t *testing.T) {
 				t.Fatal(err)
 			}
 			status, err := ReadSchemaStatus(db)
-			if err != nil || !status.Ready || status.Current != CurrentSchemaVersion || status.YingceCurrent != 4 || status.YingceExpected != 4 {
+			if err != nil || !status.Ready || status.Current != CurrentSchemaVersion || status.YingceCurrent != int64(len(yingceSchemaMigrations)) || status.YingceExpected != int64(len(yingceSchemaMigrations)) {
 				t.Fatalf("bad status: %#v %v", status, err)
 			}
 			var row schemaMigration
@@ -60,11 +61,14 @@ func TestSplitOfficialMigrationLedger(t *testing.T) {
 			}
 			var count int64
 			db.Model(&yingceSchemaMigration{}).Count(&count)
-			if count != 4 {
+			if count != int64(len(yingceSchemaMigrations)) {
 				t.Fatalf("custom records: %d", count)
 			}
 			if err = MigrateSchema(db); err != nil {
 				t.Fatalf("migration not idempotent: %v", err)
+			}
+			if !db.Migrator().HasTable("client_failures") {
+				t.Fatal("client failure migration missing")
 			}
 			if err = db.Exec("DELETE FROM yingce_schema_migrations WHERE version = 4").Error; err != nil {
 				t.Fatal(err)

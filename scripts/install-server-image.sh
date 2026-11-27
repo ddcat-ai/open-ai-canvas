@@ -13,6 +13,19 @@ CANVAS_WEB_IMAGE=""
 COMPOSE_FILE="docker-compose.deploy.yml"
 COMPOSE_URL="${COMPOSE_URL:-https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/${REPOSITORY_REF}/${COMPOSE_FILE}}"
 UPDATER_INSTALL_URL="${UPDATER_INSTALL_URL:-https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/${REPOSITORY_REF}/scripts/install-host-updater.sh}"
+REQUESTED_BROWSER_ONLY="${CANVAS_AGENT_BROWSER_ONLY:-}"
+BROWSER_COMPOSE_FILE="docker-compose.browser-only.yml"
+BROWSER_COMPOSE_URL="${BROWSER_COMPOSE_URL:-https://raw.githubusercontent.com/ddcat-ai/open-ai-canvas/${REPOSITORY_REF}/${BROWSER_COMPOSE_FILE}}"
+
+compose() {
+    local files=(-f "$COMPOSE_FILE")
+    if [[ "$CANVAS_AGENT_BROWSER_ONLY" == "true" ]]; then
+        files+=(-f "$BROWSER_COMPOSE_FILE")
+        COMPOSE_PROFILES= docker compose --env-file .env "${files[@]}" "$@"
+    else
+        docker compose --env-file .env "${files[@]}" "$@"
+    fi
+}
 
 step() {
     printf '\n==> %s\n' "$1"
@@ -126,6 +139,7 @@ prepare_environment() {
         if ! grep -Eq '^YINGCE_AGENT_TOKEN=.{32,}$' .env; then
             set_env_value .env YINGCE_AGENT_TOKEN "$(openssl rand -hex 32)"
         fi
+        configure_browser_mode
         return
     fi
 
@@ -155,6 +169,15 @@ CANVAS_ALLOW_PRIVATE_UPSTREAMS=false
 CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS=
 CANVAS_CORS_ORIGINS=
 EOF
+    configure_browser_mode
+}
+
+configure_browser_mode() {
+    local configured
+    configured="$(sed -n 's/^CANVAS_AGENT_BROWSER_ONLY=//p' .env | tail -n 1)"
+    CANVAS_AGENT_BROWSER_ONLY="${REQUESTED_BROWSER_ONLY:-${configured:-false}}"
+    [[ "$CANVAS_AGENT_BROWSER_ONLY" == "true" || "$CANVAS_AGENT_BROWSER_ONLY" == "false" ]] || fail "CANVAS_AGENT_BROWSER_ONLY 必须为 true 或 false"
+    set_env_value .env CANVAS_AGENT_BROWSER_ONLY "$CANVAS_AGENT_BROWSER_ONLY"
 }
 
 set_env_value() {
@@ -179,6 +202,11 @@ download_compose() {
     temporary_file="$(mktemp "${INSTALL_DIR}/.docker-compose.deploy.XXXXXX")"
     curl -fsSL "$COMPOSE_URL" -o "$temporary_file"
     mv "$temporary_file" "$COMPOSE_FILE"
+    if [[ "$CANVAS_AGENT_BROWSER_ONLY" == "true" ]]; then
+        temporary_file="$(mktemp "${INSTALL_DIR}/.docker-compose.browser-only.XXXXXX")"
+        curl -fsSL "$BROWSER_COMPOSE_URL" -o "$temporary_file"
+        mv "$temporary_file" "$BROWSER_COMPOSE_FILE"
+    fi
 }
 
 install_host_updater() {
@@ -190,25 +218,30 @@ install_host_updater() {
     rm -f "$installer"
 
     step "重建 backend 以启用在线更新"
-    docker compose --env-file .env -f "$COMPOSE_FILE" up -d --no-deps --force-recreate --wait --wait-timeout 600 backend
+    compose up -d --no-deps --force-recreate --wait --wait-timeout 600 backend
 }
 
 start_services() {
     step "拉取并启动 GHCR 网页与后端镜像"
-    if ! docker compose --env-file .env -f "$COMPOSE_FILE" pull; then
+    if ! compose pull; then
         fail "GHCR 镜像拉取失败；如果容器包尚未公开，请通过 GHCR_USERNAME 和 GHCR_TOKEN 登录后重试"
     fi
     local backend_digest web_digest agent_digest
     backend_digest="$(docker image inspect "$CANVAS_BACKEND_IMAGE" --format '{{range .RepoDigests}}{{println .}}{{end}}' | awk -v repository="${IMAGE_REPOSITORY}-backend" '$0 ~ "^" repository "@sha256:" { print; exit }')"
     web_digest="$(docker image inspect "$CANVAS_WEB_IMAGE" --format '{{range .RepoDigests}}{{println .}}{{end}}' | awk -v repository="${IMAGE_REPOSITORY}-web" '$0 ~ "^" repository "@sha256:" { print; exit }')"
-    agent_digest="$(docker image inspect "$CANVAS_YINGCE_AGENT_IMAGE" --format '{{range .RepoDigests}}{{println .}}{{end}}' | awk -v repository="${IMAGE_REPOSITORY}-yingce-agent" '$0 ~ "^" repository "@sha256:" { print; exit }')"
     [[ "$backend_digest" =~ ^${IMAGE_REPOSITORY//\//\/}-backend@sha256:[a-f0-9]{64}$ ]] || fail "后端镜像未返回可验证的仓库 digest"
     [[ "$web_digest" =~ ^${IMAGE_REPOSITORY//\//\/}-web@sha256:[a-f0-9]{64}$ ]] || fail "Web 镜像未返回可验证的仓库 digest"
-    [[ "$agent_digest" =~ ^${IMAGE_REPOSITORY//\//\/}-yingce-agent@sha256:[a-f0-9]{64}$ ]] || fail "Agent 镜像未返回可验证的仓库 digest"
     set_env_value .env CANVAS_BACKEND_IMAGE "$backend_digest"
     set_env_value .env CANVAS_WEB_IMAGE "$web_digest"
-    set_env_value .env CANVAS_YINGCE_AGENT_IMAGE "$agent_digest"
-    docker compose --env-file .env -f "$COMPOSE_FILE" up -d --remove-orphans --wait --wait-timeout 600
+    if [[ "$CANVAS_AGENT_BROWSER_ONLY" != "true" ]]; then
+        agent_digest="$(docker image inspect "$CANVAS_YINGCE_AGENT_IMAGE" --format '{{range .RepoDigests}}{{println .}}{{end}}' | awk -v repository="${IMAGE_REPOSITORY}-yingce-agent" '$0 ~ "^" repository "@sha256:" { print; exit }')"
+        [[ "$agent_digest" =~ ^${IMAGE_REPOSITORY//\//\/}-yingce-agent@sha256:[a-f0-9]{64}$ ]] || fail "Agent 镜像未返回可验证的仓库 digest"
+        set_env_value .env CANVAS_YINGCE_AGENT_IMAGE "$agent_digest"
+    else
+        # 切换已有部署时，profile 外的旧容器不会由 up 自动停掉。
+        docker compose --env-file .env -f "$COMPOSE_FILE" rm --stop --force yingce-agent
+    fi
+    compose up -d --remove-orphans --wait --wait-timeout 600
 }
 
 print_result() {
@@ -219,7 +252,12 @@ print_result() {
     printf '\n部署完成。\n'
     printf '访问地址：http://%s:%s\n' "$local_ip" "$CANVAS_HTTP_PORT"
     printf '安装目录：%s\n' "$INSTALL_DIR"
-    printf '查看状态：cd %q && docker compose --env-file .env -f %s ps\n' "$INSTALL_DIR" "$COMPOSE_FILE"
+    if [[ "$CANVAS_AGENT_BROWSER_ONLY" == "true" ]]; then
+        printf '运行模式：仅浏览器 Worker（保留 Go 后端任务执行）。\n'
+        printf '查看状态：cd %q && docker compose --env-file .env -f %s -f %s ps\n' "$INSTALL_DIR" "$COMPOSE_FILE" "$BROWSER_COMPOSE_FILE"
+    else
+        printf '查看状态：cd %q && docker compose --env-file .env -f %s ps\n' "$INSTALL_DIR" "$COMPOSE_FILE"
+    fi
     printf '\n首次打开后注册的第一个账号会自动成为管理员。公网长期使用前请配置 HTTPS。\n'
 }
 

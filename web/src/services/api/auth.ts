@@ -440,6 +440,7 @@ export type RuntimeTaskPolicy = {
     agentStepTimeoutSeconds: number;
     /** 同时进行中的画布 Agent 轮次上限。审批等待不占用名额。 */
     agentMaxSessions: number;
+    browserAgentEnabled: boolean;
 };
 
 export type RuntimeRequestPolicy = {
@@ -465,6 +466,7 @@ export type RuntimeRequestPolicy = {
 };
 
 export type RuntimePolicySetting = {
+    browserAgentOnly: boolean;
     resource: RuntimeResourcePolicy;
     storage: RuntimeStoragePolicy;
     task: RuntimeTaskPolicy;

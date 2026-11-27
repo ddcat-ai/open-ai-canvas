@@ -21,6 +21,9 @@ func (s *Service) terminateStuckCloudAgent(run *model.CloudAgentExecution) bool 
 	if err != nil {
 		return false
 	}
+	if state.Request.ExecutionMode == "browser" {
+		return false
+	}
 	if s.cloudAgentHasLiveWork(run, &state) {
 		return false
 	}

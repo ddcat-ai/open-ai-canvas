@@ -2,12 +2,10 @@ package app
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"os"
 	"testing"
-	"time"
 
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
@@ -96,7 +94,8 @@ func newProjectNameConflictPostgresService(t *testing.T) (*Service, *gorm.DB) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = adminSQL.Close() })
-	schema := fmt.Sprintf("project_name_conflict_app_%d", time.Now().UnixNano())
+	// 并行子测试可能落在同一时钟粒度，随机标识避免临时 schema 相撞。
+	schema := "project_name_conflict_app_" + newID()
 	if err := admin.Exec("CREATE SCHEMA " + schema).Error; err != nil {
 		t.Fatal(err)
 	}

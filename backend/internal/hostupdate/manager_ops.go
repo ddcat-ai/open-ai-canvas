@@ -259,7 +259,6 @@ func (m *Manager) composeWithImages(composePath, imageTag string, images deploym
 		defer os.Remove(envFile)
 	}
 	args := []string{"compose", "--project-name", composeProjectName(m.config.InstallDir), "--env-file", envFile, "-f", composePath}
-	args = append(args, arguments...)
 	var stderr bytes.Buffer
 	if stdout == nil {
 		stdout = io.Discard
@@ -270,6 +269,22 @@ func (m *Manager) composeWithImages(composePath, imageTag string, images deploym
 	if err != nil {
 		return err
 	}
+	if strings.EqualFold(strings.TrimSpace(values["CANVAS_AGENT_BROWSER_ONLY"]), "true") {
+		overlay := filepath.Join(m.config.InstallDir, "docker-compose.browser-only.yml")
+		if _, err := os.Stat(overlay); err != nil {
+			return fmt.Errorf("读取仅浏览器 Worker 部署配置：%w", err)
+		}
+		args = append(args, "-f", overlay)
+		environment = append(environment, "CANVAS_AGENT_BROWSER_ONLY=true", "COMPOSE_PROFILES=")
+		filtered := make([]string, 0, len(arguments))
+		for _, argument := range arguments {
+			if argument != "yingce-agent" {
+				filtered = append(filtered, argument)
+			}
+		}
+		arguments = filtered
+	}
+	args = append(args, arguments...)
 	for _, key := range []string{"CANVAS_BACKEND_IMAGE", "CANVAS_WEB_IMAGE", "CANVAS_YINGCE_AGENT_IMAGE"} {
 		if value := values[key]; value != "" {
 			environment = append(environment, key+"="+value)
@@ -333,6 +348,13 @@ func (m *Manager) writeComposeEnvOverride(images deploymentImages) (string, erro
 
 func (m *Manager) verifyImages(images deploymentImages) (deploymentImages, error) {
 	refs := []string{images.backend, images.web, images.agent}
+	values, err := readEnvFile(m.envPath())
+	if err != nil {
+		return deploymentImages{}, err
+	}
+	if strings.EqualFold(strings.TrimSpace(values["CANVAS_AGENT_BROWSER_ONLY"]), "true") {
+		refs = refs[:2]
+	}
 	digests := make([]string, 0, len(refs))
 	for _, image := range refs {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -364,7 +386,11 @@ func (m *Manager) verifyImages(images deploymentImages) (deploymentImages, error
 		}
 		digests = append(digests, digest)
 	}
-	return deploymentImages{backend: digests[0], web: digests[1], agent: digests[2]}, nil
+	result := deploymentImages{backend: digests[0], web: digests[1], agent: images.agent}
+	if len(digests) > 2 {
+		result.agent = digests[2]
+	}
+	return result, nil
 }
 
 func setDeploymentImages(path, version string, images deploymentImages) error {

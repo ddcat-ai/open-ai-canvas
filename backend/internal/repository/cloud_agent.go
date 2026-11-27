@@ -398,12 +398,38 @@ func (r *Repository) RecentCloudAgentEventsForUser(userID string, runLimit int) 
 
 // Lock before reading: checkpoints, canvas writes and task reservations commit together.
 func (r *Repository) MutateCloudAgent(userID, id string, revision int64, fn func(*model.CloudAgentExecution, *Repository) error) error {
+	return r.mutateCloudAgent(userID, id, revision, nil, fn)
+}
+
+// MutateCloudAgentChecked validates a prepared snapshot against the current run
+// while holding the storage lock. The check must reject incompatible changes;
+// task reservations and checkpoint writes then share the same transaction.
+func (r *Repository) MutateCloudAgentChecked(userID, id string, check func(*model.CloudAgentExecution) error, fn func(*model.CloudAgentExecution, *Repository) error) error {
+	if check == nil {
+		return gorm.ErrInvalidData
+	}
+	return r.mutateCloudAgent(userID, id, 0, check, fn)
+}
+
+func (r *Repository) mutateCloudAgent(userID, id string, revision int64, check func(*model.CloudAgentExecution) error, fn func(*model.CloudAgentExecution, *Repository) error) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		repo := New(tx)
 		// Keep storage -> execution as the common lock order, including nested
 		// session/undo writes, so different runs of one user cannot deadlock.
 		if err := repo.beginAgentStorageWrite(userID); err != nil {
 			return err
+		}
+		var run *model.CloudAgentExecution
+		var err error
+		if check != nil {
+			run, err = repo.CloudAgent(userID, id)
+			if err != nil {
+				return err
+			}
+			if err := check(run); err != nil {
+				return err
+			}
+			revision = run.Revision
 		}
 		q := tx.Model(&model.CloudAgentExecution{}).Where("id = ? AND user_id = ? AND revision = ?", id, userID, revision).UpdateColumn("revision", gorm.Expr("revision + 1"))
 		if q.Error != nil {
@@ -412,9 +438,13 @@ func (r *Repository) MutateCloudAgent(userID, id string, revision int64, fn func
 		if q.RowsAffected != 1 {
 			return ErrCreationConflict
 		}
-		run, err := New(tx).CloudAgent(userID, id)
-		if err != nil {
-			return err
+		if run == nil {
+			run, err = repo.CloudAgent(userID, id)
+			if err != nil {
+				return err
+			}
+		} else {
+			run.Revision++
 		}
 		previousEvents := run.EventCount
 		previousBytes := int64(len(run.StateJSON))

@@ -516,6 +516,7 @@ func migrations() []tableMigration {
 		migrateTable[model.CloudAgentResourceLease]("cloud_agent_resource_leases"),
 		migrateTable[model.CloudAgentPiSession]("cloud_agent_pi_sessions"),
 		migrateTable[model.CloudAgentGeminiCache]("cloud_agent_gemini_caches"),
+		migrateTable[model.ClientFailure]("client_failures"),
 		migrateTable[model.AgentProfile]("agent_profiles"),
 		migrateTable[model.AgentLesson]("agent_lessons"),
 		migrateTable[model.AgentMemorySetting]("agent_memory_settings"),

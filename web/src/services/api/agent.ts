@@ -85,6 +85,8 @@ export type AgentApproval = {
 };
 
 export type AgentRun = {
+    executionMode?: "browser" | "server";
+    runtimeConnection?: "connected" | "disconnected";
     pageContext?: import("@/lib/agent-page-context").AgentPageContext;
     id: string;
     conversationId?: string;
@@ -146,6 +148,7 @@ export class AgentStreamError extends Error {
 }
 
 export type CreateAgentRunInput = {
+    executionMode?: "browser" | "server";
     pageContext?: import("@/lib/agent-page-context").AgentPageContext;
     reasoningMode?: AgentReasoningMode;
     profileRevision?: string;
@@ -169,8 +172,14 @@ export type CreateAgentRunInput = {
 // Only Agent admission endpoints have server-side fingerprint/idempotency protection.
 // Never apply this policy to arbitrary provider generation POSTs.
 async function submitAgentRequest(path: string, input: CreateAgentRunInput) {
-    const body = JSON.parse(JSON.stringify(input)) as CreateAgentRunInput;
     const session = captureUserSession();
+    const body = JSON.parse(JSON.stringify(input)) as CreateAgentRunInput;
+    const capabilities = body.executionMode ? null : await getAgentCapabilities();
+    assertCurrentUserSession(session);
+    if (capabilities?.browserAgentOnly && typeof Worker === "undefined") {
+        throw new Error("当前部署仅支持浏览器 Worker，请使用支持 Worker 的浏览器");
+    }
+    body.executionMode ??= capabilities?.browserAgentEnabled && typeof Worker !== "undefined" ? "browser" : "server";
     for (let attempt = 0; ; attempt++) {
         assertCurrentUserSession(session);
         try {
@@ -211,7 +220,18 @@ export function withdrawAgentInterjection(runId: string, messageId: string) {
 }
 
 export function getAgentCapabilities() {
-    return http.get<{ version: number; permissionModes: AgentPermissionMode[]; contextScopes: string[]; skills: boolean; writeTools: boolean; capabilitySetVersion?: string; capabilitySetHash?: string; nodeTypes?: string[] }>("/agent/capabilities", {
+    return http.get<{
+        version: number;
+        browserAgentEnabled?: boolean;
+        browserAgentOnly: boolean;
+        permissionModes: AgentPermissionMode[];
+        contextScopes: string[];
+        skills: boolean;
+        writeTools: boolean;
+        capabilitySetVersion?: string;
+        capabilitySetHash?: string;
+        nodeTypes?: string[];
+    }>("/agent/capabilities", {
         timeout: 15_000,
     });
 }

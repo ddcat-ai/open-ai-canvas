@@ -405,6 +405,9 @@ func (s *Service) executeCloudAgentRuntimeTool(ctx context.Context, userID, runI
 		if err != nil {
 			return nil, err
 		}
+		if err := browserExecutorValid(ctx, &state); err != nil {
+			return nil, err
+		}
 		if err := cloudAgentRequireSkillToolAccess(s.repo, userID, call.Function.Name, s); err != nil {
 			return nil, err
 		}

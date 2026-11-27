@@ -41,6 +41,7 @@ let delays: number[] = [];
 let stops: Array<() => void> = [];
 let originalUser: ReturnType<typeof useUserStore.getState>;
 beforeEach(() => {
+    transport.http.get = async () => ({ browserAgentEnabled: false });
     originalUser = useUserStore.getState();
     useUserStore.setState({ hydrated: true, user: { id: "agent-reliability-user", username: "agent-reliability-user", displayName: "Agent 测试用户", role: "user", status: "active" } });
     delays = [];
@@ -228,6 +229,48 @@ describe("Agent SSE recovery", () => {
 
 describe("Agent admission replay and durable pending records", () => {
     const input: CreateAgentRunInput = { canvasId: "canvas", prompt: "generate", model: "original", idempotencyKey: "stable-key-123" };
+    it("browser-only deployments reject unsupported browsers without submitting a server run", async () => {
+        const nativeWorker = Object.getOwnPropertyDescriptor(globalThis, "Worker");
+        const modes: string[] = [];
+        transport.http.get = async () => ({ browserAgentEnabled: true, browserAgentOnly: true });
+        transport.http.post = async (_path: string, body: CreateAgentRunInput) => {
+            modes.push(body.executionMode!);
+            return { run: { id: "accepted" } };
+        };
+        try {
+            Object.defineProperty(globalThis, "Worker", { configurable: true, value: undefined });
+            await expect(api.createAgentRun(input)).rejects.toThrow("当前部署仅支持浏览器 Worker");
+            await expect(api.sendAgentMessage("parent", input)).rejects.toThrow("当前部署仅支持浏览器 Worker");
+            expect(modes).toEqual([]);
+            Object.defineProperty(globalThis, "Worker", { configurable: true, value: class {} });
+            await api.createAgentRun(input);
+            await api.sendAgentMessage("parent", input);
+            expect(modes).toEqual(["browser", "browser"]);
+        } finally {
+            if (nativeWorker) Object.defineProperty(globalThis, "Worker", nativeWorker);
+            else Reflect.deleteProperty(globalThis, "Worker");
+        }
+    });
+    it("selects browser only when enabled and supported, keeping explicit server requests", async () => {
+        const nativeWorker = Object.getOwnPropertyDescriptor(globalThis, "Worker");
+        const modes: string[] = [];
+        transport.http.get = async () => ({ browserAgentEnabled: true });
+        transport.http.post = async (_path: string, body: CreateAgentRunInput) => {
+            modes.push(body.executionMode!);
+            return { run: { id: "accepted" } };
+        };
+        try {
+            Object.defineProperty(globalThis, "Worker", { configurable: true, value: class {} });
+            await api.createAgentRun(input);
+            await api.createAgentRun({ ...input, executionMode: "server" });
+            Object.defineProperty(globalThis, "Worker", { configurable: true, value: undefined });
+            await api.createAgentRun(input);
+            expect(modes).toEqual(["browser", "server", "server"]);
+        } finally {
+            if (nativeWorker) Object.defineProperty(globalThis, "Worker", nativeWorker);
+            else Reflect.deleteProperty(globalThis, "Worker");
+        }
+    });
     it.each([false, true])("retries with a frozen original body/key and a bounded HTTP timeout (skills selected: %s)", async (withSkills) => {
         const bodies: unknown[] = [];
         const expectedBody: CreateAgentRunInput = withSkills ? { ...input, pinnedSkillIds: ["installed-skill"], contextScope: ["skills"] } : input;
@@ -242,7 +285,7 @@ describe("Agent admission replay and durable pending records", () => {
             return { run: { id: "accepted" } };
         };
         expect(await api.createAgentRun(mutable)).toMatchObject({ run: { id: "accepted" } });
-        expect(bodies).toEqual([expectedBody, expectedBody, expectedBody]);
+        expect(bodies).toEqual(Array(3).fill({ ...expectedBody, executionMode: "server" }));
     });
 
     it("limits transport failures to three attempts, but never retries admission rejection", async () => {
