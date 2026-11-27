@@ -261,6 +261,7 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 	registerAdminUserGroupRoutes(r, svc)
 	registerAdminChannelRoutes(r, svc)
 	registerAdminSettingRoutes(r, svc)
+	registerDatabaseBackupRoutes(r, svc)
 	registerAdminAPILogRoutes(r, svc)
 	registerAdminLoginLogRoutes(r, svc)
 	registerEmailRoutes(r, svc)

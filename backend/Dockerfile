@@ -57,6 +57,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build set -eu; \
     ldflags="-s -w -X yingce/backend/internal/buildinfo.Version=${version} -X yingce/backend/internal/buildinfo.Commit=${BUILD_COMMIT} -X yingce/backend/internal/buildinfo.BuildTime=${BUILD_TIME}"; \
     CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="$ldflags" -o /out/yingce-backend ./cmd/server; \
     CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="$ldflags" -o /out/migrate-schema ./cmd/migrate-schema; \
+    CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="$ldflags" -o /out/backup-decrypt ./cmd/backup-decrypt; \
     CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="$ldflags" -o /out/migrate-sqlite-postgres ./cmd/migrate-sqlite-postgres
 
 FROM node:22.19-alpine AS pi-runtime-deps
@@ -68,7 +69,7 @@ RUN npm ci --omit=dev --ignore-scripts
 FROM node:22.19-alpine
 
 # ffmpeg/ffprobe：短剧抽取剧情段视频最后一帧、时间线合成成片与视频播放转码。
-RUN apk add --no-cache ca-certificates tzdata wget ffmpeg \
+RUN apk add --no-cache ca-certificates tzdata wget ffmpeg postgresql17-client \
     && addgroup -S app \
     && adduser -S app -G app
 
@@ -80,6 +81,8 @@ ENV CANVAS_BACKEND_DATA_DIR=/data
 RUN mkdir -p /data && chown -R app:app /data
 COPY --from=backend-build /out/yingce-backend /usr/local/bin/yingce-backend
 COPY --from=backend-build /out/migrate-schema /usr/local/bin/migrate-schema
+COPY --from=backend-build /out/backup-decrypt /usr/local/bin/backup-decrypt
+COPY --chmod=755 backend/backup-pg-dump.cjs /usr/local/bin/pg_dump
 COPY --from=backend-build /out/migrate-sqlite-postgres /usr/local/bin/migrate-sqlite-postgres
 COPY --from=payment-package-smoke /app/plugin-packages /app/plugin-packages
 COPY --from=pi-runtime-deps /app/backend/agent-runtime/pi/node_modules /app/backend/agent-runtime/pi/node_modules
