@@ -83,11 +83,12 @@ type UserGroupRequest struct {
 
 // PublicUserGroup 是用户端会话里的分组展示信息，不含渠道绑定。
 type PublicUserGroup struct {
-	Code             string `json:"code"`
-	Name             string `json:"name"`
-	BadgeLabel       string `json:"badgeLabel"`
-	BadgeStyle       string `json:"badgeStyle"`
-	RatioBasisPoints int64  `json:"ratioBasisPoints"`
+	MembershipEndsAt *time.Time `json:"membershipEndsAt,omitempty"`
+	Code             string     `json:"code"`
+	Name             string     `json:"name"`
+	BadgeLabel       string     `json:"badgeLabel"`
+	BadgeStyle       string     `json:"badgeStyle"`
+	RatioBasisPoints int64      `json:"ratioBasisPoints"`
 }
 
 func normalizeUserGroupCode(code string) string {
@@ -235,7 +236,7 @@ func (s *Service) userGroupAccessForUser(user *model.User) (*userGroupAccess, er
 	if user == nil {
 		return nil, Unauthorized("请先登录")
 	}
-	group, err := s.resolvedUserGroup(user.UserGroup)
+	group, _, err := s.effectiveMembershipGroup(user, time.Now())
 	if err != nil {
 		return nil, err
 	}
@@ -387,11 +388,11 @@ func (s *Service) PublicUserGroupFor(user *model.User) *PublicUserGroup {
 	if user == nil {
 		return nil
 	}
-	group, err := s.resolvedUserGroup(user.UserGroup)
+	group, end, err := s.effectiveMembershipGroup(user, time.Now())
 	if err != nil {
 		return nil
 	}
-	return &PublicUserGroup{Code: group.Code, Name: group.Name, BadgeLabel: group.BadgeLabel, BadgeStyle: group.BadgeStyle, RatioBasisPoints: group.RatioBasisPoints}
+	return &PublicUserGroup{MembershipEndsAt: end, Code: group.Code, Name: group.Name, BadgeLabel: group.BadgeLabel, BadgeStyle: group.BadgeStyle, RatioBasisPoints: group.RatioBasisPoints}
 }
 
 // requireExistingUserGroup 校验管理员给用户分配的分组存在，返回写入 users 表的编码。
@@ -523,7 +524,7 @@ func (s *Service) DeleteUserGroup(actor *model.User, id string) error {
 	}
 	if err := s.repo.DeleteUserGroup(group.ID, group.Code); err != nil {
 		if errors.Is(err, repository.ErrUserGroupInUse) {
-			return BadAuthRequest("分组下仍有用户，请先把用户调整到其他分组")
+			return BadAuthRequest("该分组仍有关联用户、会员卡或待履约的会员订单")
 		}
 		return err
 	}
