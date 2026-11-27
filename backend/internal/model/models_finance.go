@@ -3,16 +3,20 @@ package model
 import "time"
 
 type CreditAccount struct {
-	ID                    string    `json:"id" gorm:"primaryKey;size:80"`
-	Kind                  string    `json:"kind" gorm:"size:24;index"`
-	UserID                string    `json:"userId,omitempty" gorm:"size:36;uniqueIndex:idx_credit_account_personal_user,where:user_id <> ''"`
-	TeamID                string    `json:"teamId,omitempty" gorm:"size:36;index"`
-	MembershipID          string    `json:"membershipId,omitempty" gorm:"size:36;index"`
-	AvailableMicrocredits int64     `json:"availableMicrocredits"`
-	ReservedMicrocredits  int64     `json:"reservedMicrocredits"`
-	Version               int64     `json:"version"`
-	CreatedAt             time.Time `json:"createdAt"`
-	UpdatedAt             time.Time `json:"updatedAt"`
+	ID                         string    `json:"id" gorm:"primaryKey;size:80"`
+	Kind                       string    `json:"kind" gorm:"size:24;index"`
+	UserID                     string    `json:"userId,omitempty" gorm:"size:36;uniqueIndex:idx_credit_account_personal_user,where:user_id <> ''"`
+	TeamID                     string    `json:"teamId,omitempty" gorm:"size:36;index"`
+	MembershipID               string    `json:"membershipId,omitempty" gorm:"size:36;index"`
+	AvailableMicrocredits      int64     `json:"availableMicrocredits"`
+	ReservedMicrocredits       int64     `json:"reservedMicrocredits"`
+	ImageAvailableMicrocredits int64     `json:"imageAvailableMicrocredits" gorm:"not null;default:0"`
+	ImageReservedMicrocredits  int64     `json:"imageReservedMicrocredits" gorm:"not null;default:0"`
+	VideoAvailableMicrocredits int64     `json:"videoAvailableMicrocredits" gorm:"not null;default:0"`
+	VideoReservedMicrocredits  int64     `json:"videoReservedMicrocredits" gorm:"not null;default:0"`
+	Version                    int64     `json:"version"`
+	CreatedAt                  time.Time `json:"createdAt"`
+	UpdatedAt                  time.Time `json:"updatedAt"`
 }
 
 type CreditLedgerEntry struct {
@@ -84,6 +88,10 @@ type BillingOrder struct {
 	UncappedAmountMicrocredits       int64 `json:"uncappedAmountMicrocredits" gorm:"not null;default:0"`
 	ActualAmountMicrocredits         int64 `json:"actualAmountMicrocredits"`
 	RefundedAmountMicrocredits       int64 `json:"refundedAmountMicrocredits"`
+	ImageReservedMicrocredits        int64 `json:"imageReservedMicrocredits" gorm:"not null;default:0"`
+	VideoReservedMicrocredits        int64 `json:"videoReservedMicrocredits" gorm:"not null;default:0"`
+	ImageActualMicrocredits          int64 `json:"imageActualMicrocredits" gorm:"not null;default:0"`
+	VideoActualMicrocredits          int64 `json:"videoActualMicrocredits" gorm:"not null;default:0"`
 	InputTokenPriceMicrocredits      int64 `json:"inputTokenPriceMicrocredits"`
 	OutputTokenPriceMicrocredits     int64 `json:"outputTokenPriceMicrocredits"`
 	CachedTokenPriceMicrocredits     int64 `json:"cachedTokenPriceMicrocredits"`
@@ -118,11 +126,19 @@ type BillingOrder struct {
 	UpdatedAt            time.Time     `json:"updatedAt"`
 }
 
+const (
+	RedeemCapabilityAll   = ""
+	RedeemCapabilityImage = "image"
+	RedeemCapabilityVideo = "video"
+)
+
 type RedeemBatch struct {
 	ID                 string     `json:"id" gorm:"primaryKey;size:36"`
 	AmountMicrocredits int64      `json:"amountMicrocredits"`
 	Count              int        `json:"count"`
 	Note               string     `json:"note" gorm:"size:500"`
+	OnePerUser         bool       `json:"onePerUser" gorm:"not null;default:false"`
+	AllowedCapability  string     `json:"allowedCapability" gorm:"size:24;not null;default:''"`
 	CreatedBy          string     `json:"createdBy" gorm:"index;size:36"`
 	CodesCipher        string     `json:"-" gorm:"type:text"`
 	ExpiresAt          *time.Time `json:"expiresAt" gorm:"index"`
@@ -135,12 +151,12 @@ type RedeemBatch struct {
 
 type RedeemCode struct {
 	ID                 string           `json:"id" gorm:"primaryKey;size:36"`
-	BatchID            string           `json:"batchId" gorm:"index;size:36;index:idx_redeem_codes_batch_status,priority:1;index:idx_redeem_codes_batch_created,priority:1"`
+	BatchID            string           `json:"batchId" gorm:"index;size:36;index:idx_redeem_codes_batch_status,priority:1;index:idx_redeem_codes_batch_created,priority:1;index:idx_redeem_codes_batch_status_user,priority:1"`
 	CodeHash           string           `json:"-" gorm:"uniqueIndex;size:64"`
 	CodeSuffix         string           `json:"codeSuffix" gorm:"size:4"`
 	AmountMicrocredits int64            `json:"amountMicrocredits"`
-	Status             RedeemCodeStatus `json:"status" gorm:"index;size:24;index:idx_redeem_codes_batch_status,priority:2"`
-	RedeemedBy         string           `json:"redeemedBy,omitempty" gorm:"index;size:36"`
+	Status             RedeemCodeStatus `json:"status" gorm:"index;size:24;index:idx_redeem_codes_batch_status,priority:2;index:idx_redeem_codes_batch_status_user,priority:2"`
+	RedeemedBy         string           `json:"redeemedBy,omitempty" gorm:"index;size:36;index:idx_redeem_codes_batch_status_user,priority:3"`
 	RedeemedAt         *time.Time       `json:"redeemedAt"`
 	RedeemedIP         string           `json:"redeemedIp,omitempty" gorm:"size:64"`
 	ExpiresAt          *time.Time       `json:"expiresAt" gorm:"index"`

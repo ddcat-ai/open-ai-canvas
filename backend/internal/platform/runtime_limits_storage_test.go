@@ -53,3 +53,15 @@ func TestPublicRuntimeLimitsStoredFileGB(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateRuntimePolicyAllowsExtendedAccessURLTTL(t *testing.T) {
+	policy := DefaultRuntimePolicy()
+	policy.Storage.AccessURLTTLSeconds = 2_419_200 // 28 days (7-day aligned signing window)
+	if err := validateRuntimePolicy(policy); err != nil {
+		t.Fatalf("validateRuntimePolicy(28d) unexpected error: %v", err)
+	}
+	policy.Storage.AccessURLTTLSeconds = 2_592_001
+	if err := validateRuntimePolicy(policy); err == nil {
+		t.Fatal("validateRuntimePolicy(30d+1s) accepted out-of-range TTL")
+	}
+}

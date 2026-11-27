@@ -95,6 +95,10 @@ func (w *taskLifecycleCoordinator) retryTask(userID string, id string) (*model.T
 	if errors.Is(err, repository.ErrTaskBillingReview) {
 		return nil, BadAuthRequest("上一次调用费用仍在核对中，处理完成前不能重复提交")
 	}
+	var poolErr *repository.InsufficientPoolCreditsError
+	if errors.As(err, &poolErr) {
+		return nil, BadAuthRequest(poolErr.Error())
+	}
 	if errors.Is(err, repository.ErrInsufficientCredits) {
 		return nil, BadAuthRequest("积分不足，请先使用兑换码充值")
 	}

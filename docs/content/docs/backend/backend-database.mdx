@@ -5,6 +5,12 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 兑换码单账号限兑与能力池（Schema 111）
+
+版本 111 `redeem_batch_limits_and_capability_pools` 为 `redeem_batches` 增加非空布尔列 `one_per_user`（默认 `false`）和 `allowed_capability`（默认 `''` 无限制，可选 `'image'` / `'video'`），为 `redeem_codes` 增加复合索引 `idx_redeem_codes_batch_status_user`（`batch_id`、`status`、`redeemed_by`）。开启单账号限兑后同一用户在同一批次下仅能成功核销 1 个兑换码；历史批次默认保持不限次数。
+
+同时为 `credit_accounts` 增加图片专享与视频专享余额/冻结分桶列（`image_available_microcredits`、`image_reserved_microcredits`、`video_available_microcredits`、`video_reserved_microcredits`，均非空默认 0），并为 `billing_orders` 增加 `image_reserved_microcredits`、`video_reserved_microcredits`、`image_actual_microcredits`、`video_actual_microcredits`（均非空默认 0）。图片/视频任务优先消耗对应能力专享积分，不足时再扣通用余额，退款严格按锁定拆分布局原路返还对应池；Agent 对话步骤（`cloud_agent` / `cloud_agent_step` / `cloud_agent_context_compaction`）优先扣通用余额、不受专用券限制，而 Agent 内部触发的图片/视频生成订单仍按媒体能力隔离。
+
 ## 模型请求插件发行版（Schema 109）
 
 `model_protocol_releases` 增加 `channel_models.protocol_release` 及索引，保存模型绑定的请求包 SHA-256。`tasks.protocol_binding_json` 和 `route_attempts.protocol_binding_json` 在新任务入队、路由尝试时记录版本、上游型号、能力与报价修订，以及渠道连接的 HMAC。快照仅在服务端使用。历史记录的新增列保持空值。

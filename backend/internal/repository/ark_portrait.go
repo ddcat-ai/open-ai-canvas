@@ -217,26 +217,14 @@ func settleArkGroupOrder(tx *gorm.DB, orderID string, note string) error {
 	if order.Scene != model.BillingSceneArkAssetGroup || (order.Status != model.BillingStatusReserved && order.Status != model.BillingStatusRunning) {
 		return ErrBillingStateConflict
 	}
-	updated := tx.Model(&model.CreditAccount{}).
-		Where("user_id = ? AND reserved_microcredits >= ?", order.UserID, order.AmountMicrocredits).
-		Updates(map[string]any{
-			"reserved_microcredits": gorm.Expr("reserved_microcredits - ?", order.AmountMicrocredits),
-			"version":               gorm.Expr("version + 1"),
-			"updated_at":            time.Now(),
-		})
-	if updated.Error != nil {
-		return updated.Error
-	}
-	if updated.RowsAffected != 1 {
-		return errors.New("reserved credit balance is inconsistent")
-	}
-	var account model.CreditAccount
-	if err := tx.First(&account, "user_id = ?", order.UserID).Error; err != nil {
+	settlement, err := settleOrderPools(tx, order, order.AmountMicrocredits, order.AmountMicrocredits, false, "reserved credit balance is inconsistent", "reserved credit balance is inconsistent")
+	if err != nil {
 		return err
 	}
+	account := settlement.Account
 	now := time.Now()
 	if err := tx.Model(&model.BillingOrder{}).Where("id = ?", order.ID).Updates(map[string]any{
-		"status": model.BillingStatusSettled, "actual_amount_microcredits": order.AmountMicrocredits, "settled_at": &now, "updated_at": now,
+		"status": model.BillingStatusSettled, "actual_amount_microcredits": order.AmountMicrocredits, "image_actual_microcredits": settlement.Actual.Image, "video_actual_microcredits": settlement.Actual.Video, "settled_at": &now, "updated_at": now,
 	}).Error; err != nil {
 		return err
 	}
@@ -245,7 +233,7 @@ func settleArkGroupOrder(tx *gorm.DB, orderID string, note string) error {
 		UserID:                     order.UserID,
 		Type:                       model.CreditLedgerConsume,
 		AmountMicrocredits:         -order.AmountMicrocredits,
-		ReservedDeltaMicrocredits:  -order.AmountMicrocredits,
+		ReservedDeltaMicrocredits:  -settlement.OrderReserved.General,
 		AvailableAfterMicrocredits: account.AvailableMicrocredits,
 		ReservedAfterMicrocredits:  account.ReservedMicrocredits,
 		BillingOrderID:             order.ID,
@@ -266,28 +254,15 @@ func refundArkGroupOrder(tx *gorm.DB, orderID string, note string) error {
 	if order.Scene != model.BillingSceneArkAssetGroup {
 		return ErrBillingStateConflict
 	}
-	updated := tx.Model(&model.CreditAccount{}).
-		Where("user_id = ? AND reserved_microcredits >= ?", order.UserID, order.AmountMicrocredits).
-		Updates(map[string]any{
-			"available_microcredits": gorm.Expr("available_microcredits + ?", order.AmountMicrocredits),
-			"reserved_microcredits":  gorm.Expr("reserved_microcredits - ?", order.AmountMicrocredits),
-			"version":                gorm.Expr("version + 1"),
-			"updated_at":             time.Now(),
-		})
-	if updated.Error != nil {
-		return updated.Error
-	}
-	if updated.RowsAffected != 1 {
-		return errors.New("reserved credit balance is inconsistent")
-	}
-	var account model.CreditAccount
-	if err := tx.First(&account, "user_id = ?", order.UserID).Error; err != nil {
+	account, released, err := refundReservedOrderPools(tx, order)
+	if err != nil {
 		return err
 	}
+	refundTotal := released.total()
 	now := time.Now()
 	note = truncateArkNote(note)
 	if err := tx.Model(&model.BillingOrder{}).Where("id = ?", order.ID).Updates(map[string]any{
-		"status": model.BillingStatusRefunded, "error": note, "refunded_amount_microcredits": order.AmountMicrocredits, "refunded_at": &now, "updated_at": now,
+		"status": model.BillingStatusRefunded, "error": note, "refunded_amount_microcredits": refundTotal, "refunded_at": &now, "updated_at": now,
 	}).Error; err != nil {
 		return err
 	}
@@ -295,9 +270,9 @@ func refundArkGroupOrder(tx *gorm.DB, orderID string, note string) error {
 		ID:                         newRepositoryID(),
 		UserID:                     order.UserID,
 		Type:                       model.CreditLedgerRefund,
-		AmountMicrocredits:         order.AmountMicrocredits,
-		AvailableDeltaMicrocredits: order.AmountMicrocredits,
-		ReservedDeltaMicrocredits:  -order.AmountMicrocredits,
+		AmountMicrocredits:         refundTotal,
+		AvailableDeltaMicrocredits: released.General,
+		ReservedDeltaMicrocredits:  -released.General,
 		AvailableAfterMicrocredits: account.AvailableMicrocredits,
 		ReservedAfterMicrocredits:  account.ReservedMicrocredits,
 		BillingOrderID:             order.ID,

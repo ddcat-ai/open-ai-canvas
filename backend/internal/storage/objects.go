@@ -498,6 +498,16 @@ func SignedQiniuObjectURL(setting Settings, objectKey string, expiresAt time.Tim
 	return qiniuStorage.MakePrivateURLv2(mac, strings.TrimRight(setting.CDNBaseURL, "/"), objectKey, deadline), nil
 }
 
+const maxSigV4PresignTTL = 7 * 24 * time.Hour
+
+func sigV4PresignTTL(signedAt, expiresAt time.Time) time.Duration {
+	ttl := expiresAt.Sub(signedAt)
+	if ttl > maxSigV4PresignTTL {
+		return maxSigV4PresignTTL
+	}
+	return ttl
+}
+
 // SignedQiniuS3ObjectURL 用七牛兼容 S3 的 AWS Signature V4 访问私有空间。
 // 没有绑定域名时，浏览器不直接访问该地址，而是由后端代理读取并返回文件。
 func SignedQiniuS3ObjectURL(setting Settings, objectKey string, expiresAt time.Time) (string, error) {
@@ -531,7 +541,7 @@ func signedQiniuS3ObjectURL(setting Settings, objectKey string, signing objectUR
 	credentialsValue := credentials.NewStaticCredentials(setting.AccessKeyID, setting.AccessKeySecret, "")
 	signer := awsv4.NewSigner(credentialsValue)
 	signedAt := signingTime(signing.SignedAt)
-	if _, err := signer.Presign(req, nil, "s3", region, signing.ExpiresAt.Sub(signedAt), signedAt); err != nil {
+	if _, err := signer.Presign(req, nil, "s3", region, sigV4PresignTTL(signedAt, signing.ExpiresAt), signedAt); err != nil {
 		return "", fmt.Errorf("七牛云 Kodo S3 签名失败：%w", err)
 	}
 	return req.URL.String(), nil

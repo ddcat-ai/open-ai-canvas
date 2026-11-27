@@ -254,10 +254,12 @@ func registerAccountResourceExtras(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		serveResourceDelivery(c, delivery, "public, max-age=0, must-revalidate", "")
+		serveResourceDelivery(c, delivery, publicResourceCacheControl(c, delivery, time.Now().UTC()), "")
 	}
 	r.GET("/public/resources/:id/file", publicResourceHandler)
+	r.HEAD("/public/resources/:id/file", publicResourceHandler)
 	r.GET("/public/resources/:id/file/:filename", publicResourceHandler)
+	r.HEAD("/public/resources/:id/file/:filename", publicResourceHandler)
 }
 
 func registerWorkspaceResourceFiles(r *gin.RouterGroup, svc *service.Service) {
