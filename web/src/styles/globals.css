@@ -1269,6 +1269,8 @@
     --node-z-content: 30; /* 节点遮罩层（stacking context 内，见 ADR-001）*/
     --node-z-overlay: 40; /* 节点角标/按钮层 */
     --node-z-handle: 50; /* 节点 resize handle 层 */
+    --canvas-node-media-label-bg: color-mix(in srgb, var(--color-neutral-950) 68%, transparent);
+    --canvas-node-media-label-ink: var(--color-neutral-0);
 
     /* 节点上下文生成器：一层浮动表面，内部仅靠明度和间距组织信息。 */
     --canvas-composer-radius: var(--r-2xl);
@@ -1287,7 +1289,7 @@
     --canvas-mention-chip-gap: 0.12em;
     --canvas-mention-chip-padding-inline: 0.16em;
     --canvas-mention-chip-offset-y: 0.14em;
-    --canvas-reference-chip-size: 52px;
+    --canvas-reference-chip-size: var(--space-16);
 
     /* Modal 组件（对话框，对应 #98 面板层级）*/
     --modal-radius: var(--r-lg);
@@ -13070,6 +13072,13 @@
         }
     }
 
+    /* 媒体角标使用固定对比度，避免画布主题和引用激活状态改变其可读性。 */
+    .canvas-node-resource-label {
+        background: var(--canvas-node-media-label-bg);
+        color: var(--canvas-node-media-label-ink);
+        backdrop-filter: blur(var(--space-2));
+    }
+
     .canvas-node-composer-references {
         display: block;
         min-width: 0;
@@ -13081,7 +13090,7 @@
         display: flex;
         min-width: 0;
         flex-wrap: nowrap;
-        align-items: stretch;
+        align-items: flex-start;
         gap: var(--space-2);
         overflow-x: auto;
         overflow-y: hidden;
@@ -13091,9 +13100,18 @@
     .canvas-node-reference-chip,
     .canvas-node-reference-add {
         width: var(--canvas-reference-chip-size);
-        height: var(--canvas-reference-chip-size);
         flex: none;
         border-radius: var(--r-md);
+    }
+
+    .canvas-node-reference-chip {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-1);
+    }
+
+    .canvas-node-reference-add {
+        height: var(--canvas-reference-chip-size);
         background: var(--canvas-composer-control-surface);
     }
 
@@ -13126,24 +13144,26 @@
 
     .canvas-node-reference-drag-handle {
         position: absolute;
-        inset: 0 auto auto 0;
+        inset: var(--space-half) auto auto var(--space-half);
         z-index: 2;
         display: grid;
         width: var(--space-5);
         height: var(--space-5);
         place-items: center;
         border: 0;
-        border-radius: var(--r-md) 0 var(--r-xs) 0;
-        background: var(--color-neutral-800);
+        border-radius: var(--r-xs);
+        background: var(--canvas-node-media-label-bg);
         padding: 0;
         color: var(--color-neutral-0);
         opacity: 0;
+        pointer-events: none;
         cursor: grab;
         transition: opacity var(--motion-instant) ease-out;
     }
 
-    .canvas-node-reference-chip:is(:hover, :focus-within) :is(.canvas-node-reference-drag-handle, .canvas-node-reference-label, .canvas-node-reference-remove) {
+    .canvas-node-reference-chip:is(:hover, :focus-within) :is(.canvas-node-reference-drag-handle, .canvas-node-reference-remove) {
         opacity: 1;
+        pointer-events: auto;
     }
 
     .canvas-node-reference-drag-handle:focus-visible {
@@ -13155,18 +13175,18 @@
         cursor: grabbing;
     }
 
-    /* 序号贴在缩略图左上角，半透明暗底保证在任意图片上都可读。 */
+    /* 序号留在左下角，避免与左上角的拖拽手柄重叠。 */
     .canvas-node-reference-order {
         position: absolute;
         z-index: 1;
-        top: calc(var(--space-1) + var(--space-half));
-        left: calc(var(--space-1) + var(--space-half));
+        top: calc(var(--canvas-reference-chip-size) - var(--space-4) - var(--space-half));
+        left: var(--space-half);
         display: grid;
         min-width: var(--space-4);
         height: var(--space-4);
         place-items: center;
         border-radius: var(--r-xs);
-        background: color-mix(in srgb, var(--color-neutral-950) 64%, transparent);
+        background: var(--canvas-node-media-label-bg);
         padding-inline: var(--space-half);
         color: var(--color-neutral-0);
         font-size: var(--fs-micro);
@@ -13180,7 +13200,8 @@
         position: relative;
         display: block;
         width: 100%;
-        height: 100%;
+        height: var(--canvas-reference-chip-size);
+        flex: none;
         overflow: hidden;
         border: 0;
         border-radius: var(--r-md);
@@ -13196,36 +13217,38 @@
 
     .canvas-node-reference-preview-hint {
         position: absolute;
-        inset: 0;
+        right: var(--space-half);
+        bottom: var(--space-half);
         display: grid;
+        width: var(--space-5);
+        height: var(--space-5);
         place-items: center;
-        background: color-mix(in srgb, var(--color-neutral-950) 44%, transparent);
+        border-radius: var(--r-xs);
+        background: var(--canvas-node-media-label-bg);
         color: var(--color-neutral-0);
         opacity: 0;
         transition: opacity var(--motion-dur-fast) var(--motion-ease-out);
         pointer-events: none;
     }
 
-    .canvas-node-reference-chip:hover .canvas-node-reference-preview-hint,
+    .canvas-node-reference-preview:hover .canvas-node-reference-preview-hint,
     .canvas-node-reference-preview:focus-visible .canvas-node-reference-preview-hint {
         opacity: 1;
     }
 
     .canvas-node-reference-label {
-        position: absolute;
-        inset: auto 0 0;
-        z-index: 1;
         display: flex;
+        width: 100%;
+        min-width: 0;
         height: var(--space-5);
         align-items: center;
         gap: 2px;
         overflow: hidden;
         border: 0;
-        border-radius: 0 0 var(--r-md) var(--r-md);
-        background: color-mix(in srgb, var(--color-neutral-950) 80%, transparent);
-        padding-inline: var(--space-1);
-        color: var(--color-neutral-0);
-        opacity: 0;
+        border-radius: var(--r-xs);
+        background: transparent;
+        padding: 0;
+        color: var(--cn-muted);
         cursor: pointer;
         font-size: var(--fs-label);
         font-weight: 500;
@@ -13238,19 +13261,24 @@
         outline-offset: calc(var(--stroke-2) * -1);
     }
 
+    .canvas-node-reference-label:hover {
+        color: var(--cn-text);
+    }
+
     .canvas-node-reference-remove {
         position: absolute;
         z-index: 1;
-        top: 0;
-        right: 0;
+        top: var(--space-half);
+        right: var(--space-half);
         display: grid;
-        width: 16px;
-        height: 16px;
+        width: var(--space-5);
+        height: var(--space-5);
         place-items: center;
         border: var(--stroke-1) solid;
         border-radius: var(--r-full);
         padding: 0;
         opacity: 0;
+        pointer-events: none;
         box-shadow: var(--shadow-sm);
         transition:
             opacity var(--motion-dur-fast) var(--motion-ease-out),
@@ -13259,8 +13287,16 @@
     }
 
     @media (hover: none) {
-        .canvas-node-reference-chip :is(.canvas-node-reference-label, .canvas-node-reference-remove) {
+        .canvas-node-reference-chip :is(.canvas-node-reference-drag-handle, .canvas-node-reference-remove) {
             opacity: 1;
+            pointer-events: auto;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .canvas-node-reference-chip button,
+        .canvas-node-reference-preview-hint {
+            transition: none;
         }
     }
 
