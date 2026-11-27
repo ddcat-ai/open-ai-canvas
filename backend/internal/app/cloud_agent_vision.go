@@ -38,6 +38,19 @@ const (
 
 var errCloudAgentImageInspectionBudget = errors.New("cloud agent image inspection budget exhausted")
 
+// 图片与视频帧共享消息容量，统计函数必须在生产代码中供两条观察链路复用。
+func cloudAgentMessageImagePartCount(message map[string]any) int {
+	parts, _ := message["content"].([]any)
+	count := 0
+	for _, value := range parts {
+		part, _ := value.(map[string]any)
+		if stringField(part, "type") == "image_url" {
+			count++
+		}
+	}
+	return count
+}
+
 func cloudAgentImageInspectionCacheKey(nodeID, storageKey string, revision int64) string {
 	return fmt.Sprintf("%s:%d:%s", nodeID, revision, storageKey)
 }
