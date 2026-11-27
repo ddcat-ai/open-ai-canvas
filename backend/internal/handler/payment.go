@@ -215,6 +215,7 @@ func RegisterPaymentRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, gin.H{"settings": settings})
 	})
 	admin := r.Group("/admin/payments")
+	registerMembershipRoutes(r, admin, svc)
 	registerPaymentExportRoutes(admin, svc)
 	admin.GET("/settings", func(c *gin.Context) {
 		user, err := currentUser(c, svc)

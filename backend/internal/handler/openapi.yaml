@@ -209,9 +209,68 @@ paths:
         "409": { $ref: "#/components/responses/Error" }
         "502": { $ref: "#/components/responses/Error" }
         "503": { $ref: "#/components/responses/Error" }
-  /payments/orders:
+  /payments/membership:
     get:
-      summary: 当前用户的充值与扩容订单
+      summary: 查询本人当前与后续会员时段
+      responses:
+        "200": { description: "data 包含 salesEnabled、baseGroup、periods，每个时段含 productName、membershipGroup、startsAt、endsAt" }
+        "401": { $ref: "#/components/responses/Error" }
+  /admin/payments/membership/sales:
+    put:
+      tags: [admin]
+      summary: 切换会员销售
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [enabled], properties: { enabled: { type: boolean } } }
+      responses:
+        "200": { description: 已保存销售开关 }
+        "403": { $ref: "#/components/responses/Error" }
+  /admin/payments/membership/cards/{term}:
+    put:
+      tags: [admin]
+      summary: 配置单张会员卡
+      parameters:
+        - { in: path, name: term, required: true, schema: { type: string, enum: [week, month, quarter, year] } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amountFen, currency, membershipGroup, creditsMicrocredits, enabled]
+              properties:
+                amountFen: { type: integer, minimum: 1, maximum: 100000000 }
+                currency: { type: string, enum: [CNY, USD] }
+                membershipGroup: { type: string, minLength: 1 }
+                creditsMicrocredits: { type: integer, format: int64, minimum: 0 }
+                enabled: { type: boolean }
+      responses:
+        "200": { description: 已保存会员卡 }
+        "403": { $ref: "#/components/responses/Error" }
+  /payments/orders:
+    post:
+      summary: 创建当前用户的支付订单
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, providerId, idempotencyKey]
+              properties:
+                productId: { type: string }
+                providerId: { type: string }
+                idempotencyKey: { type: string }
+                method: { type: string }
+                membershipVersion: { type: string, description: 会员卡必填，使用商品 updatedAt 的原值 }
+      responses:
+        "200": { description: 支付订单与收银台 }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+    get:
+      summary: 当前用户的积分、扩容与会员订单
       description: 按创建时间倒序分页；仅返回当前登录用户的订单，不接受指定用户。订单含当前状态及仍有效的支付入口，可通过既有单笔接口继续支付、查询或关闭。
       parameters:
         - { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 } }
