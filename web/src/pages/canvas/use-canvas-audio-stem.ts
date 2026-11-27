@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { startTransition, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { App } from "antd";
 import { nanoid } from "nanoid";
 import { NODE_DEFAULT_SIZE } from "@/constant/canvas";
-import { AUDIO_STEM_LABELS, AUDIO_STEM_MAX_BYTES, AUDIO_STEM_MAX_SECONDS, type AudioStemProgress, type AudioStemSelection } from "@/lib/audio-stem/contracts";
+import { AUDIO_STEM_LABELS, AUDIO_STEM_MAX_BYTES, AUDIO_STEM_MAX_SECONDS, type AudioStemProgress, type AudioStemSelection, type AudioStemTask } from "@/lib/audio-stem/contracts";
 import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
 import { audioMetadata } from "@/lib/canvas/canvas-generation-task-sync";
 import { separateAudioLocally } from "@/services/audio-stem";
@@ -21,25 +21,23 @@ export function useCanvasAudioStem({
     nodesRef,
     setNodes,
     setConnections,
-    setSelectedNodeIds,
 }: {
     projectId: string;
     domainProjectId?: string;
     nodesRef: { current: CanvasNodeData[] };
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     setConnections: Dispatch<SetStateAction<CanvasConnection[]>>;
-    setSelectedNodeIds: Dispatch<SetStateAction<Set<string>>>;
 }) {
     const { message } = App.useApp();
     const [nodeId, setNodeId] = useState<string | null>(null);
-    const [progress, setProgress] = useState<AudioStemProgress | null>(null);
+    const [task, setTask] = useState<AudioStemTask | null>(null);
     const [error, setError] = useState("");
     const controllerRef = useRef<AbortController | null>(null);
     const lifetimeRef = useRef(0);
     useEffect(() => {
         lifetimeRef.current++;
         setNodeId(null);
-        setProgress(null);
+        setTask(null);
         setError("");
         return () => {
             lifetimeRef.current++;
@@ -48,14 +46,14 @@ export function useCanvasAudioStem({
     }, [projectId]);
 
     const close = () => {
-        controllerRef.current?.abort();
+        // 关闭配置仅退出配置，后台任务只能通过任务卡的取消入口中止。
         setNodeId(null);
         setError("");
     };
 
     const open = (node: CanvasNodeData) => {
         if (controllerRef.current) {
-            message.info("请先等待当前分离完成，或取消后再操作");
+            message.info("音频正在后台分离，可在左下角查看进度或取消");
             return;
         }
         if (node.type !== CanvasNodeType.Audio || node.metadata?.locked || node.metadata?.status === "loading" || node.metadata?.fileUpload) return;
@@ -63,15 +61,19 @@ export function useCanvasAudioStem({
         setNodeId(node.id);
     };
 
-    const run = async (selection: AudioStemSelection) => {
-        if (!nodeId || controllerRef.current) return;
-        const source = nodesRef.current.find((node) => node.id === nodeId);
+    const run = async (selection: AudioStemSelection, sourceNodeId = nodeId) => {
+        if (!sourceNodeId || controllerRef.current) return;
+        const failBeforeStart = (detail: string) => {
+            if (nodeId) setError(detail);
+            else setTask((current) => (current?.nodeId === sourceNodeId ? { ...current, status: "failed", detail } : current));
+        };
+        const source = nodesRef.current.find((node) => node.id === sourceNodeId);
         if (!source || source.type !== CanvasNodeType.Audio || source.metadata?.locked || source.metadata?.status === "loading" || source.metadata?.fileUpload) {
-            setError("源音频当前不可处理");
+            failBeforeStart("源音频当前不可处理，请重新选择可用音频");
             return;
         }
         if ((source.metadata?.durationMs || 0) > AUDIO_STEM_MAX_SECONDS * 1000 || (source.metadata?.bytes || 0) > AUDIO_STEM_MAX_BYTES) {
-            setError("仅支持 3 分钟以内、128 MiB 以下的音频，请先裁剪");
+            failBeforeStart("仅支持 3 分钟以内、128 MiB 以下的音频，请先裁剪");
             return;
         }
         const controller = new AbortController();
@@ -79,6 +81,8 @@ export function useCanvasAudioStem({
         const session = localMediaSession();
         const lifetime = lifetimeRef.current;
         const sourceKey = audioStemSourceKey(source);
+        const taskId = nanoid();
+        const createdIds: string[] = [];
         const check = () => {
             controller.signal.throwIfAborted();
             assertLocalMediaSession(session);
@@ -96,7 +100,20 @@ export function useCanvasAudioStem({
             }
         }, 250);
         setError("");
-        setProgress({ phase: "reading", percent: 0 });
+        setNodeId(null);
+        setTask({ id: taskId, nodeId: source.id, title: source.title || "音频", selection, status: "running", progress: { phase: "reading", percent: 0 }, resultIds: [] });
+        const updateProgress = (progress: AudioStemProgress) => {
+            if (controller.signal.aborted || lifetime !== lifetimeRef.current) return;
+            // 下载回调可能在同一百分比重复触发；去重并降低进度更新优先级，优先响应画布输入。
+            startTransition(() =>
+                setTask((current) => {
+                    if (current?.id !== taskId || current.status !== "running") return current;
+                    if (current.progress.phase === progress.phase && current.progress.percent === progress.percent) return current;
+                    return { ...current, progress };
+                }),
+            );
+        };
+        const finish = (status: AudioStemTask["status"], detail?: string) => setTask((current) => (current?.id === taskId ? { ...current, status, detail, resultIds: [...createdIds] } : current));
         try {
             let input = source.metadata?.storageKey ? await getMediaBlob(source.metadata.storageKey, controller.signal) : null;
             check();
@@ -108,13 +125,12 @@ export function useCanvasAudioStem({
             }
             check();
             if (!input) throw new Error("找不到原始音频，请重新上传");
-            const outputs = await separateAudioLocally(input, selection, controller.signal, setProgress);
+            const outputs = await separateAudioLocally(input, selection, controller.signal, updateProgress);
             check();
-            setProgress({ phase: "saving", percent: 0 });
+            updateProgress({ phase: "saving", percent: 0 });
             let pendingRemote = false;
             let assetWarning = false;
             // 分别提交每条成功保存的结果；后一条上传失败时保留前一条，明确告知部分完成。
-            const createdIds: string[] = [];
             for (const output of outputs) {
                 check();
                 const label = AUDIO_STEM_LABELS[output.stem];
@@ -134,7 +150,6 @@ export function useCanvasAudioStem({
                 setNodes((current) => [...current, result]);
                 setConnections((current) => [...current, { id: nanoid(), fromNodeId: source.id, toNodeId: result.id }]);
                 createdIds.push(result.id);
-                setSelectedNodeIds(new Set(createdIds));
                 try {
                     const asset = await ensureCanvasNodeAsset({ canvasId: projectId, domainProjectId, node: result, source: "canvas-manual", signal: controller.signal });
                     check();
@@ -144,23 +159,40 @@ export function useCanvasAudioStem({
                     check();
                     assetWarning = true;
                 }
-                setProgress({ phase: "saving", percent: Math.round((createdIds.length / outputs.length) * 100) });
+                updateProgress({ phase: "saving", percent: Math.round((createdIds.length / outputs.length) * 100) });
             }
             check();
-            setNodeId(null);
-            if (pendingRemote) message.warning("分离完成，结果已缓存本机，尚未上传至服务端");
-            else if (assetWarning) message.warning("分离结果已保存，素材库或项目关联尚未同步完成");
-            else message.success("分离完成，已创建新的音频节点");
+            let detail = "已在原音频右侧创建结果，原文件保持不变";
+            if (pendingRemote) detail = "结果已缓存本机，尚未上传至服务端";
+            else if (assetWarning) detail = "结果已保存，素材库或项目关联待同步";
+            finish("succeeded", detail);
         } catch (reason) {
             if (lifetime === lifetimeRef.current) {
-                if (controller.signal.aborted || (reason instanceof Error && reason.name === "AbortError")) setError(reason instanceof Error ? reason.message : "操作已取消");
-                else setError(`${reason instanceof Error ? reason.message : "音频分离失败"}。已生成的结果会保留。`);
+                try {
+                    assertLocalMediaSession(session);
+                } catch {
+                    setTask(null);
+                    setNodeId(null);
+                    return;
+                }
+                const cancelled = controller.signal.aborted || (reason instanceof Error && reason.name === "AbortError");
+                finish(cancelled ? "cancelled" : "failed", `${reason instanceof Error ? reason.message : "音频分离失败"}${createdIds.length ? "。已生成的结果会保留" : ""}`);
             }
         } finally {
             window.clearInterval(guard);
             if (controllerRef.current === controller) controllerRef.current = null;
-            if (lifetime === lifetimeRef.current) setProgress(null);
         }
     };
-    return { nodeId, progress, error, open, close, run };
+    const cancel = () => {
+        if (!controllerRef.current) return;
+        setTask((current) => (current?.status === "running" ? { ...current, status: "cancelling" } : current));
+        controllerRef.current.abort(new DOMException("已取消分离", "AbortError"));
+    };
+    const dismissTask = () => {
+        if (!controllerRef.current) setTask(null);
+    };
+    const retry = () => {
+        if (task && task.status !== "running" && task.status !== "cancelling") void run(task.selection, task.nodeId);
+    };
+    return { nodeId, task, error, open, close, run, cancel, dismissTask, retry };
 }

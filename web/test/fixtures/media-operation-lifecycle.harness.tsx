@@ -98,11 +98,13 @@ mock.module("@/services/audio-stem", () => ({
 
 const { uploadMediaFile, getMediaBlob } = await import("@/services/file-storage");
 const { useCanvasAudioStem } = await import("@/pages/canvas/use-canvas-audio-stem");
+const { CanvasAudioStemTask } = await import("@/components/canvas/canvas-audio-stem-task");
 const source: CanvasNodeData = { id: "source", type: CanvasNodeType.Audio, title: "原音频", position: { x: 0, y: 0 }, width: 320, height: 120, metadata: { storageKey: "resource:input", status: "success" } };
 const nodesRef = { current: [source] };
 let api: ReturnType<typeof useCanvasAudioStem>;
 let root: ReturnType<typeof createRoot> | undefined;
 let container: HTMLElement | undefined;
+const viewed: string[] = [];
 function Harness() {
     api = useCanvasAudioStem({
         projectId: "canvas",
@@ -111,9 +113,13 @@ function Harness() {
             nodesRef.current = typeof update === "function" ? update(nodesRef.current) : update;
         },
         setConnections: () => {},
-        setSelectedNodeIds: () => {},
     });
-    return null;
+    return (
+        <>
+            <input aria-label="画布节点名称" defaultValue="继续编辑" />
+            {api.task ? <CanvasAudioStemTask task={api.task} onCancel={api.cancel} onRetry={api.retry} onDismiss={api.dismissTask} onView={(id) => viewed.push(id)} /> : null}
+        </>
+    );
 }
 const input = () => new File(["wav"], "result.wav", { type: "audio/wav" });
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -130,6 +136,7 @@ beforeEach(() => {
     reads = 0;
     inferCalls = 0;
     nodesRef.current = [source];
+    viewed.length = 0;
 });
 afterEach(() => {
     if (root) act(() => root?.unmount());
@@ -241,7 +248,7 @@ test("真实分离 hook 在源下载取消后可立即重试，旧下载完成�
     });
     expect(reads).toBe(1);
     await act(async () => {
-        api.close();
+        api.cancel();
         await first;
     });
     expect(inferCalls).toBe(0);
@@ -262,4 +269,92 @@ test("真实分离 hook 在源下载取消后可立即重试，旧下载完成�
     expect(uploads.every((upload) => upload.meta?.expectedUserId === "account-a" && upload.meta?.signal)).toBe(true);
     expect(nodesRef.current).toHaveLength(3);
     expect(api.nodeId).toBeNull();
+});
+
+function mountCanvas() {
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    act(() => root!.render(<Harness />));
+    act(() => api.open(source));
+}
+
+test("开始后关闭配置，收起进度不取消任务，画布输入与焦点保持可用", async () => {
+    autoMetadata = true;
+    mountCanvas();
+    let running!: Promise<void>;
+    await act(async () => {
+        running = api.run("both");
+        await tick();
+    });
+    expect(api.nodeId).toBeNull();
+    expect(api.task?.status).toBe("running");
+    const inputElement = container!.querySelector("input")!;
+    inputElement.focus();
+    inputElement.value = "处理中继续编辑的名称";
+    act(() => api.close());
+    expect(api.task?.status).toBe("running");
+    expect(container!.querySelector('[role="progressbar"]')?.hasAttribute("aria-valuenow")).toBe(false);
+    act(() => (container!.querySelector('[aria-label="收起分离进度"]') as HTMLButtonElement).click());
+    expect(container!.querySelector('[role="progressbar"]')).toBeNull();
+    expect(api.task?.status).toBe("running");
+    await act(async () => {
+        sharedRead.resolve(input());
+        await running;
+    });
+    expect(api.task?.status).toBe("succeeded");
+    expect(api.task?.resultIds).toHaveLength(2);
+    expect(document.activeElement).toBe(inputElement);
+    expect(inputElement.value).toBe("处理中继续编辑的名称");
+    expect(viewed).toBeEmpty();
+    act(() => (Array.from(container!.querySelectorAll("button")).find((button) => button.textContent?.includes("查看结果")) as HTMLButtonElement).click());
+    expect(viewed).toEqual([api.task!.resultIds[0]]);
+});
+
+test("后台失败在任务卡显示，可直接重试，不重新阻塞配置弹窗", async () => {
+    autoMetadata = true;
+    mountCanvas();
+    let running!: Promise<void>;
+    await act(async () => {
+        running = api.run("both");
+        await tick();
+    });
+    await act(async () => {
+        sharedRead.reject(new Error("音频读取失败，请重试"));
+        await running;
+    });
+    expect(api.task?.status).toBe("failed");
+    expect(container!.querySelector('[role="alert"]')?.textContent).toContain("音频读取失败");
+    sharedRead = deferred<Blob>();
+    await act(async () => {
+        (Array.from(container!.querySelectorAll("button")).find((button) => button.textContent === "重试") as HTMLButtonElement).click();
+        await tick();
+    });
+    expect(api.task?.status).toBe("running");
+    expect(api.nodeId).toBeNull();
+    await act(async () => {
+        api.cancel();
+        await tick();
+    });
+    expect(api.task?.status).toBe("cancelled");
+    act(() => api.dismissTask());
+    expect(api.task).toBeNull();
+});
+
+test("后台读取中切换账号，清除旧账号任务卡且不写回结果", async () => {
+    mountCanvas();
+    let running!: Promise<void>;
+    await act(async () => {
+        running = api.run("both");
+        await tick();
+    });
+    await act(async () => {
+        setActiveUserScope("account-b");
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        await running;
+    });
+    expect(api.task).toBeNull();
+    expect(container!.querySelector('[aria-label="音频分离任务"]')).toBeNull();
+    expect(inferCalls).toBe(0);
+    expect(uploads).toBeEmpty();
 });

@@ -4,6 +4,16 @@ export type StereoStem = { left: Float32Array; right: Float32Array };
 export type SeparationResult = Record<"vocals" | "drums" | "bass" | "other", StereoStem>;
 export type AudioStemProgress = { phase: "reading" | "model" | "inference" | "saving"; percent: number };
 export type AudioStemOutput = { stem: AudioStem; blob: Blob };
+export type AudioStemTask = {
+    id: string;
+    nodeId: string;
+    title: string;
+    selection: AudioStemSelection;
+    status: "running" | "cancelling" | "succeeded" | "failed" | "cancelled";
+    progress: AudioStemProgress;
+    resultIds: string[];
+    detail?: string;
+};
 
 export const AUDIO_STEM_LABELS: Record<AudioStem, string> = { vocals: "人声", instrumental: "伴奏" };
 export const AUDIO_STEM_SAMPLE_RATE = 44_100;

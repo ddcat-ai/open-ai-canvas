@@ -1,37 +1,87 @@
-import { useState } from "react";
-import { Alert, Button, Progress, Radio } from "antd";
+import { useRef, useState } from "react";
+import { Alert, Button } from "antd";
+import { ArrowRight, AudioLines, Check, FileAudio2, Layers2, Mic2, Music2, ShieldCheck, X } from "lucide-react";
 import { AppModal } from "@/components/ui/product/app-modal";
-import type { AudioStemProgress, AudioStemSelection } from "@/lib/audio-stem/contracts";
+import type { AudioStemSelection } from "@/lib/audio-stem/contracts";
+import "./canvas-audio-stem.css";
 
-const PHASE_LABELS = { reading: "读取并解码音频", model: "下载并校验分离模型", inference: "本机分离中", saving: "保存音频结果" };
+const OPTIONS = [
+    { value: "both", label: "人声和伴奏", detail: "一次获得两条音轨", icon: Layers2 },
+    { value: "vocals", label: "仅人声", detail: "提取对白与演唱", icon: Mic2 },
+    { value: "instrumental", label: "仅伴奏", detail: "保留背景音乐", icon: Music2 },
+] as const;
 
-export function CanvasAudioStemDialog({ open, title, progress, error, onClose, onRun }: { open: boolean; title: string; progress: AudioStemProgress | null; error: string; onClose: () => void; onRun: (selection: AudioStemSelection) => void }) {
+export function CanvasAudioStemDialog({ open, title, error, onClose, onRun }: { open: boolean; title: string; error: string; onClose: () => void; onRun: (selection: AudioStemSelection) => void }) {
     const [selection, setSelection] = useState<AudioStemSelection>("both");
+    const selectedChoiceRef = useRef<HTMLInputElement>(null);
     return (
-        <AppModal open={open} title="人声 / 伴奏分离" onCancel={onClose} footer={null} width={480}>
-            <div data-canvas-no-zoom className="space-y-4" onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
-                <p className="truncate text-[var(--foreground-muted)]">{title}</p>
-                <Radio.Group value={selection} onChange={(event) => setSelection(event.target.value)} disabled={Boolean(progress)}>
-                    <Radio.Button value="both">人声和伴奏</Radio.Button>
-                    <Radio.Button value="vocals">仅人声</Radio.Button>
-                    <Radio.Button value="instrumental">仅伴奏</Radio.Button>
-                </Radio.Group>
-                <p className="text-[var(--fs-label)] leading-relaxed text-[var(--foreground-muted)]">在当前浏览器处理，不消耗模型额度。首次使用需下载约 172 MiB 模型，后续优先使用本机缓存。支持 3 分钟以内、128 MiB 以下的音频；处理时请保持页面打开。</p>
-                <p className="text-[var(--fs-label)] text-[var(--foreground-muted)]">原音频保留，结果另存为 WAV 音频节点。分离后会沿用现有素材上传与同步流程；复杂混音可能有残留。</p>
-                {progress ? (
-                    <div role="status" aria-live="polite">
-                        <p>{PHASE_LABELS[progress.phase]}</p>
-                        <Progress percent={progress.percent} status="active" />
-                        <p className="text-[var(--fs-label)] text-[var(--foreground-muted)]">当前百分比表示本阶段进度，首次初始化可能较慢。</p>
+        <AppModal
+            flush
+            open={open}
+            title={null}
+            aria-labelledby="audio-stem-dialog-title"
+            afterOpenChange={(visible) => {
+                if (visible) selectedChoiceRef.current?.focus();
+            }}
+            onCancel={onClose}
+            footer={null}
+            closable={false}
+            width={520}
+        >
+            <div data-canvas-no-zoom className="audio-stem-config" onPointerDown={(event) => event.stopPropagation()} onWheel={(event) => event.stopPropagation()}>
+                <header className="audio-stem-config-header">
+                    <span className="audio-stem-feature-icon">
+                        <AudioLines size={24} aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                        <h2 id="audio-stem-dialog-title">人声 / 伴奏分离</h2>
+                        <p>拆出所需音轨，保留原始音频。</p>
                     </div>
-                ) : null}
-                {error ? <Alert type="error" title={error} showIcon /> : null}
-                <div className="flex justify-end gap-2">
-                    <Button onClick={onClose}>{progress ? "取消处理" : "关闭"}</Button>
-                    <Button type="primary" disabled={Boolean(progress)} onClick={() => onRun(selection)}>
-                        {error ? "重新分离" : "开始分离"}
-                    </Button>
+                    <button type="button" className="audio-stem-icon-button" aria-label="关闭分离设置" onClick={onClose}>
+                        <X size={18} aria-hidden="true" />
+                    </button>
+                </header>
+                <div className="audio-stem-config-body">
+                    <div className="audio-stem-source">
+                        <FileAudio2 size={18} aria-hidden="true" />
+                        <span title={title}>{title}</span>
+                        <span className="audio-stem-source-badge">原音频</span>
+                    </div>
+                    <fieldset className="audio-stem-options">
+                        <legend>选择输出音轨</legend>
+                        <div className="audio-stem-option-grid">
+                            {OPTIONS.map(({ value, label, detail, icon: Icon }) => (
+                                <label key={value} className="audio-stem-choice">
+                                    <input ref={selection === value ? selectedChoiceRef : undefined} type="radio" name="audio-stem-output" value={value} checked={selection === value} onChange={() => setSelection(value)} />
+                                    <span className="audio-stem-choice-body">
+                                        <span className="audio-stem-choice-top">
+                                            <Icon size={20} aria-hidden="true" />
+                                            <span className="audio-stem-choice-check">{selection === value ? <Check size={12} aria-hidden="true" /> : null}</span>
+                                        </span>
+                                        <span className="audio-stem-choice-label">{label}</span>
+                                        <span className="audio-stem-choice-detail">{detail}</span>
+                                    </span>
+                                </label>
+                            ))}
+                        </div>
+                    </fieldset>
+                    <div className="audio-stem-promise">
+                        <ShieldCheck size={16} aria-hidden="true" />
+                        <span>本机处理 · 不消耗模型额度 · 结果另存为 WAV</span>
+                    </div>
+                    <details className="audio-stem-help">
+                        <summary>首次使用与处理说明</summary>
+                        <p>首次下载约 172 MiB 模型，之后优先使用本机缓存。支持 3 分钟以内、128 MiB 以下的音频。结果沿用素材上传与同步流程，复杂混音可能有残留。</p>
+                    </details>
+                    {error ? <Alert type="error" title={error} showIcon /> : null}
                 </div>
+                <footer className="audio-stem-config-footer">
+                    <span>开始后可继续编辑画布</span>
+                    <Button type="primary" size="large" onClick={() => onRun(selection)}>
+                        开始分离
+                        <ArrowRight size={16} aria-hidden="true" />
+                    </Button>
+                </footer>
             </div>
         </AppModal>
     );

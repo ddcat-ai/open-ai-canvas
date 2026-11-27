@@ -94,6 +94,7 @@ import { useCanvasBatchReferences } from "./use-canvas-batch-references";
 import { useCanvasImageRotation } from "./use-canvas-image-rotation";
 import { useCanvasAudioStem } from "./use-canvas-audio-stem";
 import { CanvasAudioStemDialog } from "@/components/canvas/canvas-audio-stem-dialog";
+import { CanvasAudioStemTask } from "@/components/canvas/canvas-audio-stem-task";
 import { storyboardMinNodeHeight } from "@/lib/canvas/canvas-storyboard-layout";
 import { CanvasPrevisNodePanel } from "@/components/canvas/previs/canvas-previs-node-panel";
 import { useFocusMode } from "@/hooks/use-focus-mode";
@@ -843,7 +844,7 @@ function CanvasViewportPage() {
     );
     const { actions: batchReferences, pickerModal: batchReferencePickerModal } = useCanvasBatchReferences({ nodesRef, connectionsRef, setNodes, setConnections, createFileNode });
     const { rotateImageNode, rotatingNodeId } = useCanvasImageRotation({ projectId, nodesRef, setNodes, setConnections, setSelectedNodeIds, readOnly: false });
-    const audioStem = useCanvasAudioStem({ projectId, domainProjectId: linkedProjectId, nodesRef, setNodes, setConnections, setSelectedNodeIds });
+    const audioStem = useCanvasAudioStem({ projectId, domainProjectId: linkedProjectId, nodesRef, setNodes, setConnections });
     const { projectAssetOpen, projectAssetInitialCategory, projectAssetInitialFolderId, projectAssetInsertPosition, handleProjectAssetSelection, openProjectAssets, closeProjectAssets } = useCanvasProjectAssetPicker({
         linkedProjectId,
         refetchLinkedProject,
@@ -3378,11 +3379,11 @@ function CanvasViewportPage() {
                             <CanvasAudioStemDialog
                                 open={Boolean(audioStem.nodeId)}
                                 title={nodes.find((node) => node.id === audioStem.nodeId)?.title || "音频"}
-                                progress={audioStem.progress}
                                 error={audioStem.error}
                                 onClose={audioStem.close}
                                 onRun={(selection) => void audioStem.run(selection)}
                             />
+                            {audioStem.task ? <CanvasAudioStemTask task={audioStem.task} onCancel={audioStem.cancel} onRetry={audioStem.retry} onDismiss={audioStem.dismissTask} onView={focusCanvasNode} /> : null}
                             <CanvasNodeToolbar
                                 onSeparateAudio={audioStem.open}
                                 onRotateImage={(node, direction) => void rotateImageNode(node.id, direction)}
