@@ -64,7 +64,7 @@ type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange" | "onS
     references: CanvasResourceReference[];
     /** 页面外部入口（如参考图货架）按当前光标/选区插入文本。 */
     actionsRef?: { current: CanvasResourceMentionTextareaActions | null };
-    onSelectReference?: (reference: CanvasResourceReference) => CanvasResourceReference | undefined;
+    onSelectReference?: (reference: CanvasResourceReference) => CanvasResourceReference | undefined | Promise<CanvasResourceReference | undefined>;
     onChange: (value: string) => boolean | void;
     /** modifier：本次是 ⌘/Ctrl+Enter 触发（调用方可据此区分主次动作，例如 Agent 运行中的排队与插话）。 */
     onSubmit?: (event: { modifier: boolean }) => void;
@@ -122,6 +122,15 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const editorRef = useRef<HTMLDivElement | null>(null);
     const readOnly = Boolean(props.disabled || props.readOnly);
+    const selectionPendingRef = useRef(false);
+    const latestEditorStateRef = useRef({ value, readOnly });
+    latestEditorStateRef.current = { value, readOnly };
+    useEffect(
+        () => () => {
+            latestEditorStateRef.current = { value: "", readOnly: true };
+        },
+        [],
+    );
     const composingRef = useRef(false);
     const compositionBaseRef = useRef("");
     const [compositionValue, setCompositionValue] = useState<string | null>(null);
@@ -374,9 +383,18 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         if (!isSameMention) setMention(nextMention);
     };
 
-    const insertReference = (reference: CanvasResourceReference) => {
-        if (readOnly || !mention) return;
-        const selected = onSelectReference ? onSelectReference(reference) : reference;
+    const insertReference = async (reference: CanvasResourceReference) => {
+        if (readOnly || !mention || selectionPendingRef.current) return;
+        let selected: CanvasResourceReference | undefined;
+        selectionPendingRef.current = true;
+        try {
+            const result = onSelectReference ? onSelectReference(reference) : reference;
+            selected = result instanceof Promise ? await result : result;
+        } finally {
+            selectionPendingRef.current = false;
+        }
+        // 素材读取期间可能继续输入、关闭面板或锁定节点，不能用旧光标覆盖新正文。
+        if (latestEditorStateRef.current.readOnly || latestEditorStateRef.current.value !== value) return;
         if (!selected) return;
         if (mention.fromShelf) {
             const result = insertPromptReferenceAtSelection(value, mention, canvasResourceMentionToken(selected));
@@ -494,7 +512,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                 // 换到另一个 @ 时重置分类和高亮。
                 key={mention.start}
                 anchor={menuAnchor}
-                connectedReferences={activeMentionCanvasReferences}
+                connectedReferences={onSelectReference ? mentionCanvasReferences : activeMentionCanvasReferences}
                 assetReferences={assetReferences}
                 filteredReferences={filteredReferences}
                 query={mention.query}

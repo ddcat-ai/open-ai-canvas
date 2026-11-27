@@ -76,7 +76,7 @@ import { CanvasNodePromptPanel, type CanvasNodeGenerationMode } from "@/componen
 import { handleListGenerate } from "./list-mode-generator";
 import { CanvasToolbar } from "@/components/canvas/canvas-toolbar";
 import { useCanvasCreateCommands } from "@/components/canvas/use-canvas-create-commands";
-import { AssetPickerModal, type InsertAssetPayload } from "@/components/canvas/asset-picker-modal";
+import { AssetPickerModal, assetPickerSelectionToInsertPayloads, type InsertAssetPayload } from "@/components/canvas/asset-picker-modal";
 import { getProject, listCharacters, type ProjectAsset } from "@/services/api/projects";
 import { CanvasZoomControls } from "@/components/canvas/canvas-zoom-controls";
 import { persistCanvasAgentCameraFollow, readCanvasAgentCameraFollow } from "@/lib/canvas/canvas-agent-camera-follow";
@@ -95,7 +95,7 @@ import { useCanvasImageRotation } from "./use-canvas-image-rotation";
 import { storyboardMinNodeHeight } from "@/lib/canvas/canvas-storyboard-layout";
 import { CanvasPrevisNodePanel } from "@/components/canvas/previs/canvas-previs-node-panel";
 import { useFocusMode } from "@/hooks/use-focus-mode";
-import { connectCanvasTextMention } from "@/lib/canvas/canvas-text-mention";
+import { connectCanvasResourceMention } from "@/lib/canvas/canvas-resource-mention";
 import { writeCanvasNodePrompt } from "@/lib/canvas/canvas-node-prompt";
 import {
     applyCanvasConnectionPromptSync,
@@ -2310,21 +2310,41 @@ function CanvasViewportPage() {
                     mentionReferences={[
                         ...(mentionReferencesByNodeId.get(panelNode.id) || EMPTY_RESOURCE_REFERENCES),
                         ...buildCanvasResourceReferences(nodesRef.current, connectionsRef.current).filter(
-                            (reference) => reference.kind === "text" && reference.nodeId !== panelNode.id && !(mentionReferencesByNodeId.get(panelNode.id) || []).some((active) => active.nodeId === reference.nodeId),
+                            (reference) => reference.nodeId !== panelNode.id && !(mentionReferencesByNodeId.get(panelNode.id) || []).some((active) => active.nodeId === reference.nodeId),
                         ),
                     ]}
-                    onAddReference={(nodeId, reference) => {
-                        if (reference.active || reference.assetId || reference.kind === "skill") return reference;
-                        if (reference.kind !== "text" || !reference.nodeId || reference.nodeId === nodeId) return undefined;
+                    onAddReference={async (nodeId, reference) => {
+                        if (reference.active || reference.kind === "skill") return reference;
+                        const scope = getActiveUserScope();
                         try {
-                            const linked = connectCanvasTextMention(nodesRef.current, connectionsRef.current, nodeId, reference.nodeId, nanoid());
+                            let sourceId = reference.nodeId;
+                            let preparedNode: CanvasNodeData | undefined;
+                            if (reference.assetId) {
+                                const target = nodesRef.current.find((node) => node.id === nodeId);
+                                if (!target || target.metadata?.locked) return undefined;
+                                sourceId = nodesRef.current.find((node) => node.id !== nodeId && node.metadata?.assetId === reference.assetId)?.id || "";
+                                if (!sourceId) {
+                                    const asset = useAssetStore.getState().assets.find((item) => item.id === reference.assetId);
+                                    if (!asset) throw new Error("素材已不存在，请重新选择");
+                                    const [payload] = await assetPickerSelectionToInsertPayloads([asset.id], [{ id: asset.id, title: asset.title, category: asset.category || "other", kindLabel: reference.kind, asset }]);
+                                    if (scope !== getActiveUserScope() || !nodesRef.current.some((node) => node.id === nodeId && !node.metadata?.locked)) return undefined;
+                                    preparedNode = await createAssetPayloadNode(payload, { x: target.position.x - 360, y: target.position.y + target.height / 2 });
+                                    sourceId = preparedNode.id;
+                                }
+                            }
+                            if (scope !== getActiveUserScope() || !sourceId || sourceId === nodeId) return undefined;
+                            // 导入与连接一次提交，连接校验失败时不遗留孤立素材节点。
+                            const currentNodes = nodesRef.current;
+                            const existingSource = reference.assetId ? currentNodes.find((node) => node.id !== nodeId && node.metadata?.assetId === reference.assetId) : undefined;
+                            const nextNodes = preparedNode && !existingSource ? [...currentNodes, preparedNode] : currentNodes;
+                            const linked = connectCanvasResourceMention(nextNodes, connectionsRef.current, nodeId, existingSource?.id || sourceId, nanoid());
                             nodesRef.current = linked.nodes;
                             connectionsRef.current = linked.connections;
                             setNodes(linked.nodes);
                             setConnections(linked.connections);
                             return linked.reference;
                         } catch (cause) {
-                            message.warning(cause instanceof Error ? cause.message : "文本引用失败");
+                            if (scope === getActiveUserScope()) message.warning(cause instanceof Error ? cause.message : "素材引用失败");
                             return undefined;
                         }
                     }}
@@ -2363,6 +2383,7 @@ function CanvasViewportPage() {
         },
         [
             configInputsById,
+            createAssetPayloadNode,
             effectiveConfig,
             handleConfigNodeChange,
             handleGenerateNode,

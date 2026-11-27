@@ -19,6 +19,89 @@ const { CanvasNineGridPicker } = await import("../../src/components/canvas/canva
 const { ConfigProvider } = await import("antd");
 afterAll(() => dom.happyDOM.abort());
 
+test("添加素材直接展示未连接的画布视频，选择后建立引用", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const actions = { current: null as CanvasResourceMentionTextareaActions | null };
+    const reference: CanvasResourceReference = { id: "video", nodeId: "video", kind: "video", label: "视频1", title: "画布原片", active: false };
+    const selected: string[] = [];
+    const writes: string[] = [];
+    try {
+        await act(async () =>
+            root.render(
+                <CanvasResourceMentionTextarea
+                    value="运镜"
+                    references={[reference]}
+                    actionsRef={actions}
+                    onSelectReference={(item) => {
+                        selected.push(item.id);
+                        return { ...item, active: true };
+                    }}
+                    onChange={(next) => {
+                        writes.push(next);
+                    }}
+                />,
+            ),
+        );
+        await act(async () => actions.current!.openReferencePicker());
+        const item = document.querySelector<HTMLButtonElement>(".canvas-resource-mention-item")!;
+        expect(item?.textContent).toContain("画布原片");
+        await act(async () => item.dispatchEvent(new dom.PointerEvent("pointerdown", { bubbles: true, cancelable: true })));
+        expect(selected).toEqual(["video"]);
+        expect(writes).toEqual([`运镜 ${canvasResourceMentionToken(reference)}`]);
+    } finally {
+        await act(async () => root.unmount());
+        host.remove();
+    }
+});
+
+test("异步素材选择期间继续输入时保留新正文，重复点击只读取一次", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const actions = { current: null as CanvasResourceMentionTextareaActions | null };
+    const reference: CanvasResourceReference = { id: "image", nodeId: "image", kind: "image", label: "图片1", title: "参考图", active: false };
+    let finish!: (value: CanvasResourceReference) => void;
+    const pending = new Promise<CanvasResourceReference>((resolve) => {
+        finish = resolve;
+    });
+    let reads = 0;
+    const writes: string[] = [];
+    const render = (value: string) =>
+        root.render(
+            <CanvasResourceMentionTextarea
+                value={value}
+                references={[reference]}
+                actionsRef={actions}
+                onSelectReference={() => {
+                    reads += 1;
+                    return pending;
+                }}
+                onChange={(next) => {
+                    writes.push(next);
+                }}
+            />,
+        );
+    try {
+        await act(async () => render("原正文"));
+        await act(async () => actions.current!.openReferencePicker());
+        const item = document.querySelector<HTMLButtonElement>(".canvas-resource-mention-item")!;
+        await act(async () => {
+            item.dispatchEvent(new dom.PointerEvent("pointerdown", { bubbles: true, cancelable: true }));
+            item.dispatchEvent(new dom.PointerEvent("pointerdown", { bubbles: true, cancelable: true }));
+        });
+        expect(reads).toBe(1);
+        await act(async () => render("用户继续输入的新正文"));
+        await act(async () => finish({ ...reference, active: true }));
+        expect(writes).toEqual([]);
+        expect(host.querySelector("textarea")?.value).toBe("用户继续输入的新正文");
+    } finally {
+        await act(async () => root.unmount());
+        host.remove();
+    }
+});
+
 test("提示词预设回显当前选项，改选四视图只提交一次并收起菜单", async () => {
     const host = document.createElement("div");
     document.body.append(host);
