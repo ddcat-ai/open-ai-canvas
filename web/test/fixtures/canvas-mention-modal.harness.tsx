@@ -24,7 +24,7 @@ test("添加素材直接展示未连接的画布视频，选择后建立引用",
     document.body.append(host);
     const root = createRoot(host);
     const actions = { current: null as CanvasResourceMentionTextareaActions | null };
-    const reference: CanvasResourceReference = { id: "video", nodeId: "video", kind: "video", label: "视频1", title: "画布原片", active: false };
+    const reference: CanvasResourceReference = { id: "video", nodeId: "video", kind: "video", label: "视频1", title: "画布原片", displayLabel: "画布原片", active: false };
     const selected: string[] = [];
     const writes: string[] = [];
     try {
