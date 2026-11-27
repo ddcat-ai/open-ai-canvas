@@ -46,6 +46,10 @@ export type LocalUser = {
 export type AdminUser = LocalUser & {
     availableMicrocredits: number;
     reservedMicrocredits: number;
+    imageAvailableMicrocredits?: number;
+    imageReservedMicrocredits?: number;
+    videoAvailableMicrocredits?: number;
+    videoReservedMicrocredits?: number;
     /** 仅用户列表返回：累计充值到账积分与累计已结算消耗。 */
     rechargedMicrocredits?: number;
     consumedMicrocredits?: number;
@@ -170,7 +174,16 @@ export type AdminAuditEvent = {
 
 export type AdminUserDetail = {
     user: LocalUser;
-    account: { userId: string; availableMicrocredits: number; reservedMicrocredits: number; version: number };
+    account: {
+        userId: string;
+        availableMicrocredits: number;
+        reservedMicrocredits: number;
+        imageAvailableMicrocredits?: number;
+        imageReservedMicrocredits?: number;
+        videoAvailableMicrocredits?: number;
+        videoReservedMicrocredits?: number;
+        version: number;
+    };
     counts: { ledgerEntries: number; tasks: number; apiCalls: number; auditEvents: number; rechargeMicrocredits: number; checkinMicrocredits: number };
     storageUsage: {
         assetCount: number;

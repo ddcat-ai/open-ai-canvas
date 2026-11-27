@@ -5,13 +5,38 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"yingce/backend/internal/assets"
 	"yingce/backend/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
+
+const publicResourceMaxCacheSeconds int64 = 518_400
+
+func publicResourceCacheControl(c *gin.Context, delivery *service.ResourceDelivery, now time.Time) string {
+	if c.Query("access") == "1" || c.Query("download") == "1" || strings.EqualFold(strings.TrimSpace(c.Query("purpose")), string(assets.PurposeDownload)) {
+		return "private, no-store"
+	}
+	if delivery == nil || delivery.Resource == nil || !assets.InlineMediaType(delivery.Resource.MimeType) {
+		return "private, no-store"
+	}
+	expiresUnix, err := strconv.ParseInt(strings.TrimSpace(c.Query("expires")), 10, 64)
+	if err != nil {
+		return "private, no-store"
+	}
+	remaining := expiresUnix - now.Unix()
+	if remaining <= 0 {
+		return "private, no-store"
+	}
+	if remaining > publicResourceMaxCacheSeconds {
+		remaining = publicResourceMaxCacheSeconds
+	}
+	return fmt.Sprintf("public, max-age=%d", remaining)
+}
 
 func resourceAccessOptions(c *gin.Context) service.ResourceAccessOptions {
 	purpose := assets.AccessPurpose(strings.TrimSpace(c.Query("purpose")))
@@ -89,6 +114,14 @@ func serveResourceDelivery(c *gin.Context, delivery *service.ResourceDelivery, c
 	if seeker, ok := stream.Body.(io.ReadSeeker); ok {
 		c.Header("Content-Type", mimeType)
 		http.ServeContent(c.Writer, c.Request, resource.ID, resource.UpdatedAt, seeker)
+		return
+	}
+	if c.Request.Method == http.MethodHead {
+		c.Header("Content-Type", mimeType)
+		if stream.ContentLength >= 0 {
+			c.Header("Content-Length", strconv.FormatInt(stream.ContentLength, 10))
+		}
+		c.Status(stream.StatusCode)
 		return
 	}
 	c.DataFromReader(stream.StatusCode, stream.ContentLength, mimeType, stream.Body, nil)

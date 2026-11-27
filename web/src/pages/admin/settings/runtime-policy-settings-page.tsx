@@ -38,7 +38,15 @@ const resourceFields: PolicyField[] = [
 
 const storageFields: PolicyField[] = [
     { group: "storage", name: "transferTimeoutSeconds", label: "对象存储传输超时", extra: "对象存储上传、下载、删除与连接测试的最长等待时间。", unit: "秒", min: 10, max: 3_600 },
-    { group: "storage", name: "accessURLTTLSeconds", label: "访问地址有效期", extra: "浏览器访问对象资源时使用的签名地址有效期。", unit: "秒", min: 60, max: 86_400 },
+    {
+        group: "storage",
+        name: "accessURLTTLSeconds",
+        label: "访问地址有效期",
+        extra: "浏览器访问对象资源及公开签名地址的有效期（上限 30 天；设 2419200 秒可使 URL 在 7 天窗口内保持稳定）。",
+        unit: "秒",
+        min: 60,
+        max: 2_592_000,
+    },
     { group: "storage", name: "providerAccessURLTTLSeconds", label: "厂商访问地址有效期", extra: "模型或其他外部厂商读取对象资源时使用的地址有效期。", unit: "秒", min: 300, max: 86_400 },
     { group: "storage", name: "nonSeekableBufferMB", label: "非可寻址上传缓冲", extra: "S3 兼容存储接收不可重复读取请求体时的最大内存缓冲。", unit: "MB", max: 999 },
     { group: "storage", name: "errorBodyKB", label: "错误响应保留", extra: "对象存储错误响应中最多保留的诊断内容。", unit: "KB", max: 1_024 },

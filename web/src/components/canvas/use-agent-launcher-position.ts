@@ -7,7 +7,7 @@ const viewport = () => ({ width: window.innerWidth, height: window.innerHeight }
  * 入口的拖拽、点击与键盘移动。指针处理器（onPointer*）可以挂在入口按钮上，也可以挂在按钮内的身体热区上
  * （大形象外框不接收指针）；指针捕获落在挂处理器的元素上，因此该元素必须能被命中。
  */
-export function useAgentLauncherPosition(onOpen: () => void, width = 76, height = 76, inCanvasEditor = true) {
+export function useAgentLauncherPosition(onOpen: () => void, width = 76, height = 76, inCanvasEditor = true, minRight = 0) {
     const size = { width, height };
     const preference = useRef<string | null>(null);
     const [position, setPosition] = useState(() => {
@@ -18,6 +18,7 @@ export function useAgentLauncherPosition(onOpen: () => void, width = 76, height 
         }
         return restoreAgentLauncherPosition(preference.current, viewport(), size, inCanvasEditor);
     });
+    const shown = position.right < minRight ? clampAgentLauncherPosition({ ...position, right: minRight }, viewport(), size) : position;
     const [dragging, setDragging] = useState(false);
     const gestureRef = useRef<(AgentLauncherGesture & { pointerId: number }) | null>(null);
     const suppressClick = useRef(false);
@@ -42,7 +43,7 @@ export function useAgentLauncherPosition(onOpen: () => void, width = 76, height 
         event.stopPropagation();
         if (event.button !== 0 || !event.isPrimary || gestureRef.current) return;
         suppressClick.current = false;
-        gestureRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, start: position, dragged: false };
+        gestureRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, start: shown, dragged: false };
         event.currentTarget.setPointerCapture(event.pointerId);
     };
     const onPointerMove = (event: PointerEvent<HTMLElement>) => {
@@ -65,7 +66,7 @@ export function useAgentLauncherPosition(onOpen: () => void, width = 76, height 
         const next = cancelled ? { dragged: gesture.dragged, position: clampAgentLauncherPosition(position, viewport(), size) } : moveAgentLauncher(gesture, event.clientX, event.clientY, viewport(), size);
         suppressClick.current = cancelled || next.dragged;
         setDragging(false);
-        setPosition(next.position);
+        if (next.dragged || cancelled) setPosition(next.position);
         if (next.dragged) save(next.position);
         if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     };
@@ -85,13 +86,13 @@ export function useAgentLauncherPosition(onOpen: () => void, width = 76, height 
         const offset = offsets[event.key];
         if (!offset) return;
         event.preventDefault();
-        const next = clampAgentLauncherPosition({ right: position.right + offset[0], bottom: position.bottom + offset[1] }, viewport(), size);
+        const next = clampAgentLauncherPosition({ right: shown.right + offset[0], bottom: shown.bottom + offset[1] }, viewport(), size);
         setPosition(next);
         save(next);
     };
 
     return {
-        position,
+        position: shown,
         dragging,
         handlers: {
             onPointerDown,
