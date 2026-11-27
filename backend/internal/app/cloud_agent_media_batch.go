@@ -226,7 +226,8 @@ func cloudAgentMediaBatchItemArgs(doc map[string]any, args cloudAgentMediaBatchA
 		return cloudAgentMediaArgs{}, cloudAgentFieldError(field("nodeId"), "invalid_value", "占位节点类型与本批生成模式不一致；图片、视频、音频请分批")
 	}
 	metadata, _ := node["metadata"].(map[string]any)
-	if _, processing := mediatool.Lookup(firstNonEmpty(stringValue(metadata["operation"]), stringValue(metadata["videoEditOperation"]))); processing {
+	generationSpec, _ := metadata["generationSpec"].(map[string]any)
+	if _, processing := mediatool.Lookup(firstNonEmpty(stringValue(generationSpec["operation"]), stringValue(metadata["operation"]), stringValue(metadata["videoEditOperation"]))); processing {
 		return cloudAgentMediaArgs{}, cloudAgentFieldError(field("nodeId"), "unsupported_value", "视频处理暂不支持批量提交，请逐项调用 generate_media")
 	}
 	if reason, issue := cloudAgentMediaTargetIssue(node, args.Mode); reason != "" {

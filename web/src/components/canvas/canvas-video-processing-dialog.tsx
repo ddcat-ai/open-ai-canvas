@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { InputNumber } from "antd";
 
 import { AppModal } from "@/components/ui/product/app-modal";
@@ -34,30 +34,39 @@ export function MediaToolParameterFields({
         <div className="space-y-4">
             {Object.entries(fields).map(([key, field]) => {
                 const label = field.title || field.label || key;
+                let control: ReactNode = null;
+                if (field.enum) {
+                    control = (
+                        <Select
+                            ariaLabel={label}
+                            disabled={disabled}
+                            value={values[key] === undefined ? undefined : String(values[key])}
+                            allowClear
+                            options={field.enum.map((value) => ({ value: String(value), label: String(value) }))}
+                            onChange={(value: string | undefined) => {
+                                if (value === undefined) onChange(key, undefined);
+                                else onChange(key, field.type === "string" ? value : Number(value));
+                            }}
+                        />
+                    );
+                } else if (field.type !== "string") {
+                    control = (
+                        <InputNumber
+                            aria-label={label}
+                            disabled={disabled}
+                            className="w-full"
+                            min={field.minimum}
+                            max={field.maximum}
+                            precision={0}
+                            value={typeof values[key] === "number" ? values[key] : undefined}
+                            onChange={(value) => onChange(key, value ?? undefined)}
+                        />
+                    );
+                }
                 return (
                     <label key={key} className="flex flex-col gap-2 text-sm">
                         <span>{label}</span>
-                        {field.enum ? (
-                            <Select
-                                ariaLabel={label}
-                                disabled={disabled}
-                                value={values[key] === undefined ? undefined : String(values[key])}
-                                allowClear
-                                options={field.enum.map((value) => ({ value: String(value), label: String(value) }))}
-                                onChange={(value) => onChange(key, value === undefined ? undefined : field.type !== "string" ? Number(value) : value)}
-                            />
-                        ) : field.type !== "string" ? (
-                            <InputNumber
-                                aria-label={label}
-                                disabled={disabled}
-                                className="w-full"
-                                min={field.minimum}
-                                max={field.maximum}
-                                precision={0}
-                                value={typeof values[key] === "number" ? values[key] : undefined}
-                                onChange={(value) => onChange(key, value ?? undefined)}
-                            />
-                        ) : null}
+                        {control}
                     </label>
                 );
             })}
@@ -103,6 +112,11 @@ function ProcessingEditor({ node, config, operation, onClose, onConfirm }: Props
     const quoteKey = JSON.stringify(quoteRequest);
     const [quotedKey, setQuotedKey] = useState<string | undefined>();
     const canConfirm = ready && (!creditsEnabled || Boolean(quote && !quoteError && quotedKey === quoteKey));
+    let quoteText = "";
+    if (creditsEnabled) {
+        if (quote && quotedKey === quoteKey) quoteText = modelQuoteDescription(quote);
+        else quoteText = quoteError || (quoteRequest ? "正在计算积分…" : "源视频时长未知，无法报价");
+    }
 
     useEffect(() => {
         setQuote(null);
@@ -137,7 +151,7 @@ function ProcessingEditor({ node, config, operation, onClose, onConfirm }: Props
             onOk={() => canConfirm && onConfirm(params)}
             footer={(_, { OkBtn, CancelBtn }) => (
                 <div className="flex items-center justify-between gap-3">
-                    <span className="text-left text-xs text-muted-foreground">{creditsEnabled ? (quote && quotedKey === quoteKey ? modelQuoteDescription(quote) : quoteError || (quoteRequest ? "正在计算积分…" : "源视频时长未知，无法报价")) : ""}</span>
+                    <span className="text-left text-xs text-muted-foreground">{quoteText}</span>
                     <div className="flex shrink-0 gap-2">
                         <CancelBtn />
                         <OkBtn />

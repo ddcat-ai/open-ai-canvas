@@ -211,6 +211,17 @@ func TestSharedMediaToolsRestoreDraftProcessingFieldsBeforeSourceSelection(t *te
 	}
 }
 
+func TestSharedMediaToolsBatchRejectsCanonicalProcessingSpec(t *testing.T) {
+	doc := map[string]any{"nodes": []any{map[string]any{"id": "processing", "type": "video", "metadata": map[string]any{"generationSpec": map[string]any{"operation": "upscale"}}}}}
+	args, err := decodeCloudAgentMediaBatchArgs(`{"mode":"video","items":[{"nodeId":"processing"}]}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cloudAgentMediaBatchItemArgs(doc, args, 0); err == nil || !strings.Contains(err.Error(), "暂不支持批量") {
+		t.Fatalf("canonical processing spec entered ordinary batch: %v", err)
+	}
+}
+
 func TestSharedMediaToolsRejectPublicBypassesAndFreezeParameters(t *testing.T) {
 	s, db, args, _ := sharedMediaToolFixture(t, "enhance")
 	run, state := agentMediaRun(t, s, args, "auto")
