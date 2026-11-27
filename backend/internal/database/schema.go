@@ -51,6 +51,7 @@ func Models() []any {
 		&model.EmailVerificationCode{},
 		&model.EmailLog{},
 		&model.UserNotificationSetting{},
+		&model.UserNodeToolbarPreference{},
 		&model.AuthVerification{},
 		&model.NotificationQuota{},
 		&model.SMSChannel{},

@@ -94,6 +94,7 @@ func registerWorkspaceAssetBatchRoutes(r *gin.RouterGroup, svc *service.Service)
 }
 
 func registerAccountDataRoutes(r *gin.RouterGroup, svc *service.Service) {
+	registerNodeToolbarPreferenceRoutes(r, svc)
 	r.GET("/settings/prompt-templates", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

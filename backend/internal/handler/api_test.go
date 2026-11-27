@@ -49,6 +49,9 @@ func TestRegisterCanvasAPIExposesOpenAPIAndProjects(t *testing.T) {
 		"GET /api/admin/request-protocols":                                  false,
 		"POST /api/admin/request-protocols":                                 false,
 		"POST /api/admin/request-protocols/check":                           false,
+		"GET /api/settings/node-toolbar":                                    false,
+		"PUT /api/settings/node-toolbar/:nodeType":                          false,
+		"DELETE /api/settings/node-toolbar/:nodeType":                       false,
 	}
 	for _, route := range router.Routes() {
 		key := route.Method + " " + route.Path

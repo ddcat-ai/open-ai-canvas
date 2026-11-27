@@ -5,6 +5,18 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## 节点工具栏个人配置
+
+以下接口使用当前登录用户和统一信封，账号配置跨画布、浏览器和设备共用；写操作按账号沿用 `CanvasWritePerMinute` 限流。
+
+| 接口 | 入参与结果 |
+| --- | --- |
+| `GET /api/settings/node-toolbar` | 返回 `data.preferences`，按 `image`、`video`、`audio`、`text` 映射有序的固定入口标识数组；未保存的类型不出现。 |
+| `PUT /api/settings/node-toolbar/:nodeType` | 请求 `{pinnedEntryIds: string[]}`，返回 `data.pinnedEntryIds`。数组必须显式提供，最多 256 项，标识为 1–128 位字母、数字、冒号、下划线或连字符且以字母或数字开头，不允许重复。请求体上限 64 KiB。 |
+| `DELETE /api/settings/node-toolbar/:nodeType` | 恢复当前类型默认布局，返回 `data.nodeType`。 |
+
+`nodeType` 仅支持四类节点；非法类型或数组返回 400，未登录返回 401，超限返回 429。`pinnedEntryIds: []` 表示全部取消固定，与删除记录恢复默认不同。具体工具沿用已有标识，分类菜单标识如 `menu:process`；工具适用性仍由现有工具定义决定。前端保存后回读服务端配置，回读成功后更新工具栏；失败时在面板内反馈并保留草稿。
+
 ## 团队空间
 
 以下接口均在 `/api` 下，使用登录 Cookie。`teamId`、`membershipId`、素材 ID 只用于定位；操作权限由服务端根据当前账号及其有效成员关系决定。成员不能访问其他团队或冒用所有者，待处理邀请不授予读取权限。

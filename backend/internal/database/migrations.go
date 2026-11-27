@@ -13,7 +13,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const CurrentSchemaVersion int64 = 111
+const CurrentSchemaVersion int64 = 112
 
 const baselineSchemaChecksum = "sha256:open-ai-canvas-schema-v1-20260830"
 const schemaMigrationAppliedAtIndexChecksum = "sha256:schema-migrations-applied-at-index-v2-20260830"
@@ -399,6 +399,9 @@ var schemaMigrations = []migration{
 		return reconcileAgentStorageUsage(tx)
 	}},
 	{version: 111, name: "redeem_batch_limits_and_capability_pools", checksum: "sha256:redeem-batch-limits-and-capability-pools-v111-20261125", apply: migrateRedeemBatchLimitsAndCapabilityPools},
+	{version: 112, name: "node_toolbar_preferences", checksum: "sha256:node-toolbar-preferences-v112", apply: func(tx *gorm.DB) error {
+		return tx.AutoMigrate(&model.UserNodeToolbarPreference{})
+	}},
 }
 
 func migrateRedeemBatchLimitsAndCapabilityPools(tx *gorm.DB) error {

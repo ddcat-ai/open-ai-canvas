@@ -5,6 +5,12 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 节点工具栏个人配置
+
+- `web/src/components/canvas/canvas-node-toolbar.tsx` 合并现有工具定义并渲染具体工具、分类菜单及「更多」；`lib/canvas/node-toolbar-entries.ts` 解析固定顺序及按宽度收纳。
+- `components/canvas/toolbars/node-toolbar-settings-modal.tsx` 复用已有配置卡片，提供固定、排序、恢复默认和保存失败反馈；`hooks/use-node-toolbar-preferences.ts` 按用户隔离账号配置缓存，保存后回读。
+- `handler/node_toolbar_preferences.go` → `service/aliases_node_toolbar_preferences.go` → `app/node_toolbar_preferences.go` → `canvas/toolbar_preferences.go` → `repository/node_toolbar_preferences.go`。持久化模型为 `model/models_node_toolbar.go`，迁移版本为 112。
+
 ## 团队空间
 
 - `web/src/router.tsx` 为个人和团队挂载相同的 `pages/canvas`、`pages/create`、`pages/assets`；`lib/workspace-routes.ts` 选择 API 前缀，`lib/user-scope.ts` 隔离本地缓存。`pages/teams` 只负责空间、成员、邀请和钱包。

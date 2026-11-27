@@ -1,15 +1,17 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { App, Button, Input, Modal, Tag } from "antd";
 import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
 import { CanvasAnchoredDropdown as Dropdown } from "./canvas-anchored-dropdown";
 import type { MenuProps } from "antd";
-import { Camera, Check, ChevronDown, ChevronRight, Ellipsis, Palette, Plus, SlidersHorizontal, Wrench } from "lucide-react";
+import { Camera, Check, ChevronDown, ChevronRight, Ellipsis, Grid3x3, Palette, Plus, SlidersHorizontal, Wrench } from "lucide-react";
 
 import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
-import { avoidCanvasNodePanels, canvasNodePanelBounds, canvasOverlayBounds, canvasToolbarLayoutLevel, observeCanvasOverlayBounds, subscribeCanvasNodePanelBounds } from "@/lib/canvas/canvas-overlay-layout";
+import { avoidCanvasNodePanels, canvasNodePanelBounds, canvasOverlayBounds, observeCanvasOverlayBounds, subscribeCanvasNodePanelBounds } from "@/lib/canvas/canvas-overlay-layout";
+import { buildNodeToolbarEntries, resolvePinnedToolbarEntries, visibleToolbarEntryCount, type NodeToolbarEntry, type NodeToolbarTool } from "@/lib/canvas/node-toolbar-entries";
+import { useNodeToolbarPreferences } from "@/hooks/use-node-toolbar-preferences";
 import { ASSET_ASSIGNABLE_CATEGORY_OPTIONS } from "@/lib/asset-category";
 import { canvasThemes } from "@/lib/canvas-theme";
-import { resolveNodeToolbarPlacement, resolveToolbarTools, type NodeToolbarGroup, type ToolContext, type ToolbarHandlers } from "@/lib/canvas/tool-registry";
+import { resolveNodeToolbarPlacement, resolveToolbarTools, type ToolContext, type ToolbarHandlers } from "@/lib/canvas/tool-registry";
 import { subscribeCanvasGraphicsViewportPreview, subscribeCanvasNodeDragPreview } from "@/lib/canvas/canvas-live-viewport";
 import { canvasNodeAssetCategory } from "@/lib/canvas/canvas-node-asset";
 import type { ImageSplitParams } from "@/lib/canvas/canvas-image-data";
@@ -21,11 +23,14 @@ import { nodeGenerationPrompt } from "@/lib/canvas/generation-contract";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata, type CanvasWorkspaceMode, type Position, type ViewportTransform } from "@/types/canvas";
-import { buildImageToolbarTools } from "./canvas-image-toolbar-tools";
+import { buildImageToolbarTools, getNineGridMenuItems } from "./canvas-image-toolbar-tools";
+import { TOOL_ICON_MAP } from "./canvas-mention-chips";
 import { CanvasGridSplitPicker } from "./canvas-grid-split-picker";
 import { CanvasNineGridPicker } from "./canvas-nine-grid-picker";
 import { CanvasToolMenuOption, CanvasToolMenuSurface } from "./canvas-tool-menu";
 import { useCanvasNodeResizeMotion } from "./canvas-node-resize-motion";
+import { NodeToolbarSettingsModal } from "./toolbars/node-toolbar-settings-modal";
+import { translate } from "@/i18n";
 
 type CanvasNodeToolbarProps = {
     node: CanvasNodeData | null;
@@ -88,19 +93,7 @@ type CanvasAssetCategory = NonNullable<NonNullable<CanvasNodeData["metadata"]>["
 
 const assetCategoryOptions: Array<{ value: CanvasAssetCategory; label: string }> = ASSET_ASSIGNABLE_CATEGORY_OPTIONS;
 
-type ToolbarTool = {
-    section?: string;
-    description?: string;
-    id: string;
-    label: string;
-    icon: ReactNode;
-    onClick: () => void;
-    group: NodeToolbarGroup;
-    order: number;
-    active?: boolean;
-    danger?: boolean;
-    disabled?: boolean;
-};
+type ToolbarTool = NodeToolbarTool;
 
 export function CanvasNodeToolbar({
     node,
@@ -160,8 +153,8 @@ export function CanvasNodeToolbar({
 }: CanvasNodeToolbarProps) {
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     const [containerWidth, setContainerWidth] = useState(1000);
-    const [layoutLevel, setLayoutLevel] = useState(0);
-    const measuredToolbarWidths = useRef<number[]>([0, 0, 0]);
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const preferences = useNodeToolbarPreferences(node?.type);
     const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
     const toolbarRef = useRef<HTMLDivElement>(null);
     const { message } = App.useApp();
@@ -173,12 +166,8 @@ export function CanvasNodeToolbar({
 
     useEffect(() => {
         setOpenMenuId(null);
-    }, [node?.id]);
-
-    useEffect(() => {
-        measuredToolbarWidths.current = [0, 0, 0];
-        setLayoutLevel(0);
-    }, [node?.id, workspaceMode]);
+        setSettingsOpen(false);
+    }, [node?.id, preferences.userId]);
 
     useLayoutEffect(() => {
         const container = containerRef.current;
@@ -236,11 +225,6 @@ export function CanvasNodeToolbar({
             toolbarWidth = toolbarRef.current?.offsetWidth || 0;
             toolbarHeight = toolbarRef.current?.offsetHeight || 44;
             const availableWidth = Math.max(0, availableBounds.right - availableBounds.left);
-            const dock = toolbarRef.current?.firstElementChild as HTMLElement | null;
-            if (dock) {
-                measuredToolbarWidths.current[layoutLevel] = dock.scrollWidth;
-                setLayoutLevel(canvasToolbarLayoutLevel(availableWidth, measuredToolbarWidths.current, layoutLevel));
-            }
             setContainerWidth(availableWidth);
             scheduleUpdate();
         };
@@ -271,7 +255,7 @@ export function CanvasNodeToolbar({
             unsubscribeDrag();
             window.removeEventListener("resize", measure);
         };
-    }, [anchor === null, containerRef, layoutLevel, node, resizeMotion, viewport.k, viewport.x, viewport.y]);
+    }, [anchor === null, containerRef, node, resizeMotion, viewport.k, viewport.x, viewport.y]);
 
     if (!node || !anchor) return null;
 
@@ -392,24 +376,34 @@ export function CanvasNodeToolbar({
             onClick: () => tool.run(nodeHoverCtx),
         };
     });
-    const allTools: ToolbarTool[] = hasImage && !simpleMode ? [...registryToolbarTools, ...imageTools] : registryToolbarTools;
-    const compact = layoutLevel >= 1;
-    const narrow = layoutLevel >= 2;
-    const inGroup = (group: NodeToolbarGroup) => allTools.filter((tool) => tool.group === group).sort(compareToolbarTools);
-    const primary = inGroup("primary");
-    const primaryTools = narrow ? primary.filter((tool, index) => index === 0 || tool.id === "rotateClockwise" || tool.id === "rotateCounterclockwise" || tool.id === "remakeVideo" || tool.id === "trimRegenerate") : primary;
-    const adjustTools = compact ? [] : inGroup("adjust");
-    const cameraTools = compact ? [] : inGroup("camera");
-    const showImagePresets = hasImage && !simpleMode;
-    const processTools = compact ? [...inGroup("adjust"), ...inGroup("camera"), ...inGroup("process")] : inGroup("process");
-    const workspaceTools = narrow ? [] : inGroup("workspace");
-    const utilityTools = narrow ? [] : inGroup("utility");
-    const moreTools = [...(narrow ? [...primary.filter((tool) => !primaryTools.includes(tool)), ...inGroup("workspace"), ...inGroup("utility")] : []), ...inGroup("more")];
-    const processMenuLabel = compact ? "工具" : isVideo ? "视频工具" : isImage ? "图片工具" : isAudio ? "音频处理" : "文本调整";
+    const presetTools: ToolbarTool[] =
+        hasImage && !simpleMode
+            ? getNineGridMenuItems().map((preset, order) => {
+                  const Icon = TOOL_ICON_MAP[preset.toolIconName] ?? Grid3x3;
+                  return {
+                      id: preset.id,
+                      label: preset.label,
+                      icon: <Icon className="size-3.5" />,
+                      group: "sheet",
+                      order,
+                      section: preset.section,
+                      description: preset.description,
+                      onClick: () => onNineGrid(node, preset.toolId, preset.label, preset.toolIconName),
+                  };
+              })
+            : [];
+    const allTools: ToolbarTool[] = hasImage && !simpleMode ? [...registryToolbarTools, ...imageTools, ...presetTools] : registryToolbarTools;
+    const processMenuLabel = isVideo ? "视频工具" : isImage ? "图片工具" : isAudio ? "音频处理" : "文本调整";
+    const entries = buildNodeToolbarEntries(allTools, [
+        { group: "adjust", label: "画面调整", icon: <Palette className="size-3.5" /> },
+        { group: "camera", label: "镜头", icon: <Camera className="size-3.5" /> },
+        { group: "sheet", label: translate("canvasB.nineGrid.creativePresets"), icon: <Grid3x3 className="size-3.5" /> },
+        { group: "process", label: processMenuLabel, icon: isVideo ? <Wrench className="size-3.5" /> : <SlidersHorizontal className="size-3.5" /> },
+    ]);
     const handleMenuOpenChange = (menuId: string, open: boolean) => {
         setOpenMenuId((current) => (open ? menuId : current === menuId ? null : current));
         if (open) onKeep(node.id);
-        else if (!toolbarRef.current?.contains(document.activeElement)) onLeave();
+        else if (!settingsOpen && !toolbarRef.current?.contains(document.activeElement)) onLeave();
     };
     const dockStyle = canvasDockStyle(theme, theme.node.text);
 
@@ -421,7 +415,7 @@ export function CanvasNodeToolbar({
             style={{ left: 0, top: 0, transform: `translate3d(${anchor.left}px, ${anchor.top}px, 0)`, width: "max-content", maxWidth: containerWidth, color: theme.node.text }}
             onMouseEnter={() => onKeep(node.id)}
             onMouseLeave={() => {
-                if (!openMenuId) onLeave();
+                if (!openMenuId && !settingsOpen) onLeave();
             }}
             onMouseDown={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
@@ -429,48 +423,205 @@ export function CanvasNodeToolbar({
             onKeyDown={(event) => event.stopPropagation()}
             onFocus={() => onKeep(node.id)}
             onBlur={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget) && !openMenuId) onLeave();
+                if (!event.currentTarget.contains(event.relatedTarget) && !openMenuId && !settingsOpen) onLeave();
             }}
         >
-            <div
-                role="toolbar"
-                aria-label="节点快捷工具"
-                className="canvas-node-toolbar-dock flex h-11 max-w-full items-center gap-0.5 overflow-visible rounded-[var(--dock-radius-tight)] border px-2 backdrop-blur-2xl"
+            <NodeToolbarDock
+                entries={entries}
+                mediaMenu={isImage || isVideo}
+                pinnedEntryIds={preferences.pinnedEntryIds}
+                availableWidth={containerWidth}
                 style={{ ...dockStyle, borderColor: "color-mix(in srgb, currentColor 8%, transparent)" }}
-            >
-                {primaryTools.map((tool) => (
-                    <NodeDockToolButton key={tool.id} tool={tool} iconOnly={narrow} />
+                openMenuId={openMenuId}
+                onOpenChange={handleMenuOpenChange}
+                onSettings={
+                    preferences.canEdit
+                        ? () => {
+                              setOpenMenuId(null);
+                              setSettingsOpen(true);
+                              onKeep(node.id);
+                          }
+                        : undefined
+                }
+                split={hasImage && !simpleMode ? { node, onSplit } : undefined}
+                onPreset={hasImage && !simpleMode ? (id, label, icon) => onNineGrid(node, id, label, icon) : undefined}
+            />
+            {preferences.canEdit ? (
+                <NodeToolbarSettingsModal
+                    key={`${preferences.userId}:${node.type}`}
+                    open={settingsOpen}
+                    entries={entries}
+                    renderPreview={(ids) => <NodeToolbarPreview entries={entries} mediaMenu={isImage || isVideo} pinnedEntryIds={ids} style={{ ...dockStyle, borderColor: "color-mix(in srgb, currentColor 8%, transparent)" }} />}
+                    pinnedEntryIds={preferences.pinnedEntryIds}
+                    loading={preferences.loading}
+                    readError={preferences.error}
+                    onReload={() => void preferences.reload()}
+                    onSave={preferences.save}
+                    onClose={() => setSettingsOpen(false)}
+                />
+            ) : null}
+        </div>
+    );
+}
+
+type ToolbarSplit = { node: CanvasNodeData; onSplit: (node: CanvasNodeData, params: ImageSplitParams) => void };
+type ToolbarMenuEntry = Extract<NodeToolbarEntry, { kind: "menu" }>;
+type NodeToolbarDockProps = {
+    entries: NodeToolbarEntry[];
+    mediaMenu?: boolean;
+    pinnedEntryIds?: string[];
+    availableWidth: number;
+    style?: CSSProperties;
+    openMenuId: string | null;
+    onOpenChange: (menuId: string, open: boolean) => void;
+    onSettings?: () => void;
+    split?: ToolbarSplit;
+    onPreset?: (id: number, label: string, icon: string) => void;
+};
+const ignoreMenuChange = () => {};
+
+export function NodeToolbarPreview({ entries, pinnedEntryIds, style, mediaMenu = false }: { entries: NodeToolbarEntry[]; pinnedEntryIds: string[]; style?: CSSProperties; mediaMenu?: boolean }) {
+    const viewportRef = useRef<HTMLDivElement>(null);
+    const [availableWidth, setAvailableWidth] = useState(0);
+    useLayoutEffect(() => {
+        const viewport = viewportRef.current;
+        if (!viewport) return;
+        const measure = () => setAvailableWidth(viewport.clientWidth || viewport.getBoundingClientRect().width);
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(viewport);
+        return () => observer.disconnect();
+    }, []);
+    const previewEntries = entries.map((entry): NodeToolbarEntry => (entry.kind === "tool" ? { ...entry, tool: { ...entry.tool, onClick: ignoreMenuChange } } : { ...entry, tools: entry.tools.map((tool) => ({ ...tool, onClick: ignoreMenuChange })) }));
+    return (
+        <section aria-label="工具栏预览" className="rounded-[var(--r-md)] bg-surface-active p-3">
+            <span className="text-[var(--fs-caption)] text-muted-foreground">工具栏预览</span>
+            <span className="sr-only">
+                当前顺序：
+                {resolvePinnedToolbarEntries(entries, pinnedEntryIds)
+                    .map((entry) => entry.label)
+                    .join("、") || "仅保留更多入口"}
+            </span>
+            <div ref={viewportRef} className="relative mt-1 flex h-12 min-w-0 items-center justify-center overflow-hidden" inert>
+                <NodeToolbarDock entries={previewEntries} mediaMenu={mediaMenu} pinnedEntryIds={pinnedEntryIds} availableWidth={availableWidth} style={style} openMenuId={null} onOpenChange={ignoreMenuChange} />
+            </div>
+        </section>
+    );
+}
+
+export function NodeToolbarDock({ entries, pinnedEntryIds, availableWidth, style, openMenuId, onOpenChange, onSettings, split, onPreset, mediaMenu = false }: NodeToolbarDockProps) {
+    const pinned = resolvePinnedToolbarEntries(entries, pinnedEntryIds);
+    const [visibleCount, setVisibleCount] = useState(pinned.length);
+    const dockRef = useRef<HTMLDivElement>(null);
+    const measureRef = useRef<HTMLDivElement>(null);
+    const measureKey = pinned.map((entry) => `${entry.id}:${entry.label}:${entry.iconOnly}`).join("|");
+    useLayoutEffect(() => {
+        const measure = () => {
+            const dock = dockRef.current;
+            const row = measureRef.current;
+            if (!dock || !row) return;
+            const widths = [...row.querySelectorAll<HTMLElement>("[data-node-toolbar-entry-width]")].map((element) => element.getBoundingClientRect().width);
+            const moreWidth = row.querySelector<HTMLElement>("[data-node-toolbar-more-width]")?.getBoundingClientRect().width || 32;
+            const computed = getComputedStyle(dock);
+            const padding = (parseFloat(computed.paddingLeft) || 0) + (parseFloat(computed.paddingRight) || 0) + 2;
+            setVisibleCount(visibleToolbarEntryCount(widths, availableWidth, moreWidth + padding, parseFloat(computed.columnGap) || 2));
+        };
+        measure();
+        const observer = new ResizeObserver(measure);
+        if (measureRef.current) observer.observe(measureRef.current);
+        return () => observer.disconnect();
+    }, [measureKey, availableWidth]);
+    const visible = pinned.slice(0, visibleCount);
+    const visibleIds = new Set(visible.map((entry) => entry.id));
+    const pinnedIds = new Set(pinned.map((entry) => entry.id));
+    const menus = entries.filter((entry): entry is ToolbarMenuEntry => entry.kind === "menu");
+    const groupedToolIds = new Set(menus.flatMap((entry) => entry.tools.map((tool) => tool.id)));
+    const moreTools = entries.flatMap((entry) => (entry.kind === "tool" && !visibleIds.has(entry.id) && (!groupedToolIds.has(entry.id) || pinnedIds.has(entry.id)) ? [entry.tool] : []));
+    if (onSettings) moreTools.push({ id: "node-toolbar-settings", label: "自定义工具栏", icon: <SlidersHorizontal className="size-3.5" />, group: "more", order: Number.MAX_SAFE_INTEGER, section: "工具栏设置", onClick: onSettings });
+    const renderEntry = (entry: NodeToolbarEntry, measuring = false) => {
+        const menuProps = { openMenuId: measuring ? null : openMenuId, onOpenChange: measuring ? ignoreMenuChange : onOpenChange };
+        if (entry.kind === "menu" && entry.id === "menu:sheet" && onPreset)
+            return (
+                <CanvasNineGridPicker
+                    toolbar
+                    open={!measuring && openMenuId === entry.id}
+                    onOpenChange={(open) => menuProps.onOpenChange(entry.id, open)}
+                    onSelect={(id, label, icon) => {
+                        menuProps.onOpenChange(entry.id, false);
+                        onPreset(id, label, icon);
+                    }}
+                />
+            );
+        if (entry.kind === "menu") return <NodeDockMenuButton mediaMenu={mediaMenu} menuId={entry.id} label={entry.label} icon={entry.icon} tools={entry.tools} split={split} {...menuProps} />;
+        if (entry.id === "split" && split) return <NodeDockSplitButton tool={entry.tool} split={split} {...menuProps} />;
+        return <NodeDockToolButton tool={entry.tool} iconOnly={entry.iconOnly} />;
+    };
+    return (
+        <div ref={dockRef} role="toolbar" aria-label="节点快捷工具" className="canvas-node-toolbar-dock flex h-11 max-w-full items-center gap-0.5 overflow-visible rounded-[var(--dock-radius-tight)] border px-2 backdrop-blur-2xl" style={style}>
+            {visible.map((entry) => (
+                <span key={entry.id} className="inline-flex shrink-0" data-node-toolbar-entry={entry.id}>
+                    {renderEntry(entry)}
+                </span>
+            ))}
+            <NodeDockMenuButton
+                mediaMenu={mediaMenu}
+                menuId="more"
+                label="更多"
+                icon={<Ellipsis className="size-3.5" />}
+                tools={moreTools}
+                submenus={menus.filter((entry) => !visibleIds.has(entry.id))}
+                openMenuId={openMenuId}
+                onOpenChange={onOpenChange}
+                split={split}
+                placement="topRight"
+                iconOnly
+            />
+            {/* 全量测量行不参与布局和交互，保证被收纳的入口在空间恢复后仍能被准确测量。 */}
+            <div ref={measureRef} aria-hidden inert className="pointer-events-none invisible absolute left-0 top-0 flex w-max items-center gap-0.5">
+                {pinned.map((entry) => (
+                    <span key={entry.id} className="inline-flex shrink-0" data-node-toolbar-entry-width={entry.id}>
+                        {renderEntry(entry, true)}
+                    </span>
                 ))}
-                {/* 直接编辑类（primary）与生成/调整菜单分组，长工具条更易扫读。 */}
-                {primaryTools.length > 0 && (adjustTools.length || cameraTools.length || showImagePresets || processTools.length) ? <span aria-hidden className="aceternity-dock-separator mx-1 h-5 w-px shrink-0" /> : null}
-                {adjustTools.length ? <NodeDockMenuButton mediaMenu menuId="adjust" label="画面调整" icon={<Palette className="size-3.5" />} tools={adjustTools} openMenuId={openMenuId} onOpenChange={handleMenuOpenChange} /> : null}
-                {cameraTools.length ? <NodeDockMenuButton mediaMenu menuId="camera" label="镜头" icon={<Camera className="size-3.5" />} tools={cameraTools} openMenuId={openMenuId} onOpenChange={handleMenuOpenChange} /> : null}
-                {showImagePresets ? <CanvasNineGridPicker toolbar iconOnly={compact} open={openMenuId === "sheet"} onOpenChange={(open) => handleMenuOpenChange("sheet", open)} onSelect={(id, label, icon) => onNineGrid(node, id, label, icon)} /> : null}
-                {processTools.length ? (
-                    <NodeDockMenuButton
-                        menuId="process"
-                        mediaMenu={isImage || isVideo}
-                        label={processMenuLabel}
-                        icon={isVideo ? <Wrench className="size-3.5" /> : <SlidersHorizontal className="size-3.5" />}
-                        tools={processTools}
-                        openMenuId={openMenuId}
-                        onOpenChange={handleMenuOpenChange}
-                        split={hasImage && !simpleMode ? { node, onSplit } : undefined}
-                    />
-                ) : null}
-                {workspaceTools.length ? <span aria-hidden className="aceternity-dock-separator mx-1 h-5 w-px shrink-0" /> : null}
-                {workspaceTools.map((tool) => (
-                    <NodeDockToolButton key={tool.id} tool={tool} />
-                ))}
-                {utilityTools.length || moreTools.length ? <span aria-hidden className="aceternity-dock-separator mx-1 h-5 w-px shrink-0" /> : null}
-                {utilityTools.map((tool) => (
-                    <NodeDockToolButton key={tool.id} tool={tool} iconOnly />
-                ))}
-                {moreTools.length ? (
-                    <NodeDockMenuButton mediaMenu={isImage || isVideo} menuId="more" label="更多" icon={<Ellipsis className="size-3.5" />} tools={moreTools} openMenuId={openMenuId} onOpenChange={handleMenuOpenChange} placement="topRight" iconOnly />
-                ) : null}
+                <span className="inline-flex shrink-0" data-node-toolbar-more-width>
+                    <NodeDockMenuButton mediaMenu={mediaMenu} menuId="measure-more" label="更多" icon={<Ellipsis className="size-3.5" />} tools={[]} openMenuId={null} onOpenChange={ignoreMenuChange} iconOnly />
+                </span>
             </div>
         </div>
+    );
+}
+
+function NodeDockSplitButton({ tool, split, openMenuId, onOpenChange }: { tool: ToolbarTool; split: ToolbarSplit; openMenuId: string | null; onOpenChange: (id: string, open: boolean) => void }) {
+    const menuId = "split-direct";
+    return (
+        <Dropdown
+            disabled={tool.disabled}
+            open={openMenuId === menuId}
+            trigger={["click"]}
+            onOpenChange={(open) => onOpenChange(menuId, open)}
+            menu={{ items: [] }}
+            popupRender={() => (
+                <div data-canvas-no-zoom onMouseDown={(event) => event.stopPropagation()}>
+                    <CanvasGridSplitPicker
+                        onPick={(params) => {
+                            onOpenChange(menuId, false);
+                            split.onSplit(split.node, params);
+                        }}
+                    />
+                </div>
+            )}
+        >
+            <button
+                type="button"
+                aria-label={tool.label}
+                aria-haspopup="dialog"
+                aria-expanded={openMenuId === menuId}
+                className="aceternity-dock-command is-labeled inline-flex h-8 shrink-0 items-center justify-center gap-2 rounded-[var(--dock-item-radius)] px-2 outline-none"
+            >
+                <span className="grid size-3.5 shrink-0 place-items-center">{tool.icon}</span>
+                <span className="whitespace-nowrap text-[var(--fs-label)] font-medium">{tool.label}</span>
+            </button>
+        </Dropdown>
     );
 }
 
@@ -493,11 +644,6 @@ function NodeDockToolButton({ tool, iconOnly = false }: { tool: ToolbarTool; ico
     );
 }
 
-function compareToolbarTools(left: ToolbarTool, right: ToolbarTool) {
-    if (left.danger !== right.danger) return left.danger ? 1 : -1;
-    return left.order - right.order;
-}
-
 const firstEnabledMenuItem = '[role^="menuitem"]:not([aria-disabled="true"])';
 
 function NodeDockMenuButton({
@@ -507,10 +653,11 @@ function NodeDockMenuButton({
     tools,
     openMenuId,
     onOpenChange,
-    mediaMenu,
+    mediaMenu = true,
     placement = "top",
     iconOnly = false,
     split,
+    submenus = [],
 }: {
     menuId: string;
     label: string;
@@ -518,10 +665,11 @@ function NodeDockMenuButton({
     tools: ToolbarTool[];
     openMenuId: string | null;
     onOpenChange: (menuId: string, open: boolean) => void;
-    mediaMenu: boolean;
+    mediaMenu?: boolean;
     placement?: "top" | "topRight";
     iconOnly?: boolean;
-    split?: { node: CanvasNodeData; onSplit: (node: CanvasNodeData, params: ImageSplitParams) => void };
+    split?: ToolbarSplit;
+    submenus?: ToolbarMenuEntry[];
 }) {
     const open = openMenuId === menuId;
     const triggerRef = useRef<HTMLButtonElement>(null);
@@ -582,61 +730,66 @@ function NodeDockMenuButton({
             window.removeEventListener("scroll", schedule, true);
         };
     }, [open, splitPanelOpen]);
-    const inspected = tools.find((tool) => tool.id === inspectedId) ?? tools.find((tool) => !tool.disabled) ?? tools[0];
-    const sections = new Map<string, ToolbarTool[]>();
-    for (const tool of tools) {
-        const section = tool.danger ? "危险操作" : tool.section || "常用操作";
-        const group = sections.get(section);
-        if (group) group.push(tool);
-        else sections.set(section, [tool]);
-    }
-    const spreadGroup = sections.size === 1 && tools.length > 1;
-    const columns = spreadGroup || sections.size === 4 ? 2 : Math.min(sections.size, 3);
-    const items: MenuProps["items"] = [...sections]
-        .sort(([left], [right]) => Number(left === "危险操作") - Number(right === "危险操作"))
-        .map(([section, entries]) => ({
-            type: "group",
-            key: section,
-            label: section,
-            children: entries.map((tool) => {
-                const isSplit = Boolean(split && tool.id === "split");
-                const inspect = mediaMenu ? () => setInspectedId(tool.id) : undefined;
-                return {
-                    key: tool.id,
-                    icon: mediaMenu ? undefined : tool.icon,
-                    role: tool.active === undefined ? "menuitem" : "menuitemcheckbox",
-                    "aria-checked": tool.active,
-                    "aria-description": tool.description,
-                    "aria-haspopup": isSplit ? "dialog" : undefined,
-                    "aria-expanded": isSplit ? splitPanelOpen : undefined,
-                    onPointerEnter: inspect,
-                    onFocus: inspect,
-                    label: mediaMenu ? (
-                        <CanvasToolMenuOption icon={tool.icon} label={tool.label} checked={tool.active} endIcon={isSplit ? <ChevronRight aria-hidden className="canvas-grid-split-chevron" /> : undefined} />
-                    ) : (
-                        <div className="canvas-node-toolbar-menu-label" title={tool.description ? `${tool.label}：${tool.description}` : tool.label}>
-                            <span className="canvas-node-toolbar-menu-name">
-                                {tool.label}
-                                {tool.active ? <Check className="size-3.5 shrink-0" /> : null}
-                            </span>
-                            {tool.description ? <div className="canvas-node-toolbar-menu-description">{tool.description}</div> : null}
-                        </div>
-                    ),
-                    disabled: tool.disabled,
-                    danger: tool.danger,
-                    onClick: (info) => {
-                        if (isSplit) {
-                            info.domEvent.preventDefault();
-                            info.domEvent.stopPropagation();
-                            setSplitPanelOpen((current) => !current);
-                            return;
-                        }
-                        onOpenChange(menuId, false);
-                        tool.onClick();
-                    },
-                };
-            }),
-        }));
+    const allMenuTools = [...tools, ...submenus.flatMap((entry) => entry.tools)];
+    const inspected = allMenuTools.find((tool) => tool.id === inspectedId) ?? allMenuTools.find((tool) => !tool.disabled) ?? allMenuTools[0];
+    const buildItems = (menuTools: ToolbarTool[], prefix = ""): MenuProps["items"] => {
+        const sections = new Map<string, ToolbarTool[]>();
+        for (const tool of menuTools) {
+            const section = tool.danger ? "危险操作" : tool.section || "常用操作";
+            const group = sections.get(section);
+            if (group) group.push(tool);
+            else sections.set(section, [tool]);
+        }
+        return [...sections]
+            .sort(([left], [right]) => Number(left === "危险操作") - Number(right === "危险操作"))
+            .map(([section, entries]) => ({
+                type: "group",
+                key: `${prefix}${section}`,
+                label: section,
+                children: entries.map((tool) => {
+                    const isSplit = Boolean(split && tool.id === "split");
+                    const inspect = mediaMenu ? () => setInspectedId(tool.id) : undefined;
+                    return {
+                        key: `${prefix}${tool.id}`,
+                        icon: mediaMenu ? undefined : tool.icon,
+                        role: tool.active === undefined ? "menuitem" : "menuitemcheckbox",
+                        "aria-checked": tool.active,
+                        "aria-description": tool.description,
+                        "aria-haspopup": isSplit ? "dialog" : undefined,
+                        "aria-expanded": isSplit ? splitPanelOpen : undefined,
+                        onPointerEnter: inspect,
+                        onFocus: inspect,
+                        label: mediaMenu ? (
+                            <CanvasToolMenuOption icon={tool.icon} label={tool.label} checked={tool.active} endIcon={isSplit ? <ChevronRight aria-hidden className="canvas-grid-split-chevron" /> : undefined} />
+                        ) : (
+                            <div className="canvas-node-toolbar-menu-label" title={tool.description ? `${tool.label}：${tool.description}` : tool.label}>
+                                <span className="canvas-node-toolbar-menu-name">
+                                    {tool.label}
+                                    {tool.active ? <Check className="size-3.5 shrink-0" /> : null}
+                                </span>
+                                {tool.description ? <div className="canvas-node-toolbar-menu-description">{tool.description}</div> : null}
+                            </div>
+                        ),
+                        disabled: tool.disabled,
+                        danger: tool.danger,
+                        onClick: (info) => {
+                            if (isSplit) {
+                                info.domEvent.preventDefault();
+                                info.domEvent.stopPropagation();
+                                setSplitPanelOpen((current) => !current);
+                                return;
+                            }
+                            onOpenChange(menuId, false);
+                            tool.onClick();
+                        },
+                    };
+                }),
+            }));
+    };
+    const sectionNames = new Set(tools.map((tool) => (tool.danger ? "危险操作" : tool.section || "常用操作")));
+    const spreadGroup = submenus.length === 0 && sectionNames.size === 1 && tools.length > 1;
+    const columns = spreadGroup || sectionNames.size === 4 ? 2 : Math.max(1, Math.min(sectionNames.size + submenus.length, 3));
+    const items: MenuProps["items"] = [...submenus.map((entry) => ({ key: entry.id, label: entry.label, icon: entry.icon, children: buildItems(entry.tools, `${entry.id}:`) })), ...(buildItems(tools) || [])];
     return (
         <Dropdown
             open={open}
@@ -677,7 +830,7 @@ function NodeDockMenuButton({
                     onKeyDown={(event) => event.stopPropagation()}
                 >
                     {mediaMenu ? (
-                        <CanvasToolMenuSurface columns={columns} spreadGroup={spreadGroup} description={inspected.description ?? inspected.label}>
+                        <CanvasToolMenuSurface columns={columns} spreadGroup={spreadGroup} description={inspected?.description ?? inspected?.label ?? label}>
                             {menu}
                         </CanvasToolMenuSurface>
                     ) : (

@@ -47,6 +47,98 @@ tags:
   - name: pose-library
     description: 站点姿势库：浏览、选用，管理员导入与图片同步
 paths:
+  /settings/node-toolbar:
+    get:
+      tags: [canvas]
+      summary: 读取当前账号的节点工具栏个人配置
+      description: 按 image、video、audio、text 返回有序固定入口；无记录的类型沿用默认布局。
+      responses:
+        "200":
+          description: 账号配置
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Envelope" }
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          preferences:
+                            type: object
+                            additionalProperties:
+                              type: array
+                              items: { type: string }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+  /settings/node-toolbar/{nodeType}:
+    parameters:
+      - name: nodeType
+        in: path
+        required: true
+        schema: { type: string, enum: [image, video, audio, text] }
+    put:
+      tags: [canvas]
+      summary: 保存当前类型的固定入口及顺序
+      description: 空数组表示全部取消固定；具体工具和分类菜单的固定状态独立，请求体上限 64 KiB。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pinnedEntryIds]
+              properties:
+                pinnedEntryIds:
+                  type: array
+                  maxItems: 256
+                  uniqueItems: true
+                  items:
+                    type: string
+                    maxLength: 128
+                    pattern: '^[A-Za-z0-9][A-Za-z0-9:_-]{0,127}$'
+      responses:
+        "200":
+          description: 服务端已保存的有序入口
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Envelope" }
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          pinnedEntryIds:
+                            type: array
+                            items: { type: string }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [canvas]
+      summary: 恢复当前节点类型的默认布局
+      responses:
+        "200":
+          description: 已删除该类型的个人配置
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Envelope" }
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          nodeType: { type: string, enum: [image, video, audio, text] }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
   /teams:
     get:
       tags: [teams]
