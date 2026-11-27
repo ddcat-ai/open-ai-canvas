@@ -92,6 +92,8 @@ import { promoteLegacyBatchTableSize } from "@/lib/canvas/canvas-batch-table";
 import { filterBatchCellConnections, reconcileBatchCellConnections, syncBatchColumnReferences, type BatchScroll } from "@/lib/canvas/canvas-batch-references";
 import { useCanvasBatchReferences } from "./use-canvas-batch-references";
 import { useCanvasImageRotation } from "./use-canvas-image-rotation";
+import { useCanvasAudioStem } from "./use-canvas-audio-stem";
+import { CanvasAudioStemDialog } from "@/components/canvas/canvas-audio-stem-dialog";
 import { storyboardMinNodeHeight } from "@/lib/canvas/canvas-storyboard-layout";
 import { CanvasPrevisNodePanel } from "@/components/canvas/previs/canvas-previs-node-panel";
 import { useFocusMode } from "@/hooks/use-focus-mode";
@@ -841,6 +843,7 @@ function CanvasViewportPage() {
     );
     const { actions: batchReferences, pickerModal: batchReferencePickerModal } = useCanvasBatchReferences({ nodesRef, connectionsRef, setNodes, setConnections, createFileNode });
     const { rotateImageNode, rotatingNodeId } = useCanvasImageRotation({ projectId, nodesRef, setNodes, setConnections, setSelectedNodeIds, readOnly: false });
+    const audioStem = useCanvasAudioStem({ projectId, domainProjectId: linkedProjectId, nodesRef, setNodes, setConnections, setSelectedNodeIds });
     const { projectAssetOpen, projectAssetInitialCategory, projectAssetInitialFolderId, projectAssetInsertPosition, handleProjectAssetSelection, openProjectAssets, closeProjectAssets } = useCanvasProjectAssetPicker({
         linkedProjectId,
         refetchLinkedProject,
@@ -3372,7 +3375,16 @@ function CanvasViewportPage() {
                                 />
                             ) : null}
 
+                            <CanvasAudioStemDialog
+                                open={Boolean(audioStem.nodeId)}
+                                title={nodes.find((node) => node.id === audioStem.nodeId)?.title || "音频"}
+                                progress={audioStem.progress}
+                                error={audioStem.error}
+                                onClose={audioStem.close}
+                                onRun={(selection) => void audioStem.run(selection)}
+                            />
                             <CanvasNodeToolbar
+                                onSeparateAudio={audioStem.open}
                                 onRotateImage={(node, direction) => void rotateImageNode(node.id, direction)}
                                 onCreateEditCopy={(node) => duplicateNode(node.id, "linked-copy")}
                                 rotatingImage={rotatingNodeId !== null}

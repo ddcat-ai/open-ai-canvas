@@ -28,6 +28,28 @@ function createNodeContext(node: CanvasNodeData): ToolContext {
 }
 
 describe("canvas node toolbar model", () => {
+    test("audio separation is available only with an editable audio handler", () => {
+        const node: CanvasNodeData = { id: "audio", type: CanvasNodeType.Audio, title: "音频", position: { x: 0, y: 0 }, width: 320, height: 180, metadata: { storageKey: "resource:audio" } };
+        const ctx = createNodeContext(node);
+        const tools = () => resolveToolbarTools("node-hover", ctx, null);
+        expect(tools().some((tool) => tool.id === "separateAudio")).toBe(false);
+        const received: CanvasNodeData[] = [];
+        ctx.handlers.onNodeSeparateAudio = (source) => received.push(source);
+        const tool = tools().find((tool) => tool.id === "separateAudio")!;
+        expect(tool).toBeDefined();
+        tool.run(ctx);
+        expect(received).toEqual([node]);
+        for (const metadata of [
+            { ...node.metadata, locked: true },
+            { ...node.metadata, status: "loading" as const },
+            { ...node.metadata, fileUpload: "uploading" as const },
+        ]) {
+            expect(tool.disabled?.({ ...ctx, nodeMetadata: metadata })).toBe(true);
+        }
+        expect(tool.applicable?.({ ...ctx, node: { ...node, type: CanvasNodeType.Video } })).toBe(false);
+        expect(tool.applicable?.({ ...ctx, nodeMetadata: {} })).toBe(false);
+        expect(tool.applicable?.({ ...ctx, workspaceMode: "simple" })).toBe(true);
+    });
     test("relative depth is offered only for available, non-loading videos and runs lazily", () => {
         const node: CanvasNodeData = { id: "video", type: CanvasNodeType.Video, title: "视频", position: { x: 0, y: 0 }, width: 720, height: 405, metadata: { storageKey: "resource:video" } };
         const ctx = createNodeContext(node);

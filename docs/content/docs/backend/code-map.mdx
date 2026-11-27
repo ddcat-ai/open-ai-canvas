@@ -5,6 +5,10 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 音频节点本机分离
+
+- 工具注册：`web/src/lib/canvas/tool-registry/definitions/node-hover-tools.tsx`；交互面板：`web/src/components/canvas/canvas-audio-stem-dialog.tsx`；画布写回、取消与会话检查：`web/src/pages/canvas/use-canvas-audio-stem.ts`。
+- 模型身份与音频编码：`web/src/lib/audio-stem/`；缓存和下载校验：`web/src/services/audio-stem-model.ts`；解码和 Worker 生命周期：`web/src/services/audio-stem.ts`；实际 Demucs WASM 推理：`web/src/services/audio-stem.worker.ts`。操作说明见 `canvas/audio-stem.mdx`。
 ## 团队空间
 
 - `web/src/router.tsx` 为个人和团队挂载相同的 `pages/canvas`、`pages/create`、`pages/assets`；`lib/workspace-routes.ts` 选择 API 前缀，`lib/user-scope.ts` 隔离本地缓存。`pages/teams` 只负责空间、成员、邀请和钱包。

@@ -123,6 +123,20 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         disabled: (ctx) => !ctx.node || !canRotateCanvasImage(ctx.node) || Boolean(ctx.rotatingImage) || !ctx.handlers.onNodeRotateImage || (rotation.direction === 0 && !currentImageRotation(ctx.node)?.quarterTurns),
         run: (ctx) => ctx.handlers.onNodeRotateImage?.(ctx.node!, rotation.direction),
     })),
+    {
+        id: "separateAudio",
+        toolbar: "node-hover",
+        category: "node-state",
+        label: "在本机分离人声和伴奏，保留原音频",
+        displayLabel: "人声 / 伴奏",
+        icon: <AudioLines className="size-3.5" />,
+        defaultVisible: true,
+        defaultOrder: 41,
+        nodeToolbar: { group: "process", order: 10, section: "音频处理", description: "本机分离，另存为新的音频节点" },
+        applicable: (ctx) => hasAudio(ctx) && Boolean(ctx.handlers.onNodeSeparateAudio),
+        disabled: (ctx) => Boolean(ctx.nodeMetadata?.locked || ctx.nodeMetadata?.fileUpload || ctx.nodeMetadata?.status === "loading"),
+        run: (ctx) => ctx.handlers.onNodeSeparateAudio?.(ctx.node!),
+    },
     // 基础工具组
     {
         id: "info",
