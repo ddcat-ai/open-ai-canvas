@@ -1,12 +1,12 @@
 import { DemucsProcessor } from "demucs-web/processor";
 import * as ort from "onnxruntime-web/wasm";
 import wasmUrl from "onnxruntime-web/ort-wasm-simd-threaded.wasm?url";
-import wasmModuleUrl from "onnxruntime-web/ort-wasm-simd-threaded.mjs?url";
 import { encodeAudioStemWav, mixAudioStem } from "@/lib/audio-stem/audio";
 import type { AudioStem, AudioStemWorkerMessage, AudioStemWorkerRequest } from "@/lib/audio-stem/contracts";
 
-// 显式发布同版本 WASM 与模块资源，单线程不要求站点启用跨源隔离。
-ort.env.wasm.wasmPaths = { wasm: wasmUrl, mjs: wasmModuleUrl };
+// 使用包内嵌的模块加载器，避免 CDN 将独立 .mjs 按二进制返回后被浏览器拒绝。
+// 只覆盖同版本 WASM 地址；单线程不要求站点启用跨源隔离。
+ort.env.wasm.wasmPaths = { wasm: wasmUrl };
 ort.env.wasm.numThreads = 1;
 ort.env.wasm.proxy = false;
 const send = (message: AudioStemWorkerMessage) => self.postMessage(message);
