@@ -58,8 +58,8 @@ func TestOfficialTextMultimodalCompatibleProfiles(t *testing.T) {
 			})
 		}
 	}
-	if count != 24 {
-		t.Fatalf("compatible text profiles covered = %d, want 24 (Azure covered separately)", count)
+	if count != 25 {
+		t.Fatalf("compatible text profiles covered = %d, want 25 (Azure covered separately)", count)
 	}
 }
 
