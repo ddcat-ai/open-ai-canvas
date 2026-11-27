@@ -1,6 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { Window } from "happy-dom";
 import type { ComponentProps } from "react";
+import type { CreationMessage } from "../../src/pages/create/creation-types";
 
 const dom = new Window({ url: "http://localhost/create" });
 for (const [key, value] of Object.entries({
@@ -27,12 +28,50 @@ for (const [key, value] of Object.entries({
 const { act } = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { CreationComposer } = await import("../../src/pages/create/creation-workspace");
+const { CreationMessageView } = await import("../../src/pages/create/creation-workspace-messages");
 const { defaultConfig } = await import("../../src/stores/use-config-store");
 const { defaultModelCapabilityConfig } = await import("../../src/lib/model-capabilities");
-const { CREATION_IMAGE_DRAG_TYPE } = await import("../../src/pages/create/creation-reference-drop");
+const { CREATION_IMAGE_DRAG_TYPE, creationAttachmentFromResult } = await import("../../src/pages/create/creation-reference-drop");
 const { buildCreationMentionReferences } = await import("../../src/pages/create/creation-references");
 const { canvasResourceMentionToken } = await import("../../src/lib/canvas/canvas-resource-references");
 afterAll(() => dom.happyDOM.abort());
+
+test("用作参考图选择的是同一批结果中点击的图片", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const item: CreationMessage = { id: "done", role: "assistant", mode: "image", status: "done", content: "", createdAt: "2026-11-28T00:00:00Z", resultUrls: ["/first.png", "/second.png"] };
+    const noop = () => {};
+    const selectedImages: string[] = [];
+    try {
+        await act(async () =>
+            root.render(
+                <CreationMessageView
+                    item={item}
+                    shotNumber={0}
+                    onRetryFailure={noop}
+                    onRefreshResult={noop}
+                    onRecoverMedia={noop}
+                    onCreateVariant={noop}
+                    onEditUserMessage={noop}
+                    onContinueCanvas={noop}
+                    openingCanvas={false}
+                    onUseImageReference={async (image) => {
+                        const attachment = await creationAttachmentFromResult(image, [item], []);
+                        selectedImages.push(attachment.previewUrl);
+                    }}
+                />,
+            ),
+        );
+        const actions = [...host.querySelectorAll("button")].filter((button) => button.textContent?.startsWith("用作参考图"));
+        expect(actions.map((button) => button.textContent)).toEqual(["用作参考图 1", "用作参考图 2"]);
+        await act(async () => actions[1].click());
+        expect(selectedImages).toEqual(["/second.png"]);
+    } finally {
+        await act(async () => root.unmount());
+        host.remove();
+    }
+});
 
 test("文件与生成图片拖到编辑区均追加；标签替换只消费一次；忙碌时不接收", async () => {
     const host = document.createElement("div");

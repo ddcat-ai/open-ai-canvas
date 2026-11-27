@@ -16,6 +16,7 @@ function renderResult(item: Partial<CreationMessage>) {
             onRefreshResult={noop}
             onRecoverMedia={noop}
             onCreateVariant={noop}
+            onUseImageReference={noop}
             onContinueCanvas={noop}
             openingCanvas={false}
         />,
