@@ -50,9 +50,10 @@ func cloudAgentVideoError(reason, message string) error {
 }
 
 func cloudAgentVideoVersion(resource *model.Resource) string {
+	// 上游资源记录尚无内容摘要；更新时间保守地使任何记录变更后的帧缓存失效。
 	return creationHash(map[string]any{"id": resource.ID, "provider": resource.Provider, "objectKey": resource.ObjectKey, "bucket": resource.Bucket,
 		"endpoint": resource.Endpoint, "storageSettingId": resource.StorageSettingID, "size": resource.Size, "etag": resource.ETag,
-		"sha256": resource.ContentSHA256, "mimeType": resource.MimeType})
+		"updatedAt": resource.UpdatedAt, "mimeType": resource.MimeType})
 }
 
 // 视频解码始终在检查点事务外执行；取消既响应请求上下文，也响应持久化的会话终态。
