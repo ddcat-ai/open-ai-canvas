@@ -8,6 +8,8 @@ import { useTranslation } from "react-i18next";
 import { WalletTopupPanel, type TopupCategory } from "@/components/layout/workspace-wallet-topup";
 import { WalletHistoryRow } from "@/components/layout/workspace-wallet-history-row";
 import { usePaymentOrderFlow } from "@/components/payment/use-payment-order-flow";
+import { membershipQueryKey, refreshMembershipAccess, useMembershipBoundary } from "@/components/payment/membership";
+import { getMembership } from "@/services/api/membership";
 import { PaymentOrdersPanel, paymentOrdersQueryKey } from "@/components/payment/payment-orders-panel";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { formatCredits } from "@/constant/credits";
@@ -26,6 +28,7 @@ type WalletModalTab = "topup" | "redeem" | "income" | "history" | "orders";
 const storageGrantsQueryKey = ["account-storage-grants"] as const;
 
 export function WorkspaceWalletHost() {
+    useMembershipBoundary();
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
     const loggedIn = useUserStore((state) => Boolean(state.user));
     const { pathname, search } = useLocation();
@@ -113,6 +116,9 @@ export function WorkspaceWalletModal({
     const [redeeming, setRedeeming] = useState(false);
     const requestSequence = useRef(0);
     const storageQuery = useAccountFileStorageUsage(open);
+    const membershipEnd = useUserStore((state) => state.userGroup?.membershipEndsAt);
+    const userId = useUserStore((state) => state.user?.id);
+    const membership = useQuery({ queryKey: [...membershipQueryKey, userId], queryFn: getMembership, enabled: open && (Boolean(membershipEnd) || products.some((p) => p.kind === "membership")) });
     const grantsQuery = useQuery({ queryKey: storageGrantsQueryKey, queryFn: listMyStorageGrants, enabled: open });
     const storageMeter = accountStorageMeter(storageQuery.data);
 
@@ -182,6 +188,10 @@ export function WorkspaceWalletModal({
     };
 
     const announceGranted = async (order: PaymentOrder) => {
+        if (order.productKind === "membership") {
+            await Promise.all([announceWalletUpdated(), membership.refetch({ throwOnError: true }), refreshMembershipAccess(), queryClient.invalidateQueries({ queryKey: ["drama-models"] })]);
+            return;
+        }
         if (order.productKind === "storage") {
             await Promise.all([queryClient.invalidateQueries({ queryKey: accountFileStorageUsageQueryKey }), queryClient.invalidateQueries({ queryKey: storageGrantsQueryKey })]);
             return;
@@ -241,7 +251,7 @@ export function WorkspaceWalletModal({
             message.error(t("account.wallet.productUnavailable"));
             return;
         }
-        await payment.start(selectedProduct.id, selectedOption.providerId, selectedOption.method);
+        await payment.start(selectedProduct.id, selectedOption.providerId, selectedOption.method, selectedProduct.kind === "membership" ? selectedProduct.updatedAt : undefined);
     };
 
     // 定位到某类套餐：滚动到分组，并在当前选中项不属于该类时改选该类第一个可买套餐。
@@ -345,6 +355,8 @@ export function WorkspaceWalletModal({
                         <WalletTopupPanel
                             loading={paymentsLoading}
                             products={products}
+                            membership={membership.data}
+                            membershipError={membership.error?.message}
                             paymentOptions={paymentOptions}
                             usdCnyRate={usdCnyRate}
                             focusKind={focusKind}

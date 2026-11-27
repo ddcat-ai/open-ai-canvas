@@ -11,6 +11,7 @@ const ledgerTitleKeys = {
     consume: "account.wallet.ledger.consume",
     refund: "account.wallet.ledger.refund",
     payment_topup: "account.wallet.ledger.paymentTopup",
+    membership_bonus: "membership.bonus",
     redeem: "account.wallet.ledger.redeem",
     referral_commission: "account.wallet.ledger.referral",
     admin_grant: "account.wallet.ledger.adminAdjustment",
