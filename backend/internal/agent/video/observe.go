@@ -103,10 +103,16 @@ func Observe(ctx context.Context, ffmpeg, ffprobe, input, output string, startMs
 	for i := 0; i < count; i++ {
 		index := 0
 		if count > 1 {
-			index = i * (len(times) - 1) / (count - 1)
+			// 按时间而非帧序号均匀取样，避免变帧率视频偏向帧密集的时间段。
+			target := times[0] + float64(i)*(times[len(times)-1]-times[0])/float64(count-1)
+			index = min(sort.SearchFloat64s(times, target), len(times)-1)
+			if index > 0 && target-times[index-1] <= times[index]-target {
+				index--
+			}
 		}
 		selected = append(selected, times[index])
 	}
+	selected = unique(selected)
 	result.Frames, err = decodeFrames(ctx, ffmpeg, input, output, start, end, origin, selected)
 	return result, err
 }

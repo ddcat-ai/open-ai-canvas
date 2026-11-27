@@ -95,7 +95,7 @@ func TestObserveVariableFramesRotationAndSegmentBoundary(t *testing.T) {
 		want                 []int64
 		truncated            bool
 	}{
-		{"variable_rate", "testsrc2=size=160x90:rate=8:duration=2", "select=not(eq(n\\,3)+eq(n\\,5)+eq(n\\,7))", nil, []int64{0, 1125, 1875}, false},
+		{"variable_rate", "testsrc2=size=160x90:rate=8:duration=2", "select=not(eq(n\\,3)+eq(n\\,5)+eq(n\\,7))", nil, []int64{0, 1000, 1875}, false},
 		{"segment", "testsrc2=size=160x90:rate=1:duration=32", "null", nil, []int64{0, 14000, 29000}, true},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
