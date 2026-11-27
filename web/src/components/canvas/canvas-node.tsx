@@ -408,7 +408,7 @@ export const CanvasNode = React.memo(function CanvasNode({
 
                 {showChrome && showStatusTrack ? (
                     <div className="absolute right-3 top-3 z-[var(--node-z-overlay)] flex min-w-0 items-center justify-end gap-1 max-w-[calc(100%-24px)]">
-                        {resourceLabel && data.type !== CanvasNodeType.Image ? <ResourceLabelBadge reference={resourceLabel} theme={theme} /> : null}
+                        {resourceLabel && data.type !== CanvasNodeType.Image ? <ResourceLabelBadge reference={resourceLabel} /> : null}
                         {data.type === CanvasNodeType.Image && hasImageContent && data.metadata?.assetId ? <ArkCertificationBadge assetId={data.metadata.assetId} storageKey={data.metadata.storageKey} /> : null}
                         {hasMediaContent && !readOnly ? <ResourceStorageBadge storageKey={data.metadata?.storageKey} active={isActive} theme={theme} /> : null}
                         {isBatchRoot ? <BatchToggleBadge count={batchCount} expanded={batchExpanded} theme={theme} onToggle={() => onToggleBatch?.(data.id)} /> : null}
@@ -534,13 +534,9 @@ function areCanvasNodePropsEqual(previous: CanvasNodeProps, next: CanvasNodeProp
     );
 }
 
-function ResourceLabelBadge({ reference, theme }: { reference: CanvasResourceReference; theme: CanvasTheme }) {
+function ResourceLabelBadge({ reference }: { reference: CanvasResourceReference }) {
     return (
-        <span
-            className="pointer-events-none min-w-0 max-w-28 truncate rounded-md px-2 py-1 text-[var(--fs-tiny)] font-medium leading-none"
-            style={{ background: reference.active ? theme.accent.primary : "rgba(0,0,0,.35)", color: reference.active ? theme.accent.onPrimary : "#ffffff", opacity: reference.active ? 1 : 0.75 }}
-            title={reference.title || reference.label}
-        >
+        <span className="canvas-node-resource-label pointer-events-none min-w-0 max-w-28 truncate rounded-md px-2 py-1 text-[var(--fs-tiny)] font-medium leading-none" title={reference.title || reference.label}>
             {reference.label}
         </span>
     );
