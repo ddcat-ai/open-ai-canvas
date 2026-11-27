@@ -4,10 +4,34 @@ import { resolve } from "node:path";
 import { describe, expect, test } from "bun:test";
 
 import { assetPickerItemsToInsertPayloads } from "@/components/canvas/asset-picker-modal";
-import { pickerItemMediaKind, type AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
+import { filterPickerItems, pickerItemMediaKind, type AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
 import type { ImageAsset, TextAsset } from "@/stores/use-asset-store";
 
 const timestamp = "2026-08-28T00:00:00.000Z";
+
+describe("素材选择降级筛选", () => {
+    const items: AssetLibraryPickerItem[] = [
+        { id: "clothing", title: "白色衣服", category: "clothing", kindLabel: "图片", mediaKind: "image", folderId: "references", searchText: "cotton" },
+        { id: "expression", title: "表情", category: "expression", kindLabel: "图片", mediaKind: "image" },
+        { id: "video", title: "衣服视频", category: "clothing", kindLabel: "视频", mediaKind: "video" },
+        { id: "archived", title: "旧衣服", category: "clothing", kindLabel: "图片", mediaKind: "image", archived: true },
+    ];
+
+    test("当前分类为空时不把其他分类的缓存计入数量", () => {
+        expect(filterPickerItems(items, "pose", "all", "", "image")).toEqual([]);
+        expect(filterPickerItems(items, "clothing", "all", "", "image").map((item) => item.id)).toEqual(["clothing"]);
+    });
+
+    test("失败降级后的列表与角标遵守搜索和文件夹限制", () => {
+        expect(filterPickerItems(items, "clothing", "references", " COTTON ", "image").map((item) => item.id)).toEqual(["clothing"]);
+        expect(filterPickerItems(items, "clothing", "missing", "", "image")).toEqual([]);
+        expect(filterPickerItems(items, "clothing", "all", "不存在", "image")).toEqual([]);
+    });
+
+    test("回收站仅展示归档条目", () => {
+        expect(filterPickerItems(items, "archived", "all", "", "image").map((item) => item.id)).toEqual(["archived"]);
+    });
+});
 
 describe("canvas asset picker", () => {
     test("maps multiple local and external selections in the requested order", () => {
