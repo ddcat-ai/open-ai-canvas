@@ -128,6 +128,7 @@ const (
 	SkillRecommend         = "skill_recommend"
 	TaskGet                = "task_get"
 	CanvasInspectImage     = "canvas_inspect_image"
+	CanvasInspectVideo     = "canvas_inspect_video"
 	MemoryUpdate           = "memory_update"
 	MemorySearch           = "memory_search"
 	MCPListTools           = "mcp_list_tools"
@@ -193,6 +194,7 @@ func policies() []Policy {
 		{Name: SkillRecommend, Kind: KindControl},
 		{Name: TaskGet, Kind: KindRead},
 		{Name: CanvasInspectImage, Kind: KindPrepare, Vision: true, RequiresCanvas: true},
+		{Name: CanvasInspectVideo, Kind: KindPrepare, Vision: true, RequiresCanvas: true},
 		{Name: MemoryUpdate, Kind: KindControl, RequiresWriteMode: true, RequiresMemory: true, OutsideTransaction: true},
 		{Name: ImageLayerSplit, Kind: KindMedia, RequiresCanvas: true},
 		{Name: ModelList, Kind: KindRead, Cacheable: true, RequiresCanvas: true, RequiresWriteMode: true, OutsideTransaction: true},

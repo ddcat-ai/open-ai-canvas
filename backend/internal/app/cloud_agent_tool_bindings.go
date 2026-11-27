@@ -34,6 +34,7 @@ func cloudAgentToolHandlers() map[string]cloudAgentToolHandler {
 		agenttool.SkillRecommend:         {Read: cloudAgentHandleSkillRecommend},
 		agenttool.TaskGet:                {Read: cloudAgentHandleTaskGet},
 		agenttool.CanvasInspectImage:     {Pipeline: cloudAgentToolVision},
+		agenttool.CanvasInspectVideo:     {Pipeline: cloudAgentToolVision},
 		agenttool.MemoryUpdate:           {Read: cloudAgentHandleMemoryUpdate},
 		agenttool.ImageLayerSplit:        {Pipeline: cloudAgentToolMedia},
 		agenttool.ModelList:              {Read: cloudAgentHandleModelList},

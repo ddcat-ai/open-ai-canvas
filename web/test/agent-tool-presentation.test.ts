@@ -2,6 +2,15 @@ import { describe, expect, it } from "bun:test";
 import { AGENT_TOOL_NAMES, agentToolCategory, agentToolCategoryLabel, agentToolErrorClassLabel, agentToolStatus, agentVisionFailureSummary, friendlyAgentToolSummary } from "@/lib/canvas/agent-tool-presentation";
 
 describe("Agent tool presentation", () => {
+    it("reports sampled video coverage without claiming audio analysis or full viewing", () => {
+        expect(agentToolCategory("canvas_inspect_video")).toBe("vision");
+        const summary = friendlyAgentToolSummary("canvas_inspect_video", "", { eventType: "tool_completed", result: { frameCount: 4, startMs: 0, endMs: 30000, truncated: true } });
+        expect(summary).toContain("4 帧");
+        expect(summary).toContain("0–30 秒");
+        expect(summary).toContain("未分析声音");
+        expect(summary).toContain("剩余范围未查看");
+        expect(friendlyAgentToolSummary("canvas_inspect_video", "", { eventType: "tool_failed" })).toBe("视频观察未完成");
+    });
     it("distinguishes reading a drama shot from saving its revision", () => {
         expect(agentToolCategory("drama_shot_read")).toBe("read");
         expect(agentToolCategory("drama_shot_update")).toBe("operate");

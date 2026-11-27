@@ -153,22 +153,6 @@ func cloudAgentImageMessageIndexes(messages []map[string]any) []int {
 	return indexes
 }
 
-// cloudAgentMessageImagePartCount 数一条消息里有几个图片部件。
-func cloudAgentMessageImagePartCount(message map[string]any) int {
-	parts, ok := message["content"].([]any)
-	if !ok {
-		return 0
-	}
-	count := 0
-	for _, value := range parts {
-		part, _ := value.(map[string]any)
-		if stringField(part, "type") == "image_url" {
-			count++
-		}
-	}
-	return count
-}
-
 func cloudAgentDebugMessages(messages []map[string]any) string {
 	var builder strings.Builder
 	for index, message := range messages {

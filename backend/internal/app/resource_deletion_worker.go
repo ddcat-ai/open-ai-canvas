@@ -22,6 +22,7 @@ func (s *Service) startResourceDeletionWorker(ctx context.Context) {
 		s.cleanupStaleAnnouncementImageDrafts()
 		s.cleanupExpiredArchivedAssets()
 		s.cleanupDetachedResources()
+		s.cleanupCloudAgentVideoCache()
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
 		lastPeriodicCleanup := time.Now()
@@ -36,6 +37,7 @@ func (s *Service) startResourceDeletionWorker(ctx context.Context) {
 					s.cleanupStaleAnnouncementImageDrafts()
 					s.cleanupExpiredArchivedAssets()
 					s.cleanupDetachedResources()
+					s.cleanupCloudAgentVideoCache()
 					lastPeriodicCleanup = time.Now()
 				}
 			}

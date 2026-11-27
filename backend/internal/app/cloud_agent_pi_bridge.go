@@ -431,7 +431,7 @@ func (s *Service) executeCloudAgentRuntimeTool(ctx context.Context, userID, runI
 			return nil, fmt.Errorf("工具调用 %q 与模型声明的工具调用不一致", call.ID)
 		}
 		state.Approval = nil
-		err = s.advanceCloudAgentTool(run, &state)
+		err = s.advanceCloudAgentTool(run, &state, ctx)
 		if errors.Is(err, repository.ErrCreationConflict) {
 			time.Sleep(time.Duration(attempt+1) * 20 * time.Millisecond)
 			continue

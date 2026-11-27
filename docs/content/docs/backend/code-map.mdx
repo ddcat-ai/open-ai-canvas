@@ -5,6 +5,13 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## Agent 视频观察
+
+- `app/cloud_agent_video` 编排视频观察工具、画布和资源归属、统一图片预算、运行取消、24小时缓存及源版本复核；与图片共同进入 `cloud_agent_runtime_tools` 的事务外视觉执行路径。
+- `internal/agent/video` 使用受限 FFprobe / FFmpeg 读取真实帧时间、分段采样和按比例缩放，不接收网络地址或播放列表。帧复用普通资源存储与孤立资源清理，不新建素材档案。
+- `cloud_agent_vision` 与 Pi 模型桥接继续发送真实图片字节；发送前复核原视频节点、资源身份和版本，消息内逐帧附实际毫秒时间和无音频标记。
+- Web 的 `agent-tool-presentation` / `agent-canvas-actions` 展示采样范围、帧数与剩余未读部分，将该工具归为视觉读取。
+
 ## 团队空间
 
 - `web/src/router.tsx` 为个人和团队挂载相同的 `pages/canvas`、`pages/create`、`pages/assets`；`lib/workspace-routes.ts` 选择 API 前缀，`lib/user-scope.ts` 隔离本地缓存。`pages/teams` 只负责空间、成员、邀请和钱包。

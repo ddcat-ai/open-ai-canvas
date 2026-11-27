@@ -6,6 +6,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -432,7 +433,7 @@ func (s *Service) advanceCloudAgentReadBatch(run *model.CloudAgentExecution, sta
 	return true, err
 }
 
-func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *cloudAgentRuntime) error {
+func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *cloudAgentRuntime, contexts ...context.Context) error {
 	if run == nil || state == nil || (run.Status != "running" && run.Status != "queued") {
 		return nil
 	}
@@ -601,10 +602,19 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 	var inspectionResult any
 	var inspectionErr error
 	if allowed && binding.Handler.Pipeline == cloudAgentToolVision {
-		inspectionResult, inspectionErr = s.prepareCloudAgentImageInspection(run.UserID, state.Request.CanvasID, state, call)
+		if call.Function.Name == agenttool.CanvasInspectVideo {
+			ctx := context.Background()
+			if len(contexts) > 0 {
+				ctx = contexts[0]
+			}
+			state.RuntimeRunID = run.ID
+			inspectionResult, inspectionErr = s.prepareCloudAgentVideoInspection(ctx, run.UserID, state.Request.CanvasID, state, call)
+		} else {
+			inspectionResult, inspectionErr = s.prepareCloudAgentImageInspection(run.UserID, state.Request.CanvasID, state, call)
+		}
 		if errors.Is(inspectionErr, errCloudAgentImageInspectionBudget) {
 			inspectionErr = &cloudAgentReadLoopError{
-				ToolName:   agenttool.CanvasInspectImage,
+				ToolName:   call.Function.Name,
 				Count:      state.cloudAgentImageInspectionCalls() + 1,
 				Budget:     true,
 				ReasonCode: "vision_read_budget_exceeded",

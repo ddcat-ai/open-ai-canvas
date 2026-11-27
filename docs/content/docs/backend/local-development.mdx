@@ -5,6 +5,12 @@ description: 在宿主机启动影策前后端开发服务
 
 # 本地开发
 
+## Agent 视频观察依赖
+
+视频观察需要宿主机可执行的 `ffmpeg` 和 `ffprobe`；官方后端镜像已安装 FFmpeg 套件。可用 `ffmpeg -version`、`ffprobe -version` 检查。视频观察复用短剧渲染的 `CANVAS_FFMPEG_PATH` 配置；指定自定义 FFmpeg 时，FFprobe 需位于同一目录。
+
+当前 Agent 模型至少支持两张图片才可观察视频；缺少依赖或容量时返回明确错误，不用视频封面替代全片。详情见[HTTP API](http-api.mdx)与[待测试](../progress/pending-test.mdx)。
+
 ## SMTP 邮件故障日志
 
 注册、登录、绑定邮箱和密码找回的邮件投递失败统一输出 `ERROR` 级别的 `smtp email delivery failed` 后端日志。日志包含 `host`、`port`、`encryption`、脱敏 `recipient` 和 `error`，默认 `CANVAS_LOG_LEVEL=info` 即可看到，无需开启 debug。
