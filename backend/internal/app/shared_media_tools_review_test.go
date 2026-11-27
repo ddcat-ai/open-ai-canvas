@@ -9,6 +9,25 @@ import (
 	"yingce/backend/internal/model"
 )
 
+func TestSharedMediaToolsKeepsLegacyArkChoice(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		// 旧合同的显式同步选项优先于平铺镜像，包括 false；不能被相反的旧镜像覆盖。
+		metadata := map[string]any{
+			"generationSpec":        map[string]any{"version": 0, "mode": "video", "options": map[string]any{"arkPrivateAssetUpload": enabled}},
+			"arkPrivateAssetUpload": !enabled,
+			"seconds":               "6",
+		}
+		doc := map[string]any{"nodes": []any{map[string]any{"id": "draft", "type": "video", "metadata": metadata}}}
+		_, options, err := cloudAgentMediaDraftConfiguration(cloudAgentMediaArgs{Mode: "video", NodeID: "draft"}, doc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if options.ArkPrivateAssetUpload == nil || *options.ArkPrivateAssetUpload != enabled {
+			t.Fatalf("旧合同的显式同步选项被镜像覆盖: %+v", options)
+		}
+	}
+}
+
 func TestSharedMediaToolsPartialDraftEditPreservesOtherParameters(t *testing.T) {
 	s, _, args, _ := sharedMediaToolFixture(t, "enhance")
 	run, state := agentMediaRun(t, s, args, "auto")
