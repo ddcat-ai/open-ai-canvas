@@ -297,9 +297,6 @@ func (state *cloudAgentRuntime) cloudAgentImageInspectionCount(nodeID string) in
 // cloudAgentImageReferences 仅为实际发给模型的图片建立资源白名单。
 // 保留最新图片，超出模型数量上限的旧图换成文字；不改写工具回执和配对顺序。
 func (s *Service) cloudAgentImageReferences(userID string, req CloudAgentRequest, canonical *canonicalAgentRequest) ([]providerMedia, error) {
-	if err := s.cloudAgentValidateVideoFrames(userID, req, canonical); err != nil {
-		return nil, err
-	}
 	count := 0
 	for _, message := range canonical.Messages {
 		parts, _ := message["content"].([]any)
@@ -363,6 +360,10 @@ func (s *Service) cloudAgentImageReferences(userID string, req CloudAgentRequest
 		copy := cloneStringAnyMap(message)
 		copy["content"] = kept
 		canonical.Messages[i] = copy
+	}
+	// 只复核本次保留并实际发送的帧；被容量裁剪的旧帧不能阻断后续独立图片请求。
+	if err := s.cloudAgentValidateVideoFrames(userID, req, canonical); err != nil {
+		return nil, err
 	}
 	return refs, nil
 }
