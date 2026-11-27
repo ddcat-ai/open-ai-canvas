@@ -110,7 +110,7 @@ export function createUserColumns({
         },
         {
             key: "group",
-            title: "分组",
+            title: "基础分组",
             dataIndex: "userGroup",
             width: 120,
             align: "center",
