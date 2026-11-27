@@ -11,10 +11,12 @@ import { paymentOrderGrantLabel } from "@/lib/payment-order-grant";
 import { closePaymentOrder, createPaymentOrder, formatPaymentAmount, getPaymentOrder, queryPaymentOrder, refreshPaymentCheckout, type PaymentOrder } from "@/services/api/payments";
 
 function grantedText(order: PaymentOrder) {
+    if (order.productKind === "membership") return translate("membership.confirmed");
     return order.productKind === "storage" ? translate("account.payment.grantedStorage") : translate("account.payment.grantedCredits");
 }
 
 function notGrantedText(order: PaymentOrder) {
+    if (order.productKind === "membership") return translate("account.payment.orderClosed");
     return order.productKind === "storage" ? translate("account.payment.closedStorage") : translate("account.payment.closedCredits");
 }
 
@@ -60,11 +62,11 @@ export function usePaymentOrderFlow({ onGranted }: { onGranted: (order: PaymentO
         idempotencyKey.current = "";
     };
 
-    const start = async (productId: string, providerId: string, method?: string) => {
+    const start = async (productId: string, providerId: string, method?: string, membershipVersion?: string) => {
         setCreating(true);
         try {
             if (!idempotencyKey.current) idempotencyKey.current = createClientUUID();
-            const result = await createPaymentOrder({ productId, providerId, ...(method ? { method } : {}), idempotencyKey: idempotencyKey.current });
+            const result = await createPaymentOrder({ productId, providerId, method, membershipVersion, idempotencyKey: idempotencyKey.current });
             idempotencyKey.current = "";
             setOrder(result.order);
             await settle(result.order);
@@ -145,7 +147,15 @@ export function usePaymentOrderFlow({ onGranted }: { onGranted: (order: PaymentO
         <AppModal
             open={open}
             title={
-                order?.status === "credited" ? (order.productKind === "storage" ? t("account.payment.storageDone") : t("account.payment.topupDone")) : order?.checkout.mode === "qr_code" ? t("account.payment.scanTitle") : t("account.payment.confirmTitle")
+                order?.status === "credited"
+                    ? order.productKind === "membership"
+                        ? t("membership.confirmed")
+                        : order.productKind === "storage"
+                          ? t("account.payment.storageDone")
+                          : t("account.payment.topupDone")
+                    : order?.checkout.mode === "qr_code"
+                      ? t("account.payment.scanTitle")
+                      : t("account.payment.confirmTitle")
             }
             centered
             width={430}
@@ -168,6 +178,11 @@ export function usePaymentOrderFlow({ onGranted }: { onGranted: (order: PaymentO
                     <p>
                         {order.productName} · {paymentOrderGrantLabel(order)}
                     </p>
+                    {order.membershipStartsAt && order.membershipEndsAt && (
+                        <p>
+                            {new Date(order.membershipStartsAt).toLocaleString()} – {new Date(order.membershipEndsAt).toLocaleString()}
+                        </p>
+                    )}
                     {order.status === "pending" && order.checkout.mode === "qr_code" && order.checkout.value ? (
                         <>
                             <PaymentCheckoutCode value={order.checkout.value} />
