@@ -226,6 +226,41 @@ func TestOfficialUberLLMChatProfile(t *testing.T) {
 	}
 }
 
+func TestOfficialLLMTRChatProfile(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "llmtr-chat.yingce-plugin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg, err := ParsePluginPackage(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := pkg.Manifest.Contributes.Providers[0]
+	if provider.ID != "llmtr-chat" || provider.BaseURL != "https://llmtr.com" || provider.Auth.Type != "bearer" {
+		t.Fatalf("LLMTR provider metadata = %#v", provider)
+	}
+
+	adapter := officialPackageAdapter(t, "llmtr-chat.yingce-plugin", "llmtr-chat")
+	spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Model:    "qwen/qwen3.8-flash",
+		Messages: []Message{{Role: "user", Content: "hello"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := manifestTestBody(t, spec)
+	if spec.Method != "POST" || spec.Path != "/v1/chat/completions" || body["model"] != "qwen/qwen3.8-flash" {
+		t.Fatalf("LLMTR request = %#v, body = %#v", spec, body)
+	}
+	result, err := adapter.ParseCreate(context.Background(), []byte(`{"choices":[{"message":{"content":"llmtr ok"}}],"usage":{"total_tokens":3}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != StatusSucceeded || result.Result == nil || result.Result.Text != "llmtr ok" {
+		t.Fatalf("LLMTR response = %#v", result)
+	}
+}
+
 func TestOfficialMiniMaxH3ImageProfile(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "minimax-h3-image.yingce-plugin"))
 	if err != nil {
