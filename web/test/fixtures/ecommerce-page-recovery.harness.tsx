@@ -95,9 +95,11 @@ const errors: string[] = [];
 const paidSubmissions: unknown[] = [];
 const additionalScopes: string[] = [];
 const observers = new Map<string, Set<(task: GenerationTask) => void>>();
+let planningTextStream: { id: string; onTextDelta?: (text: string) => void; onTaskUpdate?: (task: GenerationTask) => void } | undefined;
 let completeCreateTask: ((value: GenerationTask) => void) | undefined;
 let delayTaskCreation = false;
 let failedSaves = 0;
+let failSavesAfterTaskCreation = 0;
 const originalUser = useUserStore.getState();
 
 function project(value: EcommerceDraft): EcommerceProject {
@@ -178,7 +180,7 @@ async function press(text: string) {
         });
 }
 const productInput = () => host.querySelector<HTMLInputElement>('input[placeholder="例如：便携式香薰机"]');
-const planningProgress = () => host.querySelector<HTMLElement>(".commerce-assistant-progress[role=status]");
+const planningProgress = () => host.querySelector<HTMLElement>(".commerce-planning-activity") || host.querySelector<HTMLElement>(".commerce-assistant-progress[role=status]");
 async function selectOption(label: string, text: string) {
     const input = host.querySelector<HTMLElement>(`[aria-label="${label}"]`);
     expect(input).not.toBeNull();
@@ -238,6 +240,7 @@ beforeEach(async () => {
     completeCreateTask = undefined;
     delayTaskCreation = false;
     failedSaves = 0;
+    failSavesAfterTaskCreation = 0;
     route = "";
     draft = { ...emptyEcommerceDraft(), productName: "蓝色测试商品", count: 1, agentModel: "test::vision", imageModel: "test::image", ratio: "1:1", resolution: "1k", references: [{ resourceId: "owned-product", role: "primary" }] };
     config = { ...configStore.defaultConfig };
@@ -344,6 +347,10 @@ beforeEach(async () => {
     }) as typeof http.post);
     spyOn(http, "put").mockImplementation((async (path: string, body: { revision: number; draft: EcommerceDraft; plan?: EcommercePlan | null; name: string; historyMode?: "rounds"; advanceRound?: boolean; activeRoundId?: string }) => {
         saveBodies.push(body as unknown as Record<string, unknown>);
+        if (failSavesAfterTaskCreation > 0 && paidSubmissions.length > 0) {
+            failSavesAfterTaskCreation--;
+            throw new Error("任务编号保存连接中断");
+        }
         if (failedSaves > 0) {
             failedSaves--;
             throw new Error("保存连接暂时中断");
@@ -430,6 +437,17 @@ beforeEach(async () => {
         return () => {
             for (const id of ids) observers.get(id)?.delete(listener);
         };
+    });
+    // The planning page keeps polling for status and opens the text stream only
+    // for visible increments. Tests drive that stream explicitly.
+    planningTextStream = undefined;
+    spyOn(taskApi, "waitForGenerationTask").mockImplementation((id, options) => {
+        planningTextStream = { id, onTextDelta: options?.onTextDelta, onTaskUpdate: options?.onTaskUpdate };
+        return new Promise((_resolve, reject) => {
+            const abort = () => reject(new DOMException("Aborted", "AbortError"));
+            if (options?.signal?.aborted) return abort();
+            options?.signal?.addEventListener("abort", abort);
+        });
     });
 });
 afterEach(async () => {
@@ -2104,6 +2122,14 @@ describe("真实电商页面生命周期", () => {
         expect(host.textContent).toContain("重试保存分析结果");
         expect(sessions.getEcommercePlanningReceipt(scope, saved.id)).toBe(task.id);
         expect(paidSubmissions).toHaveLength(0);
+        const savesAfterFailure = saveBodies.length;
+        // Duplicate terminal snapshots must not silently retry the failed save.
+        await act(async () => {
+            observers.get(task.id)?.forEach((listener) => listener(tasks.get(task.id)!));
+            observers.get(task.id)?.forEach((listener) => listener(tasks.get(task.id)!));
+        });
+        expect(saveBodies).toHaveLength(savesAfterFailure);
+        expect(host.textContent).toContain("重试保存分析结果");
         await press("重试保存分析结果");
         expect(host.textContent).toContain("商品分析摘要");
         expect(host.textContent).toContain(plan.productSummary);
@@ -2198,5 +2224,212 @@ describe("真实电商页面生命周期", () => {
         expect(projects.get(saved.id)!.activeRoundId).toBe("active-current");
         expect(saveBodies).toHaveLength(0);
         expect(paidSubmissions).toHaveLength(0);
+    });
+
+    test("策划等待页展示真实参考资料、累计字数与已用时，不额外创建任务", async () => {
+        draft = {
+            ...draft,
+            references: [
+                { resourceId: "product-a", role: "primary" },
+                { resourceId: "product-b", role: "detail" },
+            ],
+            count: 3,
+            instruction: "为蓝色耳机生成详情页",
+        };
+        await sessions.writeEcommerceWorkspace(scope, { sessionId: crypto.randomUUID(), draft, plan: null, project: null, creationMode: "ai", autoGenerate: false });
+        await render();
+        await press("跳过选方向");
+        expect(paidSubmissions).toHaveLength(1);
+        const progress = host.querySelector<HTMLElement>(".commerce-planning-activity")!;
+        expect(progress).not.toBeNull();
+        expect(progress.textContent).toContain("2 张参考图");
+        expect(progress.textContent).toContain("3 张图片方案");
+        expect(progress.textContent).toContain("正在分析商品与构建方案");
+        expect(progress.textContent).not.toContain("%");
+        const taskId = sessions.peekEcommerceWorkspace(scope)!.draft.planningTaskId!;
+        await act(async () => {
+            const updated = { ...tasks.get(taskId)!, status: "running" as const, textDraft: "第一段" };
+            tasks.set(taskId, updated);
+            observers.get(taskId)?.forEach((listener) => listener(updated));
+        });
+        expect(host.querySelector<HTMLElement>(".commerce-planning-activity")!.textContent).toContain("已收到 3 字策划输出");
+        await act(async () => {
+            const updated = { ...tasks.get(taskId)!, status: "running" as const, textDraft: "第一段第二段" };
+            tasks.set(taskId, updated);
+            observers.get(taskId)?.forEach((listener) => listener(updated));
+        });
+        expect(host.querySelector<HTMLElement>(".commerce-planning-activity")!.textContent).toContain("已收到 6 字策划输出");
+        // The server sends cumulative snapshots; a repeated snapshot must not double count.
+        await act(async () => {
+            observers.get(taskId)?.forEach((listener) => listener(tasks.get(taskId)!));
+        });
+        expect(host.querySelector<HTMLElement>(".commerce-planning-activity")!.textContent).toContain("已收到 6 字策划输出");
+        const seconds = () => {
+            const text = host.querySelector<HTMLElement>(".commerce-planning-title > span")!.textContent || "";
+            return Number(/(\d+) 分/.exec(text)?.[1] || 0) * 60 + Number(/(\d+) 秒/.exec(text)?.[1] || 0);
+        };
+        const before = seconds();
+        await act(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 1100));
+        });
+        expect(seconds()).toBeGreaterThan(before);
+        expect(paidSubmissions).toHaveLength(1);
+    });
+
+    test("策划运行期的已收到字数来自任务文本流，轮询快照不会清空或重复累计", async () => {
+        draft = { ...draft, references: [{ resourceId: "product-a", role: "primary" }], count: 2, instruction: "为白色音箱生成详情页" };
+        await sessions.writeEcommerceWorkspace(scope, { sessionId: crypto.randomUUID(), draft, plan: null, project: null, creationMode: "ai", autoGenerate: false });
+        await render();
+        await press("跳过选方向");
+        const taskId = sessions.peekEcommerceWorkspace(scope)!.draft.planningTaskId!;
+        expect(planningTextStream?.id).toBe(taskId);
+        await act(async () => {
+            planningTextStream!.onTextDelta?.("第一段");
+        });
+        expect(host.querySelector<HTMLElement>(".commerce-planning-activity")!.textContent).toContain("已收到 3 字策划输出");
+        // Polling remains authoritative for status but carries no draft while the
+        // task runs; it must not erase what the stream already displayed.
+        await act(async () => {
+            const updated = { ...tasks.get(taskId)!, status: "running" as const };
+            tasks.set(taskId, updated);
+            observers.get(taskId)?.forEach((listener) => listener(updated));
+        });
+        expect(host.querySelector<HTMLElement>(".commerce-planning-activity")!.textContent).toContain("已收到 3 字策划输出");
+        // The stream reader hands over cumulative text; repeated cumulative
+        // snapshots (reconnect/replay) must not add the same content twice.
+        await act(async () => {
+            planningTextStream!.onTextDelta?.("第一段第二段");
+        });
+        expect(host.querySelector<HTMLElement>(".commerce-planning-activity")!.textContent).toContain("已收到 6 字策划输出");
+        await act(async () => {
+            planningTextStream!.onTextDelta?.("第一段第二段");
+        });
+        expect(host.querySelector<HTMLElement>(".commerce-planning-activity")!.textContent).toContain("已收到 6 字策划输出");
+        expect(paidSubmissions).toHaveLength(1);
+    });
+
+    test("文本流先报成功但尚无结果时不抢先结算，拿回完整任务后只保存一次", async () => {
+        draft = { ...draft, references: [{ resourceId: "product-a", role: "primary" }], count: 1, instruction: "为白色音箱生成一张主图" };
+        await sessions.writeEcommerceWorkspace(scope, { sessionId: crypto.randomUUID(), draft, plan: null, project: null, creationMode: "ai", autoGenerate: false });
+        await render();
+        await press("跳过选方向");
+        const taskId = sessions.peekEcommerceWorkspace(scope)!.draft.planningTaskId!;
+        const savesBefore = saveBodies.length;
+        await act(async () => {
+            planningTextStream!.onTaskUpdate?.({ ...tasks.get(taskId)!, status: "succeeded" as const });
+        });
+        expect(host.textContent).not.toContain("后端任务没有返回结果");
+        expect(host.textContent).not.toContain("策划结果未通过校验");
+        expect(sessions.peekEcommerceWorkspace(scope)?.draft.planningTaskId).toBe(taskId);
+        expect(saveBodies).toHaveLength(savesBefore);
+        const plan = {
+            productSummary: "白色音箱",
+            confirmedFacts: [],
+            uncertainFacts: [],
+            qualityChecks: [],
+            visualStrategy: "干净背景展示商品",
+            images: [
+                {
+                    id: "planned-image",
+                    imageType: "main",
+                    platform: draft.platform,
+                    language: draft.language,
+                    goal: "展示商品",
+                    theme: "商品主视觉",
+                    composition: "商品居中",
+                    mainVisual: "白色音箱",
+                    verifiedClaims: "",
+                    copy: "清晰可见的桌面音箱",
+                    lighting: "柔光",
+                    fidelity: "保持结构",
+                    prompt: "真实白色音箱居中展示，保持商品真实外观",
+                    negativePrompt: "虚构功能",
+                    imageModel: draft.imageModel,
+                    ratio: draft.ratio,
+                    resolution: draft.resolution,
+                },
+            ],
+        };
+        const submission = paidSubmissions.at(-1) as { metadata: { ecommerceDraft: EcommerceDraft } };
+        await act(async () => {
+            const done = { ...tasks.get(taskId)!, status: "succeeded" as const, resultJson: JSON.stringify({ text: JSON.stringify(plan) }), inputJson: JSON.stringify({ metadata: { ecommerceDraft: submission.metadata.ecommerceDraft } }) };
+            tasks.set(taskId, done);
+            observers.get(taskId)?.forEach((listener) => listener(done));
+        });
+        expect(host.textContent).toContain("策划方案已保存");
+        expect(saveBodies).toHaveLength(savesBefore + 1);
+        expect(paidSubmissions).toHaveLength(1);
+    });
+
+    test("逐屏详情策划等待时按实际参考图计数并显示待识别的屏数", async () => {
+        draft = { ...draft, referenceMode: "detail", imageType: "detail", count: 6, instruction: "照着这张长图做详情页", layoutReferences: Array.from({ length: 23 }, (_, index) => ({ resourceId: `long-${index}`, role: "style" as const })) };
+        spyOn(referenceMedia, "prepareCommerceReferenceViews").mockImplementation(async (source) => ({ draft: source, views: [] }));
+        await sessions.writeEcommerceWorkspace(scope, { sessionId: crypto.randomUUID(), draft, plan: null, project: null, creationMode: "ai", autoGenerate: false });
+        await render();
+        await press("跳过选方向");
+        expect(paidSubmissions).toHaveLength(1);
+        const progress = host.querySelector<HTMLElement>(".commerce-planning-activity")!;
+        expect(progress.textContent).toContain("24 张参考图");
+        expect(progress.textContent).toContain("自动识别长图屏数");
+        expect(progress.textContent).not.toContain("6 张图片方案");
+    });
+
+    test("策划任务失败且结果未保存时不再显示进行中状态", async () => {
+        const task = { ...runningTask("failed-planning-task"), status: "failed" as const, error: "上游暂时不可用" };
+        tasks.set(task.id, task);
+        const saved = project({ ...draft, planningTaskId: task.id });
+        projects.set(saved.id, saved);
+        sessions.setEcommerceActiveProject(scope, saved.id);
+        sessions.setEcommercePlanningReceipt(scope, saved.id, task.id);
+        failedSaves = 1;
+        await render();
+        expect(host.textContent).toContain("重试保存分析结果");
+        expect(host.textContent).toContain("结果尚未保存");
+        expect(host.querySelector(".commerce-planning-activity")).toBeNull();
+        expect(paidSubmissions).toHaveLength(0);
+        await press("重试保存分析结果");
+        expect(host.textContent).toContain("上游暂时不可用");
+        expect(host.querySelector(".commerce-planning-activity")).toBeNull();
+        expect(paidSubmissions).toHaveLength(0);
+    });
+
+    test("策划任务创建后任务编号保存失败，仍保留进度且重试保存不会重复提交", async () => {
+        await sessions.writeEcommerceWorkspace(scope, { sessionId: crypto.randomUUID(), draft, plan: null, project: null, creationMode: "ai", autoGenerate: false });
+        failSavesAfterTaskCreation = 1;
+        await render();
+        await press("跳过选方向");
+        expect(paidSubmissions).toHaveLength(1);
+        expect(host.textContent).toContain("任务进度保存失败");
+        expect(host.textContent).toContain("重试保存任务进度");
+        const progress = host.querySelector<HTMLElement>(".commerce-planning-activity");
+        expect(progress).not.toBeNull();
+        expect(progress!.textContent).toContain("正在分析商品与构建方案");
+        const taskId = sessions.peekEcommerceWorkspace(scope)!.draft.planningTaskId!;
+        expect(taskId).toBeTruthy();
+        const retry = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find((entry) => entry.textContent?.trim() === "重试保存任务进度")!;
+        await act(async () => {
+            retry.click();
+        });
+        expect(host.textContent).not.toContain("重试保存任务进度");
+        expect(host.querySelector(".commerce-planning-activity")).not.toBeNull();
+        expect(JSON.parse([...projects.values()][0].draftJson).planningTaskId).toBe(taskId);
+        expect(paidSubmissions).toHaveLength(1);
+    });
+
+    test("营销物料张数已知时展示固定方案数，不谎称自动识别屏数", async () => {
+        draft = {
+            ...draft,
+            imageType: "marketing",
+            instruction: "做一张营销海报",
+            typeOptions: { materialPlan: JSON.stringify([{ id: "market-poster", count: 3, ratio: "1:1" }]) },
+            count: 3,
+        };
+        await sessions.writeEcommerceWorkspace(scope, { sessionId: crypto.randomUUID(), draft, plan: null, project: null, creationMode: "ai", autoGenerate: false });
+        await render();
+        await press("跳过选方向");
+        expect(paidSubmissions).toHaveLength(1);
+        const progress = host.querySelector<HTMLElement>(".commerce-planning-activity")!;
+        expect(progress.textContent).toContain("3 张图片方案");
+        expect(progress.textContent).not.toContain("自动识别长图屏数");
     });
 });
