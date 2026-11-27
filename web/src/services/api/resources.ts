@@ -156,7 +156,7 @@ const accessCache = new Map<string, CachedResourceAccess>();
 const accessRequests = new Map<string, Promise<ResourceAccess>>();
 const pendingResourceAccess = new Map<string, PendingResourceAccess>();
 let resourceAccessBatchTimer: ReturnType<typeof setTimeout> | undefined;
-const PERSISTED_DISPLAY_ACCESS_PREFIX = "resource-access-v1:";
+const PERSISTED_DISPLAY_ACCESS_PREFIX = "resource-access-v2:";
 
 function persistedDisplayAccessKey(resourceId: string, variant: ResourceAccessVariant) {
     return `${PERSISTED_DISPLAY_ACCESS_PREFIX}${resourceId}:${variant}`;

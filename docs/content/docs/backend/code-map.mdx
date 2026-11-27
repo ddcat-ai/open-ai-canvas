@@ -5,6 +5,11 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 画布 OSS 实时小图
+
+- `internal/assets/access.go` 按资源实际存储位置及用途选择小图，限制文件大小、格式和已知像素；`internal/storage/thumbnail.go` 提供固定 960px WebP 处理地址，`storage/objects.go` 将处理参数纳入 OSS 私有签名。本地与其他云存储沿用原件交付。
+- `components/canvas/canvas-node-media-content.tsx` 保留原图尺寸并按原展示档位重试；`components/cached-resource-image.tsx` 共用相同档位续签，`services/api/resources.ts` 隔离档位缓存并失效旧版展示地址。图片加载沿用现有视口门控和四路并发，不新增服务端图片解码。
+
 ## 团队空间
 
 - `web/src/router.tsx` 为个人和团队挂载相同的 `pages/canvas`、`pages/create`、`pages/assets`；`lib/workspace-routes.ts` 选择 API 前缀，`lib/user-scope.ts` 隔离本地缓存。`pages/teams` 只负责空间、成员、邀请和钱包。

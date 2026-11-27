@@ -4593,7 +4593,7 @@ paths:
                   variant:
                     {
                       type: string,
-                      enum: [original, playback],
+                      enum: [original, playback, thumbnail],
                       default: original,
                     }
       responses:

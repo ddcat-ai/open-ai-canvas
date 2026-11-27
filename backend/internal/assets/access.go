@@ -22,7 +22,7 @@ const (
 	PurposeProvider        AccessPurpose   = "provider-input"
 	VariantOriginal        ResourceVariant = "original"
 	VariantPlayback        ResourceVariant = "playback"
-	// VariantThumbnail 是画布展示档位；缩略图未生成前回落原件，保证请求不会因变体失败而退回平台重定向。
+	// VariantThumbnail 使用阿里云 OSS 实时缩放；其他存储保留原件访问。
 	VariantThumbnail ResourceVariant = "thumbnail"
 	DeliveryCDN      DeliveryMode    = "cdn"
 	DeliveryOrigin   DeliveryMode    = "origin"
@@ -55,6 +55,8 @@ type ResourceAccess struct {
 	RefreshAt        time.Time       `json:"refreshAt"`
 	Revision         string          `json:"revision"`
 	FallbackReason   string          `json:"fallbackReason,omitempty"`
+	OriginalWidth    int             `json:"originalWidth,omitempty"`
+	OriginalHeight   int             `json:"originalHeight,omitempty"`
 }
 
 func AccessError(status int, reason, message string) *kernel.AppError {
@@ -83,6 +85,9 @@ func NormalizeAccessOptions(options AccessOptions, allowProvider bool) (AccessOp
 		return options, kernel.BadAuthRequest("资源变体无效")
 	}
 	if options.Purpose == PurposeCopy || options.Purpose == PurposeDownload || options.Purpose == PurposeProvider || options.Purpose == PurposeEcommerceExport {
+		options.Variant = VariantOriginal
+	}
+	if options.Variant == VariantThumbnail && options.Purpose != PurposeDisplay {
 		options.Variant = VariantOriginal
 	}
 	if options.Purpose != PurposeDownload {
@@ -141,6 +146,16 @@ func ResolveAccess(resource *model.Resource, setting storage.Settings, options A
 	}
 	if options.Variant == VariantThumbnail {
 		access.FallbackReason = "thumbnail_not_ready"
+		// Choose from the object's actual storage, never the current global default.
+		if resource.Kind == "image" && resource.Provider == "aliyun" && setting.Provider == "aliyun" {
+			if !supportsOSSThumbnail(resource) {
+				return nil, AccessError(http.StatusUnprocessableEntity, "resource_thumbnail_unsupported", "图片超出小图预览规格，请打开原图查看")
+			}
+			access.ActualVariant = VariantThumbnail
+			access.FallbackReason = ""
+			access.OriginalWidth, access.OriginalHeight = resource.Width, resource.Height
+			access.Revision += ":oss-thumbnail-960-v1"
+		}
 	}
 	if options.Purpose == PurposeEcommerceExport {
 		access.Delivery = DeliveryProxy
@@ -170,7 +185,11 @@ func ResolveAccess(resource *model.Resource, setting storage.Settings, options A
 		access.URL, err = storage.SignedOriginObjectDownloadURL(setting, resource.ObjectKey, expires, options.DownloadName)
 		access.Delivery = DeliveryOrigin
 	} else if storage.CDNEnabled(setting) {
-		access.URL, err = storage.SignCDNURL(setting, resource.ObjectKey, expires)
+		if access.ActualVariant == VariantThumbnail {
+			access.URL, err = storage.PublicCDNImageThumbnailURL(setting, resource.ObjectKey)
+		} else {
+			access.URL, err = storage.SignCDNURL(setting, resource.ObjectKey, expires)
+		}
 		access.Delivery = DeliveryCDN
 		if setting.Delivery.CDNAuthMode == "public" {
 			access.ExpiresAt = nil
@@ -178,7 +197,9 @@ func ResolveAccess(resource *model.Resource, setting storage.Settings, options A
 	} else if setting.Delivery.RequireCDN {
 		return nil, AccessError(503, "resource_cdn_unconfigured", "CDN 访问鉴权未配置，请检查存储分发设置")
 	} else if storage.PublicOrigin(setting) {
-		if signedAt.IsZero() {
+		if access.ActualVariant == VariantThumbnail {
+			access.URL, err = storage.SignedOriginImageThumbnailURL(setting, resource.ObjectKey, signedAt, expires)
+		} else if signedAt.IsZero() {
 			access.URL, err = storage.SignedOriginObjectURL(setting, resource.ObjectKey, expires)
 		} else {
 			access.URL, err = storage.SignedOriginObjectDisplayURL(setting, resource.ObjectKey, signedAt, expires)
@@ -208,6 +229,22 @@ func ResolveAccess(resource *model.Resource, setting storage.Settings, options A
 		}
 	}
 	return access, nil
+}
+
+func supportsOSSThumbnail(resource *model.Resource) bool {
+	// Check metadata only. No original bytes are read or decoded by this service.
+	if resource.Size <= 0 || resource.Size > 20<<20 || resource.Width > 30_000 || resource.Height > 30_000 {
+		return false
+	}
+	if resource.Width > 0 && resource.Height > 0 && int64(resource.Width)*int64(resource.Height) > 250_000_000 {
+		return false
+	}
+	switch resource.MimeType {
+	case "image/jpeg", "image/png", "image/webp", "image/bmp", "image/gif", "image/tiff", "image/heic", "image/avif":
+		return true
+	default:
+		return false
+	}
 }
 
 // browserCacheable 标记浏览器直接读取字节、值得复用 HTTP 缓存的用途。

@@ -24,7 +24,7 @@ export function CachedResourceImage({ storageKey, src = "", fallback = null, loa
     const remoteResource = Boolean(resourceId);
     const localImageResource = Boolean(storageKey && storageKey.startsWith("image:"));
     const scope = getActiveUserScope();
-    const identity = `${scope}:${resourceId || storageKey || src}`;
+    const identity = `${scope}:${resourceId || storageKey || src}:${variant}`;
     const targetRef = useRef<HTMLSpanElement>(null);
     const [nearViewport, setNearViewport] = useState(eager || !remoteResource);
     const [displayed, setDisplayed] = useState<{ identity: string; src: string } | null>(null);
@@ -64,14 +64,8 @@ export function CachedResourceImage({ storageKey, src = "", fallback = null, loa
         const load = async () => {
             let candidate = src;
             if (remoteResource && resourceId) {
-                try {
-                    const access = await getResourceAccess(storageKey, "display", variant);
-                    candidate = resolveResourceAccessURL(access.url);
-                } catch (error) {
-                    if (variant !== "thumbnail") throw error;
-                    const access = await getResourceAccess(storageKey, "display", "original");
-                    candidate = resolveResourceAccessURL(access.url);
-                }
+                const access = await getResourceAccess(storageKey, "display", variant);
+                candidate = resolveResourceAccessURL(access.url);
             } else if (localImageResource && storageKey) {
                 candidate = (await resolveImageUrl(storageKey, src)) || src;
             }
@@ -79,15 +73,18 @@ export function CachedResourceImage({ storageKey, src = "", fallback = null, loa
             try {
                 await prepareCanvasImage(candidate, controller.signal);
             } catch (error) {
+                if (controller.signal.aborted) throw error;
                 if (!remoteResource || variant !== "thumbnail") {
-                    if (candidate !== src && src) await prepareCanvasImage(src, controller.signal);
-                    else throw error;
+                    if (candidate !== src && src) {
+                        await prepareCanvasImage(src, controller.signal);
+                        candidate = src;
+                    } else throw error;
                 } else {
-                    const access = await getResourceAccess(storageKey, "display", "original");
-                    const originalURL = resolveResourceAccessURL(access.url);
-                    if (!originalURL || originalURL === candidate) throw error;
-                    await prepareCanvasImage(originalURL, controller.signal);
-                    candidate = originalURL;
+                    const access = await getResourceAccess(storageKey, "display", variant, "", { forceRefresh: true });
+                    const refreshedURL = resolveResourceAccessURL(access.url);
+                    if (!refreshedURL) throw error;
+                    await prepareCanvasImage(refreshedURL, controller.signal);
+                    candidate = refreshedURL;
                 }
             }
             if (isCurrent()) {
@@ -110,10 +107,12 @@ export function CachedResourceImage({ storageKey, src = "", fallback = null, loa
                 .then((url) => {
                     if (url && url !== cachedSrc) {
                         const controller = new AbortController();
-                        void prepareCanvasImage(url, controller.signal).then(() => setDisplayed({ identity, src: url })).catch(() => {
-                            setFailedIdentity(identity);
-                            onError?.(e);
-                        });
+                        void prepareCanvasImage(url, controller.signal)
+                            .then(() => setDisplayed({ identity, src: url }))
+                            .catch(() => {
+                                setFailedIdentity(identity);
+                                onError?.(e);
+                            });
                         return;
                     }
                     setFailedIdentity(identity);
