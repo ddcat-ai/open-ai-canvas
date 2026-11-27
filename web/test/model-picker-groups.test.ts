@@ -143,7 +143,10 @@ test("different display names in one channel create distinct first-level groups"
     ]);
     const groups = groupModelsForPicker({ ...config, channels: extra }, selectableModelsByCapability({ ...config, channels: extra }, "video"));
     expect(groups).toHaveLength(3);
-    expect(groups.map((group) => group.label)).toEqual(["Seedance 2 Mini", "Seedance 2.0 Fast", "Seedance 2.0"]);
+    expect(groups.map((group) => group.label)).toEqual(["Seedance 2 Mini", "Seedance 2.0", "Seedance 2.0 Fast"]);
+    const displayGroupOrder = ["Seedance 2.0 Fast", "Seedance 2 Mini", "Seedance 2.0"];
+    const ordered = { ...config, channels: extra, displayGroupOrder };
+    expect(groupModelsForPicker(ordered, selectableModelsByCapability(ordered, "video")).map((group) => group.label)).toEqual(displayGroupOrder);
     expect(groups.every((group) => group.kind === "product" && group.models.length === 1)).toBe(true);
 });
 

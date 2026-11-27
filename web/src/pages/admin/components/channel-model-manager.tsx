@@ -661,7 +661,8 @@ export function ChannelModelManager({
                             <p>
                                 新增 {catalogDiff.added?.length || 0} · 仍在目录 {catalogDiff.retained?.length || 0} · 失效／未返回 {catalogDiff.unavailable?.length || 0}
                             </p>
-                            {!!catalogDiff.unavailable?.length && <p className="break-words">失效／未返回：{catalogDiff.unavailable.join("、")}</p>}
+                            {!!catalogDiff.missing?.length && <p className="break-words">本次未返回：{catalogDiff.missing.join("、")}</p>}
+                            {!!catalogDiff.unavailable?.length && <p className="break-words">已配置但上游未返回：{catalogDiff.unavailable.join("、")}</p>}
                             {!!catalogDiff.disabled?.length && <p className="break-words">已自动停用：{catalogDiff.disabled.join("、")}</p>}
                             <p className="text-xs text-foreground/50">目录可见不代表能够生成；协议、能力参数及价格仍按本组单独配置。</p>
                         </div>
