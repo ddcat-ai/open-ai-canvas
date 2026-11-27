@@ -6,6 +6,7 @@ import { initialChannelModelValues, validateChannelModelPrices } from "../src/pa
 import { defaultPriceTier, priceTierAmountsComplete, priceTierPayloadFromForm, priceTierToForm } from "../src/pages/admin/components/channel-model-price-tier-form";
 import { applyCapabilityTemplate, buildPricingTemplate, capabilityTemplateReason, priceSelectorIssues, pricingDimensions } from "../src/pages/admin/components/channel-model-templates";
 import type { ChannelModelPriceTier } from "../src/services/api/wallet";
+import { videoProcessingTools } from "@/lib/canvas/media-tool-contract";
 
 const protocols: ModelProtocolDefinition[] = await Promise.all(
     ["openai-images", "google-gemini-image"].map(async (name) => {
@@ -14,6 +15,26 @@ const protocols: ModelProtocolDefinition[] = await Promise.all(
         return { value: provider.id, label: provider.label, capability: "image", imageParameters: provider.imageParameters, create: "POST /test", contentType: "application/json", media: "image" };
     }),
 );
+
+test("所有注册处理操作都能配置对应价格，只有声明帧率的工具提供帧率档", () => {
+    for (const tool of videoProcessingTools) {
+        const capabilityConfig = defaultModelCapabilityConfig("volcengine-mediakit-video-enhance");
+        capabilityConfig.video!.operations = [tool.operation];
+        capabilityConfig.video!.defaultOperation = tool.operation;
+        capabilityConfig.video!.processing = { fpsPolicy: "keep_source" };
+        const values = {
+            ...initialChannelModelValues(null, []),
+            capability: "video" as const,
+            protocol: "fixture",
+            capabilityConfig,
+            priceTiers: [{ ...defaultPriceTier("advanced"), operation: tool.operation, billingMode: "fixed_request" as const, unitPrice: 1, enabled: true, priceConfigured: true }],
+        };
+        const dimensions = pricingDimensions(values);
+        expect(dimensions.find((field) => field.id === "operation")?.values).toContain(tool.operation);
+        expect(dimensions.some((field) => field.id === "fpsBand")).toBe(Boolean(tool.parameters.fps));
+        expect(() => validateChannelModelPrices(values)).not.toThrow();
+    }
+});
 const draft = () => ({
     ...initialChannelModelValues(null, protocols),
     capability: "image" as const,

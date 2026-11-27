@@ -1,4 +1,5 @@
 import type { ModelCapabilityChoice } from "@/components/model-protocol-picker";
+import { videoProcessingTools } from "@/lib/canvas/media-tool-contract";
 import type { FormInstance } from "antd";
 import { defaultModelCapabilityConfig, normalizeLegacyImageResolutionConfig, normalizeModelCapabilityConfig, officialVideoCapabilityPreset, type ModelCapabilityConfig } from "@/lib/model-capabilities";
 import { imagePresetForRatio, imageSizePresets } from "@/lib/image-size-presets";
@@ -224,7 +225,7 @@ export function validateChannelModelPrices(values: Pick<ChannelModelFormValues, 
     const operations: Record<string, string[]> = {
         text: ["text_generation"],
         image: ["text_to_image", "image_to_image"],
-        video: ["text_to_video", "image_to_video", "video_to_video", ...(values.capabilityConfig?.video?.processing ? ["enhance", "depth"] : [])],
+        video: ["text_to_video", "image_to_video", "video_to_video", ...(values.capabilityConfig?.video?.processing ? videoProcessingTools.map((tool) => tool.operation) : [])],
         audio: [],
     };
     priceTiers.forEach((tier, index) => {

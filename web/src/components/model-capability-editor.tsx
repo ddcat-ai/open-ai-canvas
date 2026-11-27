@@ -95,7 +95,8 @@ export function ModelCapabilityEditor({ value, onChange, protocol, definition, c
             </button>
         ) : null;
     const autoDLSpecFields = <AutoDLScreenSpecFields profile={profile} workflow={workflow} disabled={disabled} onChange={(video) => onChange?.({ version: 1, video })} />;
-    const inputOnlyProcessing = Boolean(profile.processing && ["depth", "upscale", "remove_subtitles"].includes(profile.defaultOperation));
+    const processingTool = mediaToolForOperation(profile.defaultOperation);
+    const inputOnlyProcessing = Boolean(profile.processing && processingTool && Object.keys(processingTool.parameters).length === 0);
     const screenFields = inputOnlyProcessing ? (
         <p className="text-sm text-muted-foreground">输出规格由处理协议决定，无需配置画面比例或分辨率。</p>
     ) : autoDL ? (
@@ -1033,3 +1034,4 @@ function parseIntegerList(value: string) {
         ),
     ).sort((left, right) => left - right);
 }
+import { mediaToolForOperation } from "@/lib/canvas/media-tool-contract";
