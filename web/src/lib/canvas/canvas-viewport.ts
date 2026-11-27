@@ -1,4 +1,4 @@
-import type { CanvasNodeData, ViewportTransform } from "@/types/canvas";
+import type { CanvasNodeData, Position, ViewportTransform } from "@/types/canvas";
 
 export type CanvasBounds = {
     left: number;
@@ -21,8 +21,10 @@ export function unobscuredCanvasArea(size: CanvasViewportSize, overlay?: CanvasB
     const right = Math.min(size.width, overlay.right);
     const bottom = Math.min(size.height, overlay.bottom);
     const candidates = [
-        { ...full, right: left }, { ...full, left: right },
-        { ...full, bottom: top }, { ...full, top: bottom },
+        { ...full, right: left },
+        { ...full, left: right },
+        { ...full, bottom: top },
+        { ...full, top: bottom },
     ].filter((area) => area.right - area.left >= 160 && area.bottom - area.top >= 160);
     return candidates.sort((a, b) => (b.right - b.left) * (b.bottom - b.top) - (a.right - a.left) * (a.bottom - a.top))[0] ?? full;
 }
@@ -74,12 +76,16 @@ export function viewportForBounds(bounds: CanvasBounds, viewportSize: CanvasView
 }
 
 export function viewportAtScale(viewport: ViewportTransform, viewportSize: CanvasViewportSize, scale: number): ViewportTransform {
+    return viewportAtAnchoredScale(viewport, { x: viewportSize.width / 2, y: viewportSize.height / 2 }, scale);
+}
+
+export function viewportAtAnchoredScale(viewport: ViewportTransform, anchor: Position, scale: number): ViewportTransform {
     const k = Math.min(2, Math.max(0.05, scale));
-    const centerWorldX = (viewportSize.width / 2 - viewport.x) / viewport.k;
-    const centerWorldY = (viewportSize.height / 2 - viewport.y) / viewport.k;
+    if (k === viewport.k) return viewport;
+    const ratio = k / viewport.k;
     return {
-        x: viewportSize.width / 2 - centerWorldX * k,
-        y: viewportSize.height / 2 - centerWorldY * k,
+        x: anchor.x - (anchor.x - viewport.x) * ratio,
+        y: anchor.y - (anchor.y - viewport.y) * ratio,
         k,
     };
 }

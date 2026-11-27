@@ -5,12 +5,14 @@ import { resolveCanvasPointerIntent } from "@/lib/canvas/canvas-selection";
 import { isDiscreteCanvasWheel } from "@/lib/canvas/canvas-wheel";
 import { canvasWheelBelongsToViewport, canvasWheelIntentTarget, createCanvasWheelIntent } from "@/lib/canvas/canvas-wheel-intent";
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
-import { applyCanvasLiveViewport, CANVAS_GRID_BLEED, canvasGridMetrics, setCanvasGestureActive, subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
+import { applyCanvasLiveViewport, CANVAS_GRID_BLEED, canvasGridMetrics, setCanvasGestureActive, subscribeCanvasGraphicsViewportPreview, subscribeCanvasViewportInputSettle } from "@/lib/canvas/canvas-live-viewport";
+import { interpolateViewport, viewportAtAnchoredScale } from "@/lib/canvas/canvas-viewport";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { ViewportTransform } from "@/types/canvas";
 
 type CanvasViewportProps = {
     interactive?: boolean;
+    wheelMode?: "legacy" | "scroll";
     containerRef: React.RefObject<HTMLDivElement | null>;
     viewport: ViewportTransform;
     appearance?: CanvasAppearance;
@@ -36,6 +38,9 @@ const CANVAS_POINTER_IGNORE_SELECTOR = "[data-canvas-no-zoom],[data-connection-c
 const CANVAS_INTERNAL_DRAG_SELECTOR = "[data-canvas-batch-table]";
 const WHEEL_ZOOM_DELTA = 72;
 const TRACKPAD_PINCH_ZOOM_DELTA = 24;
+const WHEEL_ZOOM_DURATION = 120;
+
+type WheelZoom = { from: ViewportTransform; target: ViewportTransform; startedAt: number };
 
 type TouchPoint = { x: number; y: number };
 
@@ -50,6 +55,7 @@ type PinchState = {
 
 export function CanvasViewport({
     interactive = true,
+    wheelMode = "legacy",
     containerRef,
     viewport,
     appearance,
@@ -88,6 +94,8 @@ export function CanvasViewport({
     const frameRef = useRef<number | null>(null);
     const nextViewportRef = useRef<ViewportTransform | null>(null);
     const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const wheelZoomRef = useRef<WheelZoom | null>(null);
+    const wheelZoomFrameRef = useRef<number | null>(null);
     const lastPreviewNotifyRef = useRef(0);
     const interactingRef = useRef(false);
     const touchPointsRef = useRef(new Map<number, TouchPoint>());
@@ -96,6 +104,12 @@ export function CanvasViewport({
     const spacePressedRef = useRef(false);
     const [isSpacePressed, setIsSpacePressed] = useState(false);
     const [isPanning, setIsPanning] = useState(false);
+
+    const cancelWheelZoom = useCallback(() => {
+        if (wheelZoomFrameRef.current !== null) cancelAnimationFrame(wheelZoomFrameRef.current);
+        wheelZoomFrameRef.current = null;
+        wheelZoomRef.current = null;
+    }, []);
 
     useLayoutEffect(() => {
         if (interactive) return;
@@ -109,15 +123,16 @@ export function CanvasViewport({
         pinchStateRef.current.active = false;
         touchPointsRef.current.clear();
         interactingRef.current = false;
-        if (frameRef.current) cancelAnimationFrame(frameRef.current);
-        if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+        cancelWheelZoom();
+        if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+        if (syncTimerRef.current !== null) clearTimeout(syncTimerRef.current);
         frameRef.current = null;
         syncTimerRef.current = null;
         nextViewportRef.current = null;
         setCanvasGestureActive(container, "canvasViewportInteracting", false);
         setIsPanning(false);
         setIsSpacePressed(false);
-    }, [interactive, containerRef]);
+    }, [interactive, containerRef, cancelWheelZoom]);
 
     useLayoutEffect(() => {
         if (interactingRef.current) return;
@@ -129,7 +144,9 @@ export function CanvasViewport({
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
-        return subscribeCanvasViewportPreview(container, (next) => {
+        return subscribeCanvasGraphicsViewportPreview(container, (next) => {
+            // Direct gestures may already have a newer preview queued for the next frame.
+            if (frameRef.current !== null) return;
             viewportRef.current = next;
             scaleRef.current = next.k;
         });
@@ -138,16 +155,74 @@ export function CanvasViewport({
     useEffect(() => {
         const container = containerRef.current;
         return () => {
-            if (frameRef.current) cancelAnimationFrame(frameRef.current);
-            if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+            cancelWheelZoom();
+            if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+            if (syncTimerRef.current !== null) clearTimeout(syncTimerRef.current);
+            frameRef.current = null;
+            syncTimerRef.current = null;
             setCanvasGestureActive(container, "canvasViewportInteracting", false);
             setCanvasGestureActive(container, "canvasNodeDragging", false);
         };
-    }, [containerRef]);
+    }, [cancelWheelZoom, containerRef]);
 
     const syncViewport = useCallback(() => {
         if (interactive) onViewportChange(viewportRef.current);
     }, [interactive, onViewportChange]);
+
+    const finishWheelInput = useCallback(() => {
+        if (syncTimerRef.current === null && !wheelZoomRef.current) return;
+        cancelWheelZoom();
+        if (syncTimerRef.current !== null) clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = null;
+        if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
+        nextViewportRef.current = null;
+        interactingRef.current = false;
+        const container = containerRef.current;
+        setCanvasGestureActive(container, "canvasViewportInteracting", false);
+        applyCanvasLiveViewport(container, viewportRef.current);
+        syncViewport();
+    }, [cancelWheelZoom, containerRef, syncViewport]);
+
+    useLayoutEffect(() => {
+        const container = containerRef.current;
+        if (container && interactive) return subscribeCanvasViewportInputSettle(container, finishWheelInput);
+    }, [containerRef, finishWheelInput, interactive]);
+
+    const animateWheelZoom = useCallback(
+        (from: ViewportTransform, target: ViewportTransform) => {
+            if (syncTimerRef.current !== null) clearTimeout(syncTimerRef.current);
+            syncTimerRef.current = null;
+            if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+            frameRef.current = null;
+            nextViewportRef.current = null;
+            wheelZoomRef.current = { from, target, startedAt: performance.now() };
+            // Tell the controller immediately so its camera cannot write before our first frame.
+            onViewportPreviewChange?.(from);
+            setCanvasGestureActive(containerRef.current, "canvasViewportInteracting", true);
+            if (wheelZoomFrameRef.current !== null) return;
+            const tick = (now: number) => {
+                wheelZoomFrameRef.current = null;
+                const zoom = wheelZoomRef.current;
+                if (!zoom) return;
+                const progress = (now - zoom.startedAt) / WHEEL_ZOOM_DURATION;
+                const next = progress >= 1 ? zoom.target : interpolateViewport(zoom.from, zoom.target, progress);
+                viewportRef.current = next;
+                scaleRef.current = next.k;
+                onViewportPreviewChange?.(next);
+                if (progress >= 1) {
+                    finishWheelInput();
+                    return;
+                }
+                const notify = now - lastPreviewNotifyRef.current >= 32;
+                applyCanvasLiveViewport(containerRef.current, next, notify);
+                if (notify) lastPreviewNotifyRef.current = now;
+                wheelZoomFrameRef.current = requestAnimationFrame(tick);
+            };
+            wheelZoomFrameRef.current = requestAnimationFrame(tick);
+        },
+        [containerRef, finishWheelInput, onViewportPreviewChange],
+    );
 
     const scheduleViewportChange = useCallback(
         (next: ViewportTransform, commitAfterIdle = false) => {
@@ -157,25 +232,24 @@ export function CanvasViewport({
             const container = containerRef.current;
             setCanvasGestureActive(container, "canvasViewportInteracting", true);
             nextViewportRef.current = next;
-            if (!frameRef.current)
-                frameRef.current = requestAnimationFrame((now) => {
-                    frameRef.current = null;
-                    const pending = nextViewportRef.current;
-                    if (!pending) return;
-                    const notify = now - lastPreviewNotifyRef.current >= 32;
-                    applyCanvasLiveViewport(containerRef.current, pending, notify);
-                    if (notify) lastPreviewNotifyRef.current = now;
-                });
+            const flush = (now: number) => {
+                frameRef.current = null;
+                const pending = nextViewportRef.current;
+                if (!pending) return;
+                const notify = now - lastPreviewNotifyRef.current >= 32;
+                applyCanvasLiveViewport(containerRef.current, pending, notify);
+                if (notify) lastPreviewNotifyRef.current = now;
+            };
+            if (container?.dataset.canvasNodeDragging === "true") {
+                // Apply a modifier zoom before the next edge-pan frame takes over the viewport.
+                if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+                flush(performance.now());
+            } else if (frameRef.current === null) frameRef.current = requestAnimationFrame(flush);
             if (!commitAfterIdle) return;
             if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-            syncTimerRef.current = setTimeout(() => {
-                interactingRef.current = false;
-                setCanvasGestureActive(containerRef.current, "canvasViewportInteracting", false);
-                syncViewport();
-                syncTimerRef.current = null;
-            }, 120);
+            syncTimerRef.current = setTimeout(finishWheelInput, 120);
         },
-        [containerRef, onViewportPreviewChange, syncViewport],
+        [containerRef, finishWheelInput, onViewportPreviewChange],
     );
 
     useEffect(() => {
@@ -221,12 +295,13 @@ export function CanvasViewport({
             const deltaY = wheelDeltaToPixels(event.deltaY, event.deltaMode);
             const absX = Math.abs(deltaX);
             const absY = Math.abs(deltaY);
-            const isPinchZoom = event.ctrlKey || event.metaKey;
+            const scrollMode = wheelMode === "scroll";
+            const modifierZoom = event.ctrlKey || (!scrollMode && event.metaKey);
             const intentTarget = canvasWheelIntentTarget(target);
-            const forceCanvas = isPinchZoom || event.shiftKey || absX > absY;
+            const forceCanvas = modifierZoom || event.shiftKey || absX > absY;
             const wheelOwner = wheelIntentRef.current.resolve(intentTarget, event, performance.now(), forceCanvas);
             if (intentTarget && wheelOwner === "scroll") return;
-            if (!intentTarget && target?.closest(CANVAS_WHEEL_IGNORE_SELECTOR) && !isPinchZoom) {
+            if (!intentTarget && target?.closest(CANVAS_WHEEL_IGNORE_SELECTOR) && !modifierZoom) {
                 // 普通滚动仍留在既有输入、弹层和滚动面板边界内。
                 if (event.shiftKey || absX > absY) event.preventDefault();
                 return;
@@ -234,17 +309,23 @@ export function CanvasViewport({
 
             // Modifier wheel/pinch is canvas zoom only inside this canvas or its prompt panel.
             event.preventDefault();
-            interactingRef.current = true;
-            const current = viewportRef.current;
+            if (panState.current.isPanning || pinchStateRef.current.active || (absX === 0 && absY === 0)) return;
             const looksLikeMouseWheel = isDiscreteCanvasWheel(event.deltaY, event.deltaMode);
-            const looksLikeTrackpadPan = !isPinchZoom && (event.shiftKey || absX > 0 || (!looksLikeMouseWheel && absY > 0));
+            const shouldPan = !modifierZoom && (scrollMode || event.shiftKey || absX > 0 || (!looksLikeMouseWheel && absY > 0));
+            const dragging = container.dataset.canvasNodeDragging === "true";
 
-            if (looksLikeTrackpadPan) {
-                const panX = event.shiftKey && absX < 1 ? deltaY : deltaX;
+            if (shouldPan) {
+                if (dragging) return;
+                cancelWheelZoom();
+                const current = viewportRef.current;
+                interactingRef.current = true;
+                // Browsers may already move Shift-wheel's delta to the horizontal axis.
+                const shiftPan = event.shiftKey && (scrollMode || absX < 1);
+                const panX = shiftPan && absX < 1 ? deltaY : deltaX;
                 scheduleViewportChange(
                     {
                         x: current.x - panX,
-                        y: current.y - (event.shiftKey && absX < 1 ? 0 : deltaY),
+                        y: current.y - (shiftPan ? 0 : deltaY),
                         k: current.k,
                     },
                     true,
@@ -252,26 +333,29 @@ export function CanvasViewport({
                 return;
             }
 
+            const zoomInput = scrollMode && event.shiftKey && deltaY === 0 ? deltaX : deltaY;
+            if (zoomInput === 0 || (dragging && !modifierZoom)) return;
             const rect = containerRectRef.current || container.getBoundingClientRect();
-            if (!rect) return;
-            const mouseX = event.clientX - rect.left;
-            const mouseY = event.clientY - rect.top;
-            const zoomDelta = isPinchZoom && !looksLikeMouseWheel ? TRACKPAD_PINCH_ZOOM_DELTA : WHEEL_ZOOM_DELTA;
-            const factor = Math.pow(1.1, -deltaY / zoomDelta);
-            const newScale = clampScale(current.k * factor);
-            const worldX = (mouseX - current.x) / current.k;
-            const worldY = (mouseY - current.y) / current.k;
-
-            scheduleViewportChange(
-                {
-                    x: mouseX - worldX * newScale,
-                    y: mouseY - worldY * newScale,
-                    k: newScale,
-                },
-                true,
-            );
+            const anchor = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+            const zoomDelta = modifierZoom && !looksLikeMouseWheel ? TRACKPAD_PINCH_ZOOM_DELTA : WHEEL_ZOOM_DELTA;
+            const factor = Math.pow(1.1, -zoomInput / zoomDelta);
+            const animate = looksLikeMouseWheel && !dragging && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            const current = viewportRef.current;
+            // Accumulate rapid notches from the queued target scale, but anchor the next
+            // segment to what is currently under the pointer, even if it moved.
+            const baseScale = animate ? (wheelZoomRef.current?.target.k ?? current.k) : current.k;
+            const zoomTarget = viewportAtAnchoredScale(current, anchor, baseScale * factor);
+            if (animate && wheelZoomRef.current?.target.k === zoomTarget.k) return;
+            if (zoomTarget === current) {
+                finishWheelInput();
+                return;
+            }
+            if (!animate) cancelWheelZoom();
+            interactingRef.current = true;
+            if (animate) animateWheelZoom(current, zoomTarget);
+            else scheduleViewportChange(zoomTarget, true);
         },
-        [containerRef, scheduleViewportChange],
+        [animateWheelZoom, cancelWheelZoom, containerRef, finishWheelInput, scheduleViewportChange, wheelMode],
     );
 
     const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -281,6 +365,7 @@ export function CanvasViewport({
         const target = event.target instanceof Element ? event.target : null;
         // AntD 浮层通过 Portal 渲染到节点 DOM 之外；若不统一排除，会被误判为画布空白并捕获指针。
         if (target?.closest(CANVAS_POINTER_IGNORE_SELECTOR)) return;
+        finishWheelInput();
         const isBackgroundClick = panOverNodes || !target?.closest("[data-node-id],[data-connection-id]");
         const isTouch = event.pointerType === "touch";
 

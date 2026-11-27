@@ -66,7 +66,7 @@ test("cleared tool references do not fall back to the original generation prompt
     expect(toolReferences).not.toContain("||");
 });
 
-test("workspace starts collapsed and keeps separated navigation and bottom toggle", () => {
+test("workspace starts collapsed and keeps its toggle next to the rail entries", () => {
     const page = readFileSync(new URL("../src/pages/canvas/project.tsx", import.meta.url), "utf8");
     expect(page).toContain("const [workspaceOpen, setWorkspaceOpen] = useState(false)");
     const panel = component("canvas-workspace-panel.tsx");
@@ -74,8 +74,19 @@ test("workspace starts collapsed and keeps separated navigation and bottom toggl
     expect(panel.indexOf("canvas-workspace-rail-toggle")).toBeGreaterThan(panel.indexOf("entries.map"));
     const css = component("canvas-workspace-panel.css");
     expect(css).toContain("gap: var(--space-1)");
-    expect(css).toContain("margin-top: auto");
+    expect(css).not.toMatch(/\.canvas-workspace-rail-divider\s*\{[^}]*margin-top:\s*auto/);
+    expect(css).toMatch(/\.canvas-workspace-corner\.is-expanded \.canvas-workspace-shell > \.canvas-workspace-rail\s*\{[^}]*padding-block-start: calc\(2 \* \(var\(--space-2\) \+ var\(--stroke-1\)\)\)/);
     expect(css).toContain("prefers-reduced-motion: reduce");
+});
+
+test("canvas links to workspace home beside the project menu and keeps settings in the tools", () => {
+    const source = readFileSync(new URL("../src/pages/canvas/canvas-project-top-bar.tsx", import.meta.url), "utf8");
+    const heading = source.split("canvas-topbar-project-cluster")[1]?.split("canvas-topbar-title-block")[0] ?? "";
+    const tools = source.split("canvas-topbar-tools-cluster")[1]?.split("<CanvasShortcutsModal")[0] ?? "";
+    expect(heading).toMatch(/<\/Dropdown>\s*<\/CanvasTopBarTooltip>\s*<CanvasTopBarTooltip label="主页">\s*<Link to=\{workspacePath\("\/"\)\}/);
+    expect(tools).not.toContain('<Link to={workspacePath("/")}');
+    expect(tools).toContain("<Link to={settingsPath()}");
+    expect(source).not.toContain('key: "home"');
 });
 
 test("rail inherits canvas dock colors from the workspace shell", () => {
@@ -84,7 +95,8 @@ test("rail inherits canvas dock colors from the workspace shell", () => {
     expect(panel).toContain("...canvasDockStyle(theme)");
     expect(panel).toContain("background: undefined");
     expect(panel).not.toContain('boxShadow: "none"');
-    const railCss = component("canvas-workspace-panel.css").split(".canvas-workspace-rail {")[1];
+    const styles = component("canvas-workspace-panel.css");
+    const railCss = styles.slice(styles.indexOf("\n.canvas-workspace-rail {"));
     expect(railCss).not.toContain("var(--muted-foreground)");
     expect(railCss).not.toContain("var(--workspace-navigation)");
     for (const token of ["--dock-command-hover", "--dock-command-active", "--dock-command-active-text"]) expect(railCss).toContain(`var(${token})`);

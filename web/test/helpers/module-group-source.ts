@@ -24,7 +24,7 @@ export const SPLIT_MODULE_GROUPS: Record<string, readonly string[]> = {
     "pages/assets/index.tsx": ["pages/assets/asset-library-cards.tsx", "pages/assets/asset-library-format.ts", "pages/assets/asset-library-panels.tsx"],
     "components/canvas/previs/canvas-previs-workbench.tsx": ["components/canvas/previs/previs-inspectors.tsx"],
     "pages/canvas/project.tsx": ["pages/canvas/canvas-clipboard.ts"],
-    "pages/create/creation-workspace.tsx": ["pages/create/creation-workspace-empty.tsx", "pages/create/creation-workspace-history.tsx", "pages/create/creation-workspace-messages.tsx"],
+    "pages/create/creation-workspace.tsx": ["pages/create/creation-workspace-empty.tsx", "pages/create/creation-workspace-history.tsx", "pages/create/creation-workspace-messages.tsx", "pages/create/creation-model-picker.tsx"],
     "services/user-data-sync.ts": ["services/user-data-sync-media.ts"],
     "stores/use-config-store.ts": ["stores/config-model-options.ts", "stores/config-workflow-fields.ts"],
 };

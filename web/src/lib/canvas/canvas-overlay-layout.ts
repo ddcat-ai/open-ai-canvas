@@ -107,17 +107,20 @@ export function avoidCanvasNodePanels(anchor: { left: number; top: number }, siz
     return { left, top };
 }
 
-export function placeCanvasNodePanel(node: CanvasNodeData, viewport: ViewportTransform, bounds: CanvasOverlayBounds, size: Size, dragOffset?: Position | null) {
+export function placeCanvasNodePanel(node: CanvasNodeData, viewport: ViewportTransform, bounds: CanvasOverlayBounds, size: Size, dragOffset?: Position | null, anchorBelow = false) {
     const width = Math.min(size.width, Math.max(0, bounds.right - bounds.left));
     const height = Math.min(size.height, Math.max(0, bounds.bottom - bounds.top));
     const center = viewport.x + (node.position.x + (dragOffset?.x || 0) + node.width / 2) * viewport.k;
     const nodeTop = viewport.y + (node.position.y + (dragOffset?.y || 0)) * viewport.k;
     const nodeBottom = nodeTop + node.height * viewport.k;
     const below = nodeBottom + 10;
+    const left = Math.min(Math.max(center - width / 2, bounds.left), bounds.right - width);
+    // Keep the text editor on its node's lower edge, even when that edge leaves the viewport.
+    if (anchorBelow) return { left: center - width / 2, top: below, placement: "below" as const };
     const above = nodeTop - height - 10;
     const placement = below + height > bounds.bottom && above >= bounds.top ? "above" : "below";
     return {
-        left: Math.min(Math.max(center - width / 2, bounds.left), bounds.right - width),
+        left,
         top: Math.min(Math.max(placement === "above" ? above : below, bounds.top), bounds.bottom - height),
         placement,
     };

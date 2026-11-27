@@ -32,6 +32,71 @@ const { CanvasGestureRenderWindow } = await import("@/pages/canvas/canvas-gestur
 const { buildCanvasSpatialIndex, canvasNodeBounds } = await import("@/lib/canvas/canvas-spatial-index");
 const { CanvasNodeType } = await import("@/types/canvas");
 const noop = () => {};
+
+test("discrete wheel zoom accumulates notches, anchors intermediate frames, and settles interrupted input", async () => {
+    const initial = { x: 60, y: 40, k: 1 };
+    let latest = initial;
+    const commits: ViewportTransform[] = [];
+    const { settleCanvasViewportInput } = await import("@/lib/canvas/canvas-live-viewport");
+    function Harness() {
+        const [viewport, setViewport] = useState(initial);
+        return (
+            <CanvasViewport
+                containerRef={useRef<HTMLDivElement>(null)}
+                viewport={viewport}
+                onViewportPreviewChange={(next) => (latest = next)}
+                onViewportChange={(next) => {
+                    commits.push(next);
+                    setViewport(next);
+                }}
+            >
+                <div />
+            </CanvasViewport>
+        );
+    }
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const flush = (offset: number) => {
+        const pending = [...frames.values()];
+        frames.clear();
+        pending.forEach((callback) => callback(performance.now() + offset));
+    };
+    try {
+        await act(async () => root.render(<Harness />));
+        const viewport = host.querySelector<HTMLDivElement>("[data-canvas-viewport]")!;
+        const anchor = { x: 240, y: 190 };
+        await act(async () => {
+            viewport.dispatchEvent(wheelAt(anchor, -120));
+            viewport.dispatchEvent(wheelAt(anchor, -120));
+        });
+        expect(latest).toBe(initial);
+        await act(async () => flush(30));
+        const finalScale = 1.1 ** (240 / 72);
+        expect(latest.k).toBeGreaterThan(initial.k);
+        expect(latest.k).toBeLessThan(finalScale);
+        expect(latest.x + (anchor.x - initial.x) * latest.k).toBeCloseTo(anchor.x, 6);
+        expect(latest.y + (anchor.y - initial.y) * latest.k).toBeCloseTo(anchor.y, 6);
+        expect(commits).toHaveLength(0);
+        await act(async () => flush(130));
+        expect(commits).toHaveLength(1);
+        expect(commits[0].k).toBeCloseTo(finalScale, 6);
+        await act(async () => {
+            viewport.dispatchEvent(wheelAt(anchor, 120));
+            flush(32);
+        });
+        const interrupted = latest;
+        await act(async () => settleCanvasViewportInput(viewport));
+        await act(async () => flush(180));
+        expect(commits).toHaveLength(2);
+        expect(commits[1]).toBe(interrupted);
+        expect(viewport.dataset.canvasViewportInteracting).toBeUndefined();
+    } finally {
+        await act(async () => root.unmount());
+        host.remove();
+        frames.clear();
+    }
+});
 // happy-dom 的 WheelEvent 未初始化 MouseEvent 坐标，显式补齐浏览器会提供的字段。
 function wheelAt(point: { x: number; y: number }, deltaY: number) {
     const event = new dom.WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY });
@@ -100,6 +165,91 @@ test("跨吸附线时只刷新绘制预览，松手提交最后的位置并清�
         expect(activity).toEqual([false, true, false]);
     } finally {
         stop();
+        await act(async () => root.unmount());
+        host.remove();
+    }
+});
+
+test.each(["mouseup", "blur"] as const)("拖到右下边缘后持续平移，%s 停止手势", async (finishEvent) => {
+    const viewportRef = { current: { x: 50, y: 20, k: 0.5 } };
+    const initial = { x: 160, y: 160 };
+    const node: CanvasNodeData = { id: "edge", type: CanvasNodeType.Text, title: "节点", position: initial, width: 80, height: 80, metadata: {} };
+    const pan = (next: ViewportTransform) => {
+        viewportRef.current = next;
+    };
+    let writes = 0;
+    let settles = 0;
+    let position = initial;
+    function Harness() {
+        const containerRef = useRef<HTMLDivElement>(null);
+        const controller = useCanvasSelectionController({
+            containerRef,
+            nodesRef: useRef([node]),
+            viewportRef,
+            selectedNodeIdsRef: useRef(new Set<string>()),
+            historyPausedRef: useRef(false),
+            screenToCanvas: (x, y) => ({ x: (x - viewportRef.current.x) / viewportRef.current.k, y: (y - viewportRef.current.y) / viewportRef.current.k }),
+            previewNodeDragViewport: pan,
+            commitNodeDragViewport: () => {
+                settles++;
+            },
+            setNodes: (update) => {
+                writes++;
+                position = (typeof update === "function" ? update([node]) : update)[0].position;
+            },
+            setSelectedNodeIds: noop,
+            setSelectedConnectionId: noop,
+            cancelPendingConnectionCreate: noop,
+            onCanvasSelectionStart: noop,
+            onNodeInteractionStart: noop,
+            onNodeClick: noop,
+            onDeselect: noop,
+        });
+        return (
+            <div ref={containerRef} data-canvas-viewport>
+                <div data-node-id="edge" onMouseDown={(event) => controller.handleNodeMouseDown(event, "edge")} />
+            </div>
+        );
+    }
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    const flush = (time: number) => {
+        const pending = [...frames.values()];
+        frames.clear();
+        pending.forEach((callback) => callback(time));
+    };
+    try {
+        await act(async () => root.render(<Harness />));
+        const container = host.querySelector<HTMLElement>("[data-canvas-viewport]")!;
+        container.getBoundingClientRect = () => new dom.DOMRect(0, 0, 600, 400) as unknown as DOMRect;
+        const element = host.querySelector<HTMLElement>("[data-node-id]")!;
+        const pointer = { clientX: 590, clientY: 390 };
+        await act(async () => {
+            element.dispatchEvent(new dom.MouseEvent("mousedown", { bubbles: true, button: 0, clientX: 140, clientY: 110 }));
+            window.dispatchEvent(new dom.MouseEvent("mousemove", pointer));
+            flush(100);
+            flush(116);
+        });
+        const before = viewportRef.current;
+        await act(async () => flush(132));
+        expect(viewportRef.current.x).toBeLessThan(before.x);
+        expect(viewportRef.current.y).toBeLessThan(before.y);
+        expect(writes).toBe(0);
+        const [dx, dy] = element.style.translate.split(" ").map(parseFloat);
+        expect(viewportRef.current.x + (initial.x + dx + 20) * 0.5).toBeCloseTo(pointer.clientX, 5);
+        expect(viewportRef.current.y + (initial.y + dy + 20) * 0.5).toBeCloseTo(pointer.clientY, 5);
+        await act(async () => {
+            window.dispatchEvent(finishEvent === "blur" ? new dom.Event("blur") : new dom.MouseEvent("mouseup", pointer));
+            flush(148);
+        });
+        expect(settles).toBe(1);
+        expect(frames.size).toBe(0);
+        expect(container.dataset.canvasNodeDragging).toBeUndefined();
+        expect(writes).toBe(finishEvent === "mouseup" ? 1 : 0);
+        expect(position.x).toBeCloseTo(initial.x + (finishEvent === "mouseup" ? dx : 0), 5);
+        expect(position.y).toBeCloseTo(initial.y + (finishEvent === "mouseup" ? dy : 0), 5);
+    } finally {
         await act(async () => root.unmount());
         host.remove();
     }

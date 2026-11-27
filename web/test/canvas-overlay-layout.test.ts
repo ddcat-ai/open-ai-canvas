@@ -69,6 +69,16 @@ describe("canvas floating overlay layout", () => {
         expect(position).toEqual({ left: 465, top: 435, placement: "below" });
     });
 
+    test("text editor stays below its node at the viewport edge during drag and zoom", () => {
+        const bounds = canvasOverlayBounds({ width: 1024, height: 720 }, { left: 76, top: 64, bottom: 626 });
+        const node = { ...image, type: CanvasNodeType.Text, position: { x: 400, y: 500 } };
+        const size = { width: 680, height: 238 };
+        expect(placeCanvasNodePanel(node, { x: 0, y: 0, k: 1 }, bounds, size, null, true)).toEqual({ left: 150, top: 670, placement: "below" });
+        expect(placeCanvasNodePanel(node, { x: -100, y: -450, k: 1.5 }, bounds, size, { x: 10, y: 20 }, true)).toEqual({ left: 310, top: 580, placement: "below" });
+        expect(placeCanvasNodePanel(node, { x: -1000, y: 0, k: 1 }, bounds, size, { x: -20, y: 0 }, true).left).toBe(-870);
+        expect(placeCanvasNodePanel(node, { x: 1000, y: 0, k: 1 }, bounds, size, { x: 20, y: 0 }, true).left).toBe(1170);
+    });
+
     test("toolbar folds against actual available width and unfolds only when measured content fits", () => {
         expect(canvasToolbarLayoutLevel(936, [918, 0, 0], 0)).toBe(0);
         expect(canvasToolbarLayoutLevel(840, [918, 0, 0], 0)).toBe(1);

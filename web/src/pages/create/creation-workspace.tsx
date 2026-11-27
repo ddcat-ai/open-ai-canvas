@@ -19,7 +19,7 @@ import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resour
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
 import { HoverBorderGradient } from "@/components/ui/aceternity/hover-border-gradient";
 import { SpotlightSurface } from "@/components/ui/aceternity/spotlight-surface";
-import { ModelPicker } from "@/components/model-picker";
+import { CreationModelPicker } from "./creation-model-picker";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { ASSET_CATEGORY_LABELS } from "@/lib/asset-category";
@@ -40,7 +40,7 @@ import type { PromptOptimizerProvider } from "@/lib/plugins/plugin-types";
 import { type CreationReference } from "./creation-references";
 import { hasCreationReferenceDrop, readCreationReferenceDrop, type CreationReferenceDrop } from "./creation-reference-drop";
 import { creationAttachmentKind, type CreationAttachment, type CreationMode } from "./creation-assets";
-import { countOptions, modeLabels, qualityOptions, resolutionOptions, type CreationShotRailEntry } from "./creation-types";
+import { countOptions, qualityOptions, resolutionOptions, type CreationShotRailEntry } from "./creation-types";
 import { creationMessageNeedsResultSync } from "./creation-conversations";
 import "./creation-product.css";
 import "./creation-scrollbars.css";
@@ -600,18 +600,7 @@ export function CreationComposer(props: ComposerProps) {
                             </button>
                         </Tooltip>
                     ) : null}
-                    <ModelPicker
-                        config={props.config}
-                        value={props.model}
-                        onChange={props.onModelChange}
-                        capability={props.mode}
-                        requirements={props.modelRequirements}
-                        className="creation-model-picker"
-                        placeholder={`选择${modeLabels[props.mode]}模型`}
-                        showSelectedPrice={false}
-                        showOptionPrices
-                        variant="creation"
-                    />
+                    <CreationModelPicker config={props.config} value={props.model} onChange={props.onModelChange} mode={props.mode} requirements={props.modelRequirements} />
                     {props.mode === "video" || (props.mode === "image" && imageSettingsSupported) ? <GenerationSettingsMenu {...props} /> : null}
                     {props.mode === "video" ? <DurationMenu profile={props.videoProfile} seconds={props.seconds} onChange={props.setSeconds} /> : null}
                     {props.mode === "text" ? (

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject, type SetStateAction } from "react";
 
+import { canvasDragEdgePanVelocity } from "@/lib/canvas/canvas-drag-edge-pan";
 import { applyCanvasNodeDragPreview, applyCanvasNodeSelectionPreview, applyCanvasSelectionPreview } from "@/lib/canvas/canvas-live-viewport";
 import { calculateNodeAlignment, createNodeAlignmentContext, sameStringSet, type NodeAlignmentContext } from "@/lib/canvas/canvas-project-domain";
 import { applyFrameDrop, buildCanvasFrameDropIndex, findFrameDropTargetFromIndex, getFrameChildIds, isFrameNode } from "@/lib/canvas/canvas-frame";
@@ -22,6 +23,9 @@ type UseCanvasSelectionControllerOptions = {
     selectedNodeIdsRef: { current: Set<string> };
     historyPausedRef: { current: boolean };
     screenToCanvas: (clientX: number, clientY: number) => Position;
+    beginNodeDragViewport?: () => void;
+    previewNodeDragViewport?: (next: ViewportTransform) => void;
+    commitNodeDragViewport?: () => void;
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     setSelectedNodeIds: Dispatch<SetStateAction<Set<string>>>;
     setSelectedConnectionId: Dispatch<SetStateAction<string | null>>;
@@ -71,6 +75,9 @@ export function useCanvasSelectionController({
     selectedNodeIdsRef,
     historyPausedRef,
     screenToCanvas,
+    beginNodeDragViewport,
+    previewNodeDragViewport,
+    commitNodeDragViewport,
     setNodes,
     setSelectedNodeIds,
     setSelectedConnectionId,
@@ -85,7 +92,8 @@ export function useCanvasSelectionController({
     onDeselect,
 }: UseCanvasSelectionControllerOptions) {
     const dragFrameRef = useRef<number | null>(null);
-    const pendingNodeDragRef = useRef<Position>({ x: 0, y: 0 });
+    const dragPointerRef = useRef<Position | null>(null);
+    const lastEdgePanTimeRef = useRef<number | null>(null);
     const alignmentContextRef = useRef<NodeAlignmentContext | null>(null);
     const lastFrameDropCheckRef = useRef(0);
     const selectionFrameRef = useRef<number | null>(null);
@@ -217,6 +225,7 @@ export function useCanvasSelectionController({
             draggedNodesRef.current = currentNodes.filter((node) => dragIds.has(node.id) && !node.metadata?.locked);
             const draggedRenderNodeIds = initialSelectedNodes.map((item) => item.id);
             const draggedRenderNodeIdSet = new Set(draggedRenderNodeIds);
+            beginNodeDragViewport?.();
             dragRef.current = {
                 isDraggingNode: true,
                 hasMoved: false,
@@ -231,14 +240,15 @@ export function useCanvasSelectionController({
             };
             historyPausedRef.current = true;
             nodeDraggingRef.current = true;
-            pendingNodeDragRef.current = { x: 0, y: 0 };
+            dragPointerRef.current = null;
+            lastEdgePanTimeRef.current = null;
             alignmentContextRef.current = createNodeAlignmentContext(currentNodes, initialSelectedNodes);
             lastFrameDropCheckRef.current = 0;
             setIsNodeDragging(true);
             setDragPreview({ x: 0, y: 0, nodeIds: draggedRenderNodeIdSet });
             applyCanvasNodeDragPreview(containerRef.current, { x: 0, y: 0, nodeIds: draggedRenderNodeIdSet }, selectionBoundsElementRef.current);
         },
-        [containerRef, historyPausedRef, nodesRef, onBatchConnectionTarget, onNodeBringToFront, onNodeClick, onNodeInteractionStart, screenToCanvas, selectedNodeIdsRef, setSelectedConnectionId, setSelectedNodeIds],
+        [beginNodeDragViewport, containerRef, historyPausedRef, nodesRef, onBatchConnectionTarget, onNodeBringToFront, onNodeClick, onNodeInteractionStart, screenToCanvas, selectedNodeIdsRef, setSelectedConnectionId, setSelectedNodeIds],
     );
 
     const finishNodeDrag = useCallback(
@@ -247,9 +257,12 @@ export function useCanvasSelectionController({
                 cancelAnimationFrame(dragFrameRef.current);
                 dragFrameRef.current = null;
             }
+            dragPointerRef.current = null;
+            lastEdgePanTimeRef.current = null;
             if (!dragRef.current.isDraggingNode) return;
+            commitNodeDragViewport?.();
             const shouldOpenPanelOnClick = dragRef.current.openPanelOnClick;
-            const wasClick = shouldOpenPanelOnClick && !dragRef.current.hasMoved && dragRef.current.draggedNodeIds.length === 1;
+            const wasClick = clientX != null && clientY != null && shouldOpenPanelOnClick && !dragRef.current.hasMoved && dragRef.current.draggedNodeIds.length === 1;
             const clickedNodeId = dragRef.current.draggedNodeIds[0];
             const currentViewport = viewportRef.current;
             const world = clientX == null || clientY == null ? dragRef.current.startWorld : screenToCanvas(clientX, clientY);
@@ -263,15 +276,12 @@ export function useCanvasSelectionController({
             applyCanvasNodeDragPreview(containerRef.current, null);
             setIsNodeDragging(false);
             setDragPreview(null);
-            if (dragRef.current.hasMoved) {
+            if (dragRef.current.hasMoved && clientX != null && clientY != null) {
                 const draggedNodeIds = new Set(dragRef.current.draggedNodeIds);
-                const positioned =
-                    clientX == null || clientY == null
-                        ? nodesRef.current
-                        : nodesRef.current.map((node) => {
-                              const initial = initialById.get(node.id);
-                              return initial ? { ...node, position: { x: initial.x + dx, y: initial.y + dy } } : node;
-                          });
+                const positioned = nodesRef.current.map((node) => {
+                    const initial = initialById.get(node.id);
+                    return initial ? { ...node, position: { x: initial.x + dx, y: initial.y + dy } } : node;
+                });
                 const targetId = findFrameDropTargetFromIndex(frameDropIndexRef.current, draggedNodesRef.current, draggedNodeIds, { x: dx, y: dy });
                 const target = targetId ? positioned.find((node) => node.id === targetId) : undefined;
                 const linkedFolder = target?.metadata?.folder?.assetFolderId ? target : undefined;
@@ -293,34 +303,56 @@ export function useCanvasSelectionController({
                 if (clickedNode) onNodeClick(clickedNode);
             }
         },
-        [historyPausedRef, nodesRef, onLinkedFolderDrop, onNodeClick, onNodeDragEnd, screenToCanvas, setNodes, viewportRef],
+        [commitNodeDragViewport, containerRef, historyPausedRef, nodesRef, onLinkedFolderDrop, onNodeClick, onNodeDragEnd, screenToCanvas, setNodes, viewportRef],
+    );
+
+    const renderNodeDragFrame = useCallback(
+        function renderFrame(now: number) {
+            dragFrameRef.current = null;
+            const drag = dragRef.current;
+            const pointer = dragPointerRef.current;
+            const container = containerRef.current;
+            if (!drag.isDraggingNode || !pointer || !container) return;
+
+            const velocity = previewNodeDragViewport ? canvasDragEdgePanVelocity(pointer, container.getBoundingClientRect()) : null;
+            const panning = velocity !== null && (velocity.x !== 0 || velocity.y !== 0);
+            if (panning && velocity) {
+                // Limit time after an interrupted frame so the camera never jumps.
+                const elapsed = Math.max(0, Math.min(32, now - (lastEdgePanTimeRef.current ?? now))) / 1000;
+                lastEdgePanTimeRef.current = now;
+                if (elapsed > 0) {
+                    const { x, y, k } = viewportRef.current;
+                    previewNodeDragViewport?.({ x: x + velocity.x * elapsed, y: y + velocity.y * elapsed, k });
+                }
+            } else {
+                lastEdgePanTimeRef.current = null;
+            }
+
+            // Reproject the same pointer against the live viewport after every pan frame.
+            const world = screenToCanvas(pointer.x, pointer.y);
+            const rawOffset = { x: world.x - drag.startWorld.x, y: world.y - drag.startWorld.y };
+            const aligned = calculateNodeAlignment(alignmentContextRef.current, rawOffset, 7 / viewportRef.current.k);
+            if (now - lastFrameDropCheckRef.current >= 100) {
+                lastFrameDropCheckRef.current = now;
+                setFrameDropTargetId(findFrameDropTargetFromIndex(frameDropIndexRef.current, draggedNodesRef.current, new Set(drag.draggedNodeIds), aligned.offset));
+            }
+            applyCanvasNodeDragPreview(container, { ...aligned.offset, nodeIds: drag.draggedRenderNodeIdSet, guides: aligned.guides }, selectionBoundsElementRef.current);
+            if (panning) dragFrameRef.current = requestAnimationFrame(renderFrame);
+        },
+        [containerRef, previewNodeDragViewport, screenToCanvas, viewportRef],
     );
 
     const handleNodeDragMove = useCallback(
         (event: MouseEvent | PointerEvent) => {
-            if (!dragRef.current.isDraggingNode) return;
-            // 拖动中缩放不能重新缩放已走过的屏幕位移；抓取点始终以画布坐标为基准。
-            const world = screenToCanvas(event.clientX, event.clientY);
-            pendingNodeDragRef.current = { x: world.x - dragRef.current.startWorld.x, y: world.y - dragRef.current.startWorld.y };
-            if (Math.abs(event.clientX - dragRef.current.startX) > 3 || Math.abs(event.clientY - dragRef.current.startY) > 3) dragRef.current.hasMoved = true;
-            // 点击时指针常有 1~3px 抖动；未越过拖动阈值前不预览位移，否则对齐吸附会把节点
-            // 临时拉偏最多 7px，松手判定为点击后又弹回原位，表现为“点一下左右抖动”。
-            if (!dragRef.current.hasMoved) return;
-            if (dragFrameRef.current) return;
-            dragFrameRef.current = requestAnimationFrame(() => {
-                const aligned = calculateNodeAlignment(alignmentContextRef.current, pendingNodeDragRef.current, 7 / viewportRef.current.k);
-                const latest = aligned.offset;
-                const now = performance.now();
-                if (now - lastFrameDropCheckRef.current >= 100) {
-                    lastFrameDropCheckRef.current = now;
-                    const draggedNodeIds = new Set(dragRef.current.draggedNodeIds);
-                    setFrameDropTargetId(findFrameDropTargetFromIndex(frameDropIndexRef.current, draggedNodesRef.current, draggedNodeIds, latest));
-                }
-                applyCanvasNodeDragPreview(containerRef.current, { ...latest, nodeIds: dragRef.current.draggedRenderNodeIdSet, guides: aligned.guides }, selectionBoundsElementRef.current);
-                dragFrameRef.current = null;
-            });
+            const drag = dragRef.current;
+            if (!drag.isDraggingNode) return;
+            if (Math.abs(event.clientX - drag.startX) > 3 || Math.abs(event.clientY - drag.startY) > 3) drag.hasMoved = true;
+            // A click or slight pointer wobble must not pan or snap the node.
+            if (!drag.hasMoved) return;
+            dragPointerRef.current = { x: event.clientX, y: event.clientY };
+            if (dragFrameRef.current === null) dragFrameRef.current = requestAnimationFrame(renderNodeDragFrame);
         },
-        [containerRef, screenToCanvas, viewportRef],
+        [renderNodeDragFrame],
     );
 
     const updateSelectionPreview = useCallback(

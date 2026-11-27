@@ -231,8 +231,9 @@
     margin: var(--space-1) auto;
     background: color-mix(in srgb, currentColor 12%, transparent);
 }
-.canvas-workspace-corner.is-expanded .canvas-workspace-rail-divider {
-    margin-top: auto;
+.canvas-workspace-corner.is-expanded .canvas-workspace-shell > .canvas-workspace-rail {
+    /* 补齐收起时项目标题下的间距和边框，保持轨道按钮位置。 */
+    padding-block-start: calc(2 * (var(--space-2) + var(--stroke-1)));
 }
 .canvas-workspace-rail .canvas-workspace-rail-button > span {
     display: block;

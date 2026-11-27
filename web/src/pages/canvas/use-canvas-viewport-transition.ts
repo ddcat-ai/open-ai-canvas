@@ -28,7 +28,7 @@ export function useCanvasViewportTransition(viewportRef: MutableRefObject<Viewpo
             cancel();
             const from = viewportRef.current;
             const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-            if (reducedMotion) {
+            if (reducedMotion || (from.x === target.x && from.y === target.y && from.k === target.k)) {
                 viewportRef.current = target;
                 onPreview(target);
                 onCommit(target);
