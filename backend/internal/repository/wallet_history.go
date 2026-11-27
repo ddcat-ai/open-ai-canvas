@@ -46,7 +46,7 @@ func (r *Repository) WalletHistory(userID string, entryType string, limit int, o
 	switch entryType {
 	case "income":
 		ledger = ledger.Where("(type IN ? OR (type = ? AND amount_microcredits > 0))", []model.CreditLedgerType{
-			model.CreditLedgerRedeem, model.CreditLedgerPaymentTopup, model.CreditLedgerAdminGrant,
+			model.CreditLedgerRedeem, model.CreditLedgerPaymentTopup, model.CreditLedgerMembershipBonus, model.CreditLedgerAdminGrant,
 			model.CreditLedgerAdminAdjust, model.CreditLedgerSignupBonus, model.CreditLedgerCheckinBonus, model.CreditLedgerReferral,
 		}, model.CreditLedgerTeamTransfer)
 		orders = orders.Where("1 = 0")
