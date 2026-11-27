@@ -587,6 +587,21 @@ func AssetFromJSON(userID string, raw json.RawMessage) (model.Asset, error) {
 		return model.Asset{}, err
 	}
 	category := model.NormalizeAssetCategory(model.AssetCategory(payload.Category), payload.Kind)
+	if strings.TrimSpace(payload.Category) != "" {
+		normalizedInput := strings.ToLower(strings.TrimSpace(payload.Category))
+		if !model.IsValidAssetCategory(model.AssetCategory(normalizedInput)) && normalizedInput != "wardrobe" && normalizedInput != "weapon" && normalizedInput != "style" {
+			return model.Asset{}, kernel.BadAuthRequest("不支持的资产业务分类")
+		}
+	}
+	var document map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &document); err != nil {
+		return model.Asset{}, err
+	}
+	document["category"], _ = json.Marshal(category)
+	normalizedRaw, err := json.Marshal(document)
+	if err != nil {
+		return model.Asset{}, err
+	}
 	status := model.AssetVersionStatus(strings.TrimSpace(payload.Status))
 	if status == "" {
 		status = model.AssetVersionStatusConfirmed
@@ -600,7 +615,7 @@ func AssetFromJSON(userID string, raw json.RawMessage) (model.Asset, error) {
 		Status:           status,
 		PrimaryVersionID: primaryVersionID,
 		Title:            strings.TrimSpace(payload.Title),
-		PayloadJSON:      string(raw),
+		PayloadJSON:      string(normalizedRaw),
 		CreatedAt:        createdAt,
 		UpdatedAt:        updatedAt,
 	}, nil

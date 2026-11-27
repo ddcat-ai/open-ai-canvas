@@ -47,6 +47,35 @@ tags:
   - name: pose-library
     description: 站点姿势库：浏览、选用，管理员导入与图片同步
 paths:
+  /characters/{assetId}/representations:
+    put:
+      summary: 替换角色形象表达并创建不可变版本
+      parameters:
+        - { in: path, name: assetId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [representations]
+              properties:
+                expectedVersionId: { type: string, description: 与 operationId 成对提交的角色当前版本 }
+                operationId: { type: string, maxLength: 100, description: 相同内容重试使用相同标识 }
+                definition: { type: object, additionalProperties: true }
+                representations:
+                  type: array
+                  items:
+                    type: object
+                    required: [role, resourceId]
+                    properties:
+                      role: { type: string }
+                      resourceId: { type: string }
+                      metadata: { type: object, additionalProperties: true }
+      responses:
+        '200': { description: 角色当前详情；相同操作重放不新增版本 }
+        '400': { description: 请求或生成来源无效 }
+        '409': { description: character_version_conflict 或 idempotency_conflict }
   /teams:
     get:
       tags: [teams]
@@ -4779,6 +4808,10 @@ paths:
     get:
       tags: [tasks]
       summary: 当前空间的生成任务
+      parameters:
+        - { in: query, name: characterAssetId, schema: { type: string }, description: 按梳妆台角色筛选，先筛选再分页 }
+        - { in: query, name: before, schema: { type: string }, description: 当前空间上一页末尾任务 ID，读取更早记录 }
+        - { in: query, name: pageSize, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
       responses: { '200': { $ref: '#/components/responses/Envelope' } }
     post:
       tags: [tasks]

@@ -44,7 +44,7 @@ export function characterInitial(name: string) {
 }
 
 /** 画布上的角色卡：海报式主视觉，底部压名字与形象/声音状态。 */
-export function CanvasCharacterReferenceNodeContent({ node, onSelectOutfit }: { node: CanvasNodeData; onSelectOutfit?: (outfit: CharacterOutfit) => void }) {
+export function CanvasCharacterReferenceNodeContent({ node, onSelectOutfit, onOpenDressing }: { node: CanvasNodeData; onSelectOutfit?: (outfit: CharacterOutfit) => void; onOpenDressing?: () => void }) {
     const { t } = useTranslation();
     const metadata = node.metadata;
     const name = metadata?.characterName || node.title || t("canvasA.characterNode.unnamed");
@@ -70,6 +70,21 @@ export function CanvasCharacterReferenceNodeContent({ node, onSelectOutfit }: { 
             )}
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-black/90 via-black/45 to-transparent" />
             <span className="absolute left-3.5 top-3 text-[var(--fs-label)] font-medium uppercase tracking-[.24em] text-white/55">Character</span>
+            {onOpenDressing && metadata?.characterAssetId && !metadata.sharedCharacter ? (
+                <button
+                    type="button"
+                    data-canvas-no-zoom
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onOpenDressing();
+                    }}
+                    className="absolute right-3 top-3 rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-[var(--workspace-accent)]"
+                >
+                    梳妆台
+                </button>
+            ) : null}
             <div className="absolute inset-x-0 bottom-0 flex items-end gap-3 px-4 pb-3">
                 <div className="min-w-0 flex-1">
                     <div className="truncate text-[var(--fs-heading)] font-semibold leading-6 tracking-tight">{name}</div>

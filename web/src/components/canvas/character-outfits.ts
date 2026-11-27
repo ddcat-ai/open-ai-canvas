@@ -13,6 +13,7 @@ export type CharacterOutfit = {
     name: string;
     resourceId: string;
     clothing?: string;
+    source?: Record<string, unknown>;
 };
 
 export function parseCharacterOutfits(definition?: Record<string, unknown>, representations?: Array<{ role: string; resourceId: string }>, fallbackResourceId?: string): CharacterOutfit[] {
@@ -29,7 +30,8 @@ export function parseCharacterOutfits(definition?: Record<string, unknown>, repr
         seenIds.add(rawId);
         const name = typeof record.name === "string" && record.name.trim() ? record.name.trim() : `造型 ${parsed.length + 1}`;
         const clothing = typeof record.clothing === "string" && record.clothing.trim() ? record.clothing.trim() : undefined;
-        parsed.push({ id: rawId, name, resourceId, ...(clothing ? { clothing } : {}) });
+        const source = record.source && typeof record.source === "object" && !Array.isArray(record.source) ? (record.source as Record<string, unknown>) : undefined;
+        parsed.push({ id: rawId, name, resourceId, ...(clothing ? { clothing } : {}), ...(source ? { source } : {}) });
     });
     if (parsed.length) return parsed;
     const primaryId =
@@ -86,16 +88,25 @@ export function buildCharacterOutfitPersistence(
     definition: Record<string, unknown>,
     outfits: CharacterOutfit[],
     activeOutfitId?: string,
+    existingRepresentations: Array<{ role: string; resourceId: string; metadata?: Record<string, unknown> }> = [],
 ): {
     definition: Record<string, unknown>;
     representations: Array<{ role: string; resourceId: string; metadata?: Record<string, unknown> }>;
     activeOutfit: CharacterOutfit;
 } {
-    const normalized = outfits.filter((item) => item.resourceId.trim());
+    const previousOutfits = parseCharacterOutfits(definition);
+    const normalized = outfits
+        .filter((item) => item.resourceId.trim())
+        .map((item) => {
+            const previous = previousOutfits.find((entry) => entry.id === item.id);
+            // 手动换图后旧任务不再是这张图的来源；重命名及新增生成形象仍保留来源。
+            return previous && previous.resourceId !== item.resourceId ? { ...item, source: undefined } : item;
+        });
     const active = (activeOutfitId ? normalized.find((item) => item.id === activeOutfitId) : undefined) || normalized[0];
     const nextDefinition: Record<string, unknown> = {
         ...definition,
         outfits: normalized.map((item) => ({
+            ...item,
             id: item.id,
             name: item.name.trim() || "默认造型",
             resourceId: item.resourceId.trim(),
@@ -113,7 +124,8 @@ export function buildCharacterOutfitPersistence(
           ]
         : [];
     normalized.forEach((item, index) => {
-        const safeRole = `outfit:${item.id.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40) || index + 1}`;
+        // role 是版本内的表达槽位，数据库只允许 32 字符；完整造型标识保留在 metadata 中。
+        const safeRole = `outfit:${index + 1}`;
         if (!representations.some((entry) => entry.role === safeRole)) {
             representations.push({
                 role: safeRole,
@@ -122,6 +134,11 @@ export function buildCharacterOutfitPersistence(
             });
         }
     });
+    existingRepresentations
+        .filter((item) => item.role !== "primary" && item.role !== "turnaround_sheet" && !item.role.startsWith("outfit:"))
+        .forEach((item) => {
+            if (!representations.some((entry) => entry.role === item.role)) representations.push(item);
+        });
     return { definition: nextDefinition, representations, activeOutfit: active };
 }
 

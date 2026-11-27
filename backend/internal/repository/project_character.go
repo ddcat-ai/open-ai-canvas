@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -10,6 +11,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+var ErrCharacterVersionConflict = errors.New("角色版本已更新，请刷新后重试")
 
 func (r *Repository) ProjectCharacterAsset(userID string, projectID string, assetID string) (*model.Asset, error) {
 	var asset model.Asset
@@ -245,8 +248,18 @@ func (r *Repository) CreateProjectCharacter(projectID string, asset *model.Asset
 }
 
 // SaveCharacterVersion 通过不可变版本替换角色当前状态，旧镜头仍可继续引用历史版本。
-func (r *Repository) SaveCharacterVersion(projectID string, asset *model.Asset, version *model.AssetVersion, representations []model.AssetRepresentation, voice *model.CharacterVoiceBinding) error {
+func (r *Repository) SaveCharacterVersion(projectID string, asset *model.Asset, version *model.AssetVersion, representations []model.AssetRepresentation, voice *model.CharacterVoiceBinding, expectedVersionID ...string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		// 先原子占用当前版本，锁随事务持有；创建版本失败也会回滚，避免并发写相互覆盖。
+		if len(expectedVersionID) > 0 && expectedVersionID[0] != "" {
+			result := tx.Model(&model.Asset{}).Where("id = ? AND user_id = ? AND primary_version_id = ?", asset.ID, asset.UserID, expectedVersionID[0]).Update("primary_version_id", version.ID)
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return ErrCharacterVersionConflict
+			}
+		}
 		if err := saveCharacterVersion(tx, asset, version, representations, voice); err != nil {
 			return err
 		}

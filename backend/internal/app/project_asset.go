@@ -553,12 +553,7 @@ func containsString(values []string, target string) bool {
 }
 
 func validAssetCategory(category model.AssetCategory) bool {
-	switch category {
-	case model.AssetCategoryCharacter, model.AssetCategoryEnvironment, model.AssetCategoryProp, model.AssetCategoryMaterial, model.AssetCategoryOther, model.AssetCategoryArk:
-		return true
-	default:
-		return false
-	}
+	return model.IsValidAssetCategory(category)
 }
 
 // assignableAssetCategory 校验用户请求的目标分类。方舟认证分类只由认证结果写入，

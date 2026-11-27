@@ -390,7 +390,12 @@ func (r *Repository) Tasks(userID string, limit int, projectID string, activeOnl
 	return r.TasksWithWorkbenchKind(userID, limit, projectID, activeOnly, "")
 }
 
-func (r *Repository) TasksWithWorkbenchKind(userID string, limit int, projectID string, activeOnly bool, workbenchKind string) ([]model.Task, error) {
+type TaskIdentityFilter struct {
+	CharacterAssetID string
+	BeforeTaskID     string
+}
+
+func (r *Repository) TasksWithWorkbenchKind(userID string, limit int, projectID string, activeOnly bool, workbenchKind string, identities ...TaskIdentityFilter) ([]model.Task, error) {
 	var tasks []model.Task
 	if limit <= 0 || limit > 100 {
 		limit = 50
@@ -404,6 +409,7 @@ func (r *Repository) TasksWithWorkbenchKind(userID string, limit int, projectID 
 		query = query.Where("status IN ?", []model.TaskStatus{model.TaskStatusQueued, model.TaskStatusRunning})
 	}
 	if workbenchKind != "" {
+
 		taskType := "canvas_" + workbenchKind
 		if r.db.Dialector.Name() == "postgres" {
 			query = query.Where("(workbench_kind = ? AND type = ?) OR (type = ? AND input_json::jsonb -> 'metadata' ->> 'source' = ? AND input_json::jsonb -> 'metadata' ->> 'workbenchKind' = ?)", workbenchKind, taskType, taskType, "workbench", workbenchKind)
@@ -411,7 +417,24 @@ func (r *Repository) TasksWithWorkbenchKind(userID string, limit int, projectID 
 			query = query.Where("(workbench_kind = ? AND type = ?) OR (type = ? AND json_extract(input_json, '$.metadata.source') = ? AND json_extract(input_json, '$.metadata.workbenchKind') = ?)", workbenchKind, taskType, taskType, "workbench", workbenchKind)
 		}
 	}
-	err := query.Order("created_at desc").Limit(limit).Find(&tasks).Error
+	if len(identities) > 0 {
+		filter := identities[0]
+		if filter.CharacterAssetID != "" {
+			if r.db.Dialector.Name() == "postgres" {
+				query = query.Where("NULLIF(input_json, '')::jsonb -> 'metadata' ->> 'source' = ? AND NULLIF(input_json, '')::jsonb -> 'metadata' -> 'dressing' ->> 'characterAssetId' = ?", "character-dressing-table", filter.CharacterAssetID)
+			} else {
+				query = query.Where("json_extract(CASE WHEN json_valid(input_json) THEN input_json ELSE '{}' END, '$.metadata.source') = ? AND json_extract(CASE WHEN json_valid(input_json) THEN input_json ELSE '{}' END, '$.metadata.dressing.characterAssetId') = ?", "character-dressing-table", filter.CharacterAssetID)
+			}
+		}
+		if filter.BeforeTaskID != "" {
+			cursor, err := r.TaskForUser(userID, filter.BeforeTaskID)
+			if err != nil {
+				return nil, err
+			}
+			query = query.Where("created_at < ? OR (created_at = ? AND id < ?)", cursor.CreatedAt, cursor.CreatedAt, cursor.ID)
+		}
+	}
+	err := query.Order("created_at desc, id desc").Limit(limit).Find(&tasks).Error
 	return tasks, err
 }
 

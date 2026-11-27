@@ -13,8 +13,11 @@ import type { CanvasNodeData } from "@/types/canvas";
 import { fetchOfficialAssetReference } from "@/services/api/official-assets";
 import { CharacterStudioOutfitManager } from "@/components/canvas/character-outfit-bar";
 import { buildCharacterOutfitPersistence, parseCharacterOutfits, resolveActiveCharacterOutfit, type CharacterOutfit } from "@/components/canvas/character-outfits";
+import { createClientUUID } from "@/lib/client-id";
+import { ApiError } from "@/services/api/request";
+import { CharacterDressingPanel } from "./character-dressing-panel";
 
-type Tab = "profile" | "visual" | "voice";
+type Tab = "profile" | "visual" | "voice" | "dressing";
 type FieldKey = "role" | "aliases" | "appearance" | "physique" | "clothing" | "personality" | "props" | "consistencyPrompt" | "multiViewPrompt" | "voiceLanguage" | "voiceAge" | "voiceTimbre";
 type Drafts = Record<FieldKey | "name", string>;
 
@@ -47,12 +50,14 @@ export function CanvasCharacterReferenceModal({
     open,
     onClose,
     onUpdated,
+    initialTab = "profile",
 }: {
     node: CanvasNodeData | null;
     canvasNodes?: CanvasNodeData[];
     open: boolean;
     onClose: () => void;
     onUpdated?: (detail: ProjectCharacterDetail, selectedOutfitId?: string) => void;
+    initialTab?: Tab;
 }) {
     // 资源 ID → 画布节点名：用户在画布上重命名过的图片/音频，选择时按新名字显示并作为声音名保存。
     const canvasTitles = useMemo<CanvasMediaTitles>(() => {
@@ -65,11 +70,11 @@ export function CanvasCharacterReferenceModal({
         return titles;
     }, [canvasNodes]);
     return (
-        <AppModal open={open && Boolean(node)} title={null} footer={null} destroyOnHidden width="min(1120px, calc(100vw - 32px))" onCancel={onClose} flush>
+        <AppModal open={open && Boolean(node)} title={null} footer={null} destroyOnHidden centered styles={{ wrapper: { overflow: "hidden" } }} width="min(1120px, calc(100vw - 32px))" onCancel={onClose} flush>
             {node?.metadata?.sharedCharacter ? (
                 <SharedCharacterStudio node={node} />
             ) : node?.metadata?.characterAssetId ? (
-                <CharacterStudio key={node.id} node={node} assetId={node.metadata.characterAssetId} canvasTitles={canvasTitles} onUpdated={onUpdated} />
+                <CharacterStudio key={node.id} node={node} assetId={node.metadata.characterAssetId} canvasTitles={canvasTitles} onUpdated={onUpdated} initialTab={initialTab} />
             ) : node?.metadata?.officialAssetId ? (
                 <OfficialCharacterStudio key={node.id} node={node} />
             ) : null}
@@ -123,7 +128,19 @@ function OfficialCharacterStudio({ node }: { node: CanvasNodeData }) {
     );
 }
 
-function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: CanvasNodeData; assetId: string; canvasTitles: CanvasMediaTitles; onUpdated?: (detail: ProjectCharacterDetail, selectedOutfitId?: string) => void }) {
+function CharacterStudio({
+    node,
+    assetId,
+    canvasTitles,
+    onUpdated,
+    initialTab,
+}: {
+    node: CanvasNodeData;
+    assetId: string;
+    canvasTitles: CanvasMediaTitles;
+    onUpdated?: (detail: ProjectCharacterDetail, selectedOutfitId?: string) => void;
+    initialTab: Tab;
+}) {
     const { t } = useTranslation();
     const { message } = App.useApp();
     const queryClient = useQueryClient();
@@ -144,9 +161,14 @@ function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: Can
     const definitionKey = JSON.stringify(effectiveDefinition);
     const baseline = useMemo(() => draftsFrom(name, JSON.parse(definitionKey) as Record<string, unknown>), [name, definitionKey]);
     const [drafts, setDrafts] = useState<Drafts>(baseline);
-    const [tab, setTab] = useState<Tab>("profile");
+    const [tab, setTab] = useState<Tab>(initialTab);
+    const tabPanelRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (tabPanelRef.current) tabPanelRef.current.scrollTop = 0;
+    }, [tab]);
     const [busyKey, setBusyKey] = useState("");
     const [addingNewOutfit, setAddingNewOutfit] = useState(false);
+    const pendingSave = useRef<{ key: string; operationId: string; expectedVersionId: string } | null>(null);
     // 服务端数据到达或保存成功后，用新基线覆盖草稿。
     useEffect(() => setDrafts(baseline), [baseline]);
     const dirty = (Object.keys(baseline) as Array<keyof Drafts>).some((key) => baseline[key].trim() !== drafts[key].trim());
@@ -169,15 +191,22 @@ function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: Can
             onUpdated?.(next, targetOutfitId);
             message.success(success);
         } catch (error) {
+            // 明确的版本冲突表示本次未写入，刷新后应允许用新版本重新提交。
+            if (error instanceof ApiError && error.reason === "character_version_conflict") pendingSave.current = null;
+            void detailQuery.refetch();
             message.error(error instanceof Error ? error.message : t("canvasA.characterStudio.saveFailed"));
         } finally {
             setBusyKey("");
         }
     };
     const saveOutfits = (nextOutfits: CharacterOutfit[], nextActiveId: string, busyId = "outfit") => {
-        const payload = buildCharacterOutfitPersistence(definition, nextOutfits, nextActiveId);
+        if (!detail) return;
+        const payload = buildCharacterOutfitPersistence(definition, nextOutfits, nextActiveId, detail.character.representations);
+        const key = JSON.stringify(payload);
+        if (pendingSave.current?.key !== key) pendingSave.current = { key, operationId: createClientUUID(), expectedVersionId: detail.character.versionId };
+        const mutation = pendingSave.current;
         setAddingNewOutfit(false);
-        return commit(busyId, () => replaceCharacterRepresentations(assetId, payload.representations, payload.definition), t("canvasA.characterStudio.visualUpdated"), nextActiveId);
+        return commit(busyId, () => replaceCharacterRepresentations(assetId, payload.representations, payload.definition, mutation), t("canvasA.characterStudio.visualUpdated"), nextActiveId);
     };
     const bindImage = (resourceId: string) => {
         const imageTitle = canvasTitles.get(resourceId)?.trim();
@@ -204,9 +233,10 @@ function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: Can
                         addingNewOutfit || !outfits.length
                             ? [...outfits, { id: newOutfitId, name: cleanName || (outfits.length === 0 ? "默认造型" : `造型 ${outfits.length + 1}`), resourceId: resource.id }]
                             : outfits.map((item) => (item.id === (activeOutfit?.id || outfits[0].id) ? { ...item, resourceId: resource.id } : item));
-                    const payload = buildCharacterOutfitPersistence(definition, nextOutfits, targetOutfitId);
+                    if (!detail) throw new Error("角色详情尚未加载");
+                    const payload = buildCharacterOutfitPersistence(definition, nextOutfits, targetOutfitId, detail.character.representations);
                     setAddingNewOutfit(false);
-                    return replaceCharacterRepresentations(assetId, payload.representations, payload.definition);
+                    return replaceCharacterRepresentations(assetId, payload.representations, payload.definition, { expectedVersionId: detail.character.versionId, operationId: createClientUUID() });
                 }
                 return bindCharacterVoice(assetId, { sampleResourceId: resource.id, voiceName: file.name.replace(/\.[^.]+$/, "") });
             },
@@ -236,11 +266,32 @@ function CharacterStudio({ node, assetId, canvasTitles, onUpdated }: { node: Can
     };
 
     return (
-        <div className="grid h-[min(760px,calc(100dvh-48px))] min-h-0 grid-rows-[minmax(260px,40vh)_minmax(0,1fr)] overflow-hidden bg-background text-foreground md:grid-cols-[minmax(0,1fr)_minmax(420px,1.05fr)] md:grid-rows-1">
-            <CharacterStage name={drafts.name.trim() || name} role={drafts.role.trim()} cover={cover} hasCover={Boolean(coverResourceId)} voiceName={voiceName} voiceSampleId={voiceSampleId} version={detail?.character.version} />
+        <div
+            className={`grid h-[min(760px,calc(100dvh-48px))] min-h-0 overflow-hidden bg-background text-foreground ${tab === "dressing" ? "grid-cols-1 grid-rows-1" : "grid-rows-[minmax(260px,40vh)_minmax(0,1fr)] md:grid-cols-[minmax(0,1fr)_minmax(420px,1.05fr)] md:grid-rows-1"}`}
+        >
+            {tab !== "dressing" ? (
+                <CharacterStage name={drafts.name.trim() || name} role={drafts.role.trim()} cover={cover} hasCover={Boolean(coverResourceId)} voiceName={voiceName} voiceSampleId={voiceSampleId} version={detail?.character.version} />
+            ) : null}
             <section className="flex min-h-0 flex-col">
                 <CharacterTabs value={tab} onChange={setTab} />
-                <div id={`character-tab-panel-${tab}`} role="tabpanel" aria-labelledby={`character-tab-${tab}`} className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-7 pb-8 pt-6">
+                <div ref={tabPanelRef} id={`character-tab-panel-${tab}`} role="tabpanel" aria-labelledby={`character-tab-${tab}`} className={`min-h-0 flex-1 ${tab === "dressing" ? "overflow-hidden" : "thin-scrollbar overflow-y-auto px-7 pb-8 pt-6"}`}>
+                    {detail ? (
+                        <div hidden={tab !== "dressing"} className="h-full">
+                            <CharacterDressingPanel
+                                detail={detail}
+                                outfit={activeOutfit}
+                                nodeId={node.id}
+                                onRefresh={() => void detailQuery.refetch()}
+                                onSaved={(next, outfitId) => {
+                                    queryClient.setQueryData(["character-studio", assetId], next);
+                                    void queryClient.invalidateQueries({ queryKey: ["characters"] });
+                                    setSelectedOutfitId(outfitId);
+                                    setTab("visual");
+                                    onUpdated?.(next, outfitId);
+                                }}
+                            />
+                        </div>
+                    ) : null}
                     {tab === "profile" ? <ProfileForm drafts={drafts} onChange={(key, value) => setDrafts((current) => ({ ...current, [key]: value }))} /> : null}
                     {tab === "visual" ? (
                         <div>
@@ -316,6 +367,7 @@ const TABS: Array<{ value: Tab; labelKey: string; icon: ReactNode }> = [
     { value: "profile", labelKey: "canvasA.characterStudio.tabProfile", icon: <IdCard /> },
     { value: "visual", labelKey: "canvasA.characterStudio.tabVisual", icon: <ImageIcon /> },
     { value: "voice", labelKey: "canvasA.characterStudio.tabVoice", icon: <AudioLines /> },
+    { value: "dressing", labelKey: "梳妆台", icon: <ImageIcon /> },
 ];
 
 /** 右侧主导航：等分整行、带图标和下划线指示，比分段控件更醒目；支持左右方向键切换。 */
@@ -331,7 +383,7 @@ function CharacterTabs({ value, onChange }: { value: Tab; onChange: (tab: Tab) =
         refs.current[next]?.focus();
     };
     return (
-        <div role="tablist" aria-label={t("canvasA.characterStudio.tabsLabel")} onKeyDown={onKeyDown} className="grid shrink-0 grid-cols-3 border-b border-border pl-3 pr-14 pt-3">
+        <div role="tablist" aria-label={t("canvasA.characterStudio.tabsLabel")} onKeyDown={onKeyDown} className="grid shrink-0 grid-cols-4 border-b border-border pl-3 pr-14 pt-3">
             {TABS.map((item, index) => {
                 const active = item.value === value;
                 return (

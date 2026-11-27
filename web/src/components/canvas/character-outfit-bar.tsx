@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useCharacterCoverSrc } from "@/components/canvas/canvas-character-reference-node";
 import { type CharacterOutfit } from "@/components/canvas/character-outfits";
 import { resourceFileUrl } from "@/services/api/resources";
+import { assetCategoryLabel } from "@/lib/asset-category";
 
 function OutfitThumb({ resourceId, name }: { resourceId: string; name: string }) {
     const src = useCharacterCoverSrc(resourceId ? resourceFileUrl(resourceId) : undefined);
@@ -124,7 +125,28 @@ export function CharacterStudioOutfitManager({
                     </div>
                 </div>
             ) : null}
+            {activeOutfit?.source ? <OutfitGenerationSource outfit={activeOutfit} /> : null}
         </div>
+    );
+}
+
+function OutfitGenerationSource({ outfit }: { outfit: CharacterOutfit }) {
+    const snapshot = outfit.source?.snapshot;
+    if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) return null;
+    const value = snapshot as Record<string, unknown>;
+    const references = Array.isArray(value.references) ? value.references.filter((item): item is { category: string; title: string } => Boolean(item && typeof item === "object" && typeof item.category === "string" && typeof item.title === "string")) : [];
+    return (
+        <details className="mt-3 rounded-lg border border-border p-3 text-xs text-foreground/60">
+            <summary className="cursor-pointer text-foreground">生成依据</summary>
+            <div className="mt-2 space-y-2">
+                {typeof value.extraPrompt === "string" && value.extraPrompt ? <p className="whitespace-pre-wrap">{value.extraPrompt}</p> : <p>使用参考图片调整形象</p>}
+                {references.map((item, index) => (
+                    <p key={index}>
+                        {assetCategoryLabel(item.category)}：{item.title}
+                    </p>
+                ))}
+            </div>
+        </details>
     );
 }
 

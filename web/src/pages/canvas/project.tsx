@@ -314,6 +314,7 @@ function CanvasViewportPage() {
     const [dialogNodeId, setDialogNodeId] = useState<string | null>(null);
     const [textEditorNodeId, setTextEditorNodeId] = useState<string | null>(null);
     const [characterReferenceNodeId, setCharacterReferenceNodeId] = useState<string | null>(null);
+    const [characterReferenceInitialTab, setCharacterReferenceInitialTab] = useState<"profile" | "dressing">("profile");
     const [characterLibraryOpen, setCharacterLibraryOpen] = useState(false);
     const [characterLibraryPosition, setCharacterLibraryPosition] = useState<Position | undefined>();
     const [drawingNodeId, setDrawingNodeId] = useState<string | null>(null);
@@ -1226,6 +1227,7 @@ function CanvasViewportPage() {
                 setDialogNodeId(null);
             } else if (node.type === CanvasNodeType.Text && node.metadata?.workflowKind === "character" && (node.metadata.characterAssetId || node.metadata.officialAssetId)) {
                 setDialogNodeId(null);
+                setCharacterReferenceInitialTab("profile");
                 setCharacterReferenceNodeId(node.id);
             } else if (node.type === CanvasNodeType.Text) {
                 setDialogNodeId(node.id);
@@ -1618,6 +1620,7 @@ function CanvasViewportPage() {
         setDialogNodeId(null);
         setToolbarNodeId(null);
         if (node.metadata?.workflowKind === "character" && (node.metadata.characterAssetId || node.metadata.officialAssetId)) {
+            setCharacterReferenceInitialTab("profile");
             setCharacterReferenceNodeId(node.id);
             return;
         }
@@ -2389,7 +2392,15 @@ function CanvasViewportPage() {
     const renderCanvasNodeContent = useCallback(
         (contentNode: CanvasNodeData) => {
             if (contentNode.metadata?.workflowKind === "character" && (contentNode.metadata.characterAssetId || contentNode.metadata.officialAssetId)) {
-                return <CanvasCharacterReferenceNodeContent node={contentNode} />;
+                return (
+                    <CanvasCharacterReferenceNodeContent
+                        node={contentNode}
+                        onOpenDressing={() => {
+                            setCharacterReferenceInitialTab("dressing");
+                            setCharacterReferenceNodeId(contentNode.id);
+                        }}
+                    />
+                );
             }
             if (contentNode.metadata?.workflowKind === "styleboard" && !contentNode.metadata.content) {
                 return <CanvasStylePlaceholderNodeContent onChoose={() => setStylePickerOpen(true)} />;
@@ -3601,7 +3612,8 @@ function CanvasViewportPage() {
                                 canvasNodes={nodes}
                                 open={Boolean(characterReferenceNode)}
                                 onClose={() => setCharacterReferenceNodeId(null)}
-                                onUpdated={(detail) => setNodes((current) => refreshCanvasCharacterReferenceNodes(current, [{ ...detail.asset, character: detail.character }]))}
+                                initialTab={characterReferenceInitialTab}
+                                onUpdated={(detail, outfitId) => setNodes((current) => refreshCanvasCharacterReferenceNodes(current, [{ ...detail.asset, character: detail.character }], { nodeId: characterReferenceNodeId || undefined, outfitId }))}
                             />
 
                             {textEditorNode ? (

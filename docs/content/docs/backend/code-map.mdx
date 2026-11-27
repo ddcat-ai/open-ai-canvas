@@ -5,6 +5,13 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 角色梳妆台
+
+- 入口与交互：画布的角色卡、角色工作室和 `character-dressing-panel`；选图复用 `AssetLibraryPickerModal` 的固定分类与导入模式，姿势复用 `CanvasPoseLibraryModal` 的单选资源返回模式，图片放大复用 `CanvasImagePreview`。
+- 业务编排：`services/character-dressing` 组织槽位用途、去重图序、能力检查、任务关联、上传与命名保存；调用已有图片任务和角色 representations API。`character-outfits` 保留来源和既有表达，角色节点刷新使用原有目标节点选用参数。
+- 后端：`app/character_representation_mutation` 和 `app/character_dressing` 校验版本、持久回执、图片归属与来源任务；`repository/project_character` 保证事务比较主版本。任务列表在原查询中增加角色筛选与更早任务游标，先筛选再限制条数。
+- 分类合同：前端公共分类和后端 model 统一增加六类值，个人同步写入同时规范实体与 JSON；官方发布、导入、筛选继续走原素材服务，不新增素材或形象表。
+
 ## 团队空间
 
 - `web/src/router.tsx` 为个人和团队挂载相同的 `pages/canvas`、`pages/create`、`pages/assets`；`lib/workspace-routes.ts` 选择 API 前缀，`lib/user-scope.ts` 隔离本地缓存。`pages/teams` 只负责空间、成员、邀请和钱包。
