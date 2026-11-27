@@ -878,7 +878,7 @@ export default function CreatePage() {
         setLibraryOpen(false);
     };
 
-    const addDroppedReferences = async (drop: CreationReferenceDrop) => {
+    const addComposerReferences = async (drop: CreationReferenceDrop) => {
         if (!requireCreationLogin() || busy || referenceReplacementBusy || referenceDropLock.current) return;
         const maxImages = mode === "video" ? videoReferenceLimits?.maxImages || 0 : maxReferences;
         const maxAttachments = mode === "video" ? Infinity : maxReferences;
@@ -902,6 +902,9 @@ export default function CreatePage() {
                 const next = appendCreationReference(attachmentsRef.current, attachment, maxImages, maxAttachments);
                 attachmentsRef.current = next;
                 setAttachments(next);
+                window.requestAnimationFrame(() => {
+                    if (active()) composerFocusRef.current?.focus({ preventScroll: true });
+                });
                 return;
             }
             const files = drop.files.filter((file) => file.type.startsWith("image/"));
@@ -1609,6 +1612,11 @@ export default function CreatePage() {
     };
 
     const generationActive = activeConversation.messages.some((message) => message.role === "assistant" && message.status === "pending");
+    const canReferencePreviousImage =
+        mode === "image" &&
+        maxReferences > 0 &&
+        !attachments.some((attachment) => creationAttachmentKind(attachment) === "image") &&
+        activeConversation.messages.some((message) => message.mode === "image" && message.status === "done" && (message.resultStorageKeys?.length || message.resultUrls?.length));
     const startPrompt = (nextMode: CreationMode, nextPrompt: string) => {
         setAgentMode(false);
         selectMode(nextMode);
@@ -1625,7 +1633,7 @@ export default function CreatePage() {
         generationActive,
         referenceReplacementBusy,
         referenceDropBusy,
-        onReferenceDrop: addDroppedReferences,
+        onReferenceDrop: addComposerReferences,
         attachments,
         referenceImageSize,
         maxReferences,
@@ -1834,6 +1842,8 @@ export default function CreatePage() {
                                                 onRecoverMedia={() => void recoverMessageMedia(item)}
                                                 refreshingResult={resultRefreshIds.has(item.id)}
                                                 onCreateVariant={() => createVariant(item, index)}
+                                                onUseImageReference={(image) => void addComposerReferences({ kind: "result", image })}
+                                                imageReferenceBusy={busy || referenceReplacementBusy || referenceDropBusy}
                                                 onContinueCanvas={(ids) => void continueOnCanvas(ids)}
                                                 openingCanvas={openingCanvas}
                                                 onEditUserMessage={(text) => {
@@ -1847,7 +1857,7 @@ export default function CreatePage() {
                             </section>
                         </main>
                         <section className="creation-thread-composer">
-                            <CreationComposer {...composerProps} variant="thread" />
+                            <CreationComposer {...composerProps} variant="thread" placeholderOverride={canReferencePreviousImage ? "描述新画面，修改之前的图请先点「用作参考图」" : undefined} />
                         </section>
                     </div>
                 )}

@@ -30,7 +30,7 @@ import { Button } from "antd";
 import { CanvasImagePreview } from "@/components/canvas/canvas-image-preview";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { creationResultEntries } from "./creation-result-urls";
-import { CREATION_IMAGE_DRAG_TYPE } from "./creation-reference-drop";
+import { CREATION_IMAGE_DRAG_TYPE, type CreationImageDrag } from "./creation-reference-drop";
 
 export function CreationMessageView({
     item,
@@ -41,6 +41,8 @@ export function CreationMessageView({
     refreshingResult = false,
     onCreateVariant,
     onEditUserMessage,
+    onUseImageReference,
+    imageReferenceBusy,
     onContinueCanvas,
     openingCanvas,
 }: {
@@ -52,6 +54,8 @@ export function CreationMessageView({
     refreshingResult?: boolean;
     onCreateVariant: () => void;
     onEditUserMessage: (text: string) => void;
+    onUseImageReference: (image: CreationImageDrag) => void;
+    imageReferenceBusy?: boolean;
     onContinueCanvas: (ids?: string[]) => void;
     openingCanvas: boolean;
 }) {
@@ -130,6 +134,8 @@ export function CreationMessageView({
                         onRecoverMedia={onRecoverMedia}
                         refreshingResult={refreshingResult}
                         onCreateVariant={onCreateVariant}
+                        onUseImageReference={onUseImageReference}
+                        imageReferenceBusy={imageReferenceBusy}
                         onContinueCanvas={onContinueCanvas}
                         openingCanvas={openingCanvas}
                     />
@@ -279,6 +285,8 @@ export function MediaResult({
     onRecoverMedia,
     refreshingResult = false,
     onCreateVariant,
+    onUseImageReference,
+    imageReferenceBusy,
     onContinueCanvas,
     openingCanvas,
 }: {
@@ -288,6 +296,8 @@ export function MediaResult({
     onRecoverMedia: () => void;
     refreshingResult?: boolean;
     onCreateVariant: () => void;
+    onUseImageReference: (image: CreationImageDrag) => void;
+    imageReferenceBusy?: boolean;
     onContinueCanvas: (ids?: string[]) => void;
     openingCanvas: boolean;
 }) {
@@ -478,6 +488,13 @@ export function MediaResult({
             )}
             <div className="creation-media-actions">
                 <span>{isVideo ? "视频结果" : `${displayResultUrls.length} 张图片`}</span>
+                {item.mode === "image" && item.status === "done"
+                    ? resultEntries.map(({ key }, index) => (
+                          <Button key={key} type="link" size="small" disabled={imageReferenceBusy} onClick={() => onUseImageReference({ messageId: item.id, resultKey: key })}>
+                              {displayResultUrls.length === 1 ? "用作参考图" : `用作参考图 ${index + 1}`}
+                          </Button>
+                      ))
+                    : null}
                 <Button type="link" size="small" loading={openingCanvas} disabled={!canContinueWithResults} title={canContinueWithResults ? undefined : "素材保存完成后才能转入画布"} onClick={() => onContinueCanvas(resultAssetIds)}>
                     添加到画布
                 </Button>
