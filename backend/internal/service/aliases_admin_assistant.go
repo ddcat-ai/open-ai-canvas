@@ -8,6 +8,7 @@ type AssistantOAuthRequest = app.AssistantOAuthRequest
 type AssistantOAuthTokenRequest = app.AssistantOAuthTokenRequest
 type AssistantExecuteRequest = app.AssistantExecuteRequest
 type AssistantExecution = app.AssistantExecution
+type AdminChannelModelLabelRequest = app.AdminChannelModelLabelRequest
 
 const AssistantAPIPath = app.AssistantAPIPath
 const AssistantAttachmentLimit = app.AssistantAttachmentLimit

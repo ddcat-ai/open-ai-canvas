@@ -170,7 +170,7 @@ func (c BatchChannelModelChanges) fields() []string {
 	for _, field := range []struct {
 		name string
 		set  bool
-	}{{"capability", c.Capability != nil}, {"protocol", c.Protocol != nil}, {"protocolRelease", c.ProtocolRelease != nil}, {"displayName", c.DisplayName != nil}, {"description", c.Description != nil}, {"enabled", c.Enabled != nil}, {"pricingEnabled", c.PricingEnabled != nil}, {"capabilityTemplate", c.CapabilityTemplate != nil}, {"pricingTemplate", c.PricingTemplate != nil}} {
+	}{{"capability", c.Capability != nil}, {"protocol", c.Protocol != nil}, {"protocolRelease", c.ProtocolRelease != nil}, {"displayName", c.DisplayName != nil}, {"channelLabel", c.ChannelLabel != nil}, {"description", c.Description != nil}, {"enabled", c.Enabled != nil}, {"pricingEnabled", c.PricingEnabled != nil}, {"capabilityTemplate", c.CapabilityTemplate != nil}, {"pricingTemplate", c.PricingTemplate != nil}} {
 		if field.set {
 			result = append(result, field.name)
 		}
@@ -192,6 +192,17 @@ func (s *Service) prepareBatchModelUpdate(repo *repository.Repository, channel *
 			return batchModelUpdate{}, BadAuthRequest("模型展示名不能超过 160 字")
 		}
 		columns["display_name"] = after.DisplayName
+	}
+	if changes.ChannelLabel != nil {
+		label := strings.TrimSpace(*changes.ChannelLabel)
+		if label == after.ProviderModelKey {
+			label = ""
+		}
+		if len([]rune(label)) > 80 {
+			return batchModelUpdate{}, BadAuthRequest("渠道展示名不能超过 80 字")
+		}
+		after.ChannelLabel = label
+		columns["channel_label"] = label
 	}
 	if changes.Description != nil {
 		after.Description = strings.TrimSpace(*changes.Description)

@@ -301,7 +301,7 @@ func (s *Service) ExecuteAssistantOperation(ctx context.Context, p *AssistantPri
 			}
 		}
 	}
-	row := &model.AssistantInvocation{ID: newID(), UserID: p.User.ID, CredentialID: p.bindingID(), IdempotencyKey: key, Operation: op.Method, ArgumentsHash: argumentsHash, PreviewJSON: assistantJSON(preview), Status: status, Source: source, CreatedAt: now, ExpiresAt: now.Add(10 * time.Minute)}
+	row := &model.AssistantInvocation{ID: newID(), UserID: p.User.ID, CredentialID: p.bindingID(), IdempotencyKey: key, Operation: op.Method, ArgumentsHash: argumentsHash, PreviewJSON: assistantJSON(preview), Status: status, Source: source, CreatedAt: now, ExpiresAt: now.Add(60 * time.Minute)}
 	if err = s.repo.ReserveAssistantInvocation(row); err != nil {
 		return nil, err
 	}
@@ -494,6 +494,57 @@ func (s *Service) AssistantCall(actor *model.User, id string) (*model.AssistantI
 	}
 	return s.repo.AssistantInvocationByID(u.ID, id)
 }
+
+// 只读查询当前管理员的原调用，确认后以此恢复状态，避免换幂等键重复执行。
+func (s *Service) GetAssistantInvocation(p *AssistantPrincipal, id string) (*AssistantExecution, error) {
+	p, err := s.refreshAssistantPrincipal(p)
+	if err != nil {
+		return nil, err
+	}
+	row, err := s.repo.AssistantInvocationByID(p.User.ID, id)
+	if err != nil {
+		return nil, NotFound("调用不存在")
+	}
+	out := &AssistantExecution{ID: row.ID, Status: row.Status}
+	if row.Status == "pending" {
+		out.Status = "pending_confirmation"
+		base, _ := AssistantBaseURL()
+		out.ConfirmationURL = base + "/admin/agent-access?confirmation=" + row.ID
+	}
+	if strings.TrimSpace(row.ResultJSON) != "" {
+		decoder := json.NewDecoder(strings.NewReader(row.ResultJSON))
+		decoder.UseNumber()
+		if err := decoder.Decode(out); err != nil {
+			return nil, NewAppError(409, "调用结果待核实")
+		}
+	}
+	return out, nil
+}
+
+// 仅拒绝当前管理员尚未执行的调用；取消不触发业务操作，重复取消保持原终态。
+func (s *Service) CancelAssistantInvocation(p *AssistantPrincipal, id string) (*AssistantExecution, error) {
+	p, err := s.refreshAssistantPrincipal(p)
+	if err != nil {
+		return nil, err
+	}
+	row, err := s.repo.AssistantInvocationByID(p.User.ID, id)
+	if err != nil {
+		return nil, NotFound("调用不存在")
+	}
+	switch row.Status {
+	case "pending", "ready", "approved":
+		if !row.ExpiresAt.After(time.Now()) {
+			return &AssistantExecution{ID: row.ID, Status: "expired"}, nil
+		}
+		if err := s.repo.TransitionAssistantInvocation(row.ID, row.Status, "rejected", time.Now()); err != nil {
+			return nil, NewAppError(409, "调用已被处理或已过期")
+		}
+		return &AssistantExecution{ID: row.ID, Status: "rejected"}, nil
+	default:
+		return &AssistantExecution{ID: row.ID, Status: row.Status}, nil
+	}
+}
+
 func (s *Service) ConfirmAssistantCall(actor *model.User, id string, approve bool) error {
 	u, err := s.assistantAdmin(actor)
 	if err != nil {

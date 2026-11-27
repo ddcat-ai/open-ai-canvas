@@ -200,7 +200,7 @@ func TestAssistantMCPRealSDKTransport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools.Tools) != 3 {
+	if len(tools.Tools) != 5 {
 		t.Fatalf("got %d tools", len(tools.Tools))
 	}
 	for _, call := range []struct {
@@ -245,6 +245,14 @@ func TestAssistantMCPRealSDKTransport(t *testing.T) {
 	calls, err := svc.AssistantCalls(admin, 1)
 	if err != nil || len(calls) == 0 {
 		t.Fatal("missing MCP invocation", err)
+	}
+	out, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "admin_get_invocation", Arguments: map[string]any{"id": calls[0].ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ = json.Marshal(out)
+	if out.IsError || !bytes.Contains(data, []byte(`pending_confirmation`)) {
+		t.Fatalf("admin_get_invocation: %s", data)
 	}
 	w := assistantHTTPRequest(r, "POST", "/api/admin-assistant/calls/"+calls[0].ID+"/confirm", "session-admin.test-token", "", "https://canvas.example.test", map[string]bool{"approve": true})
 	if w.Code != 200 {

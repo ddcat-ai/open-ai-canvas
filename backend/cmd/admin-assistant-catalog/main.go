@@ -326,7 +326,7 @@ func main() {
 			op.Module = "settings"
 		}
 		op.HighRisk = op.Write
-		for _, prefix := range []string{"CreateSystemChannel", "UpdateSystemChannel", "DuplicateSystemChannel", "AdminEditSkill", "AdminUpdateSkill", "UpdatePromptTemplate", "CreatePromptTemplate", "UpdateAnnouncement", "CreateAnnouncement", "UpdateBannerAnnouncement", "CreateBannerAnnouncement"} {
+		for _, prefix := range []string{"CreateSystemChannel", "UpdateSystemChannel", "DuplicateSystemChannel", "AdminEditSkill", "AdminUpdateSkill", "UpdatePromptTemplate", "CreatePromptTemplate", "UpdateAnnouncement", "CreateAnnouncement", "UpdateBannerAnnouncement", "CreateBannerAnnouncement", "UpdateAdminChannelModelLabel"} {
 			if strings.HasPrefix(op.Method, prefix) {
 				op.HighRisk = false
 			}

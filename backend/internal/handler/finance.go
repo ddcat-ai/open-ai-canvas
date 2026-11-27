@@ -278,6 +278,19 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 		ok(c, gin.H{"models": models})
 	})
 	// 跨渠道模型列表：用于按模型名称在全部系统渠道中筛选。
+	r.GET("/admin/channel-models/costs", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		models, err := svc.AdminChannelModelCosts(user)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, models)
+	})
 	r.GET("/admin/channel-models", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {
@@ -465,6 +478,24 @@ func RegisterFinanceRoutes(r *gin.RouterGroup, svc *service.Service) {
 	})
 	r.PATCH("/admin/channels/:id/models/:modelId", func(c *gin.Context) {
 		saveChannelModel(c, svc, c.Param("modelId"))
+	})
+	r.PATCH("/admin/channels/:id/models/:modelId/label", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req service.AdminChannelModelLabelRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			failService(c, service.BadAuthRequest("无效的 JSON 参数"))
+			return
+		}
+		item, err := svc.UpdateAdminChannelModelLabel(user, c.Param("id"), c.Param("modelId"), req)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, item)
 	})
 	r.PATCH("/admin/channels/:id/models/:modelId/sort", func(c *gin.Context) {
 		user, err := currentUser(c, svc)

@@ -32,21 +32,21 @@ description: 管理员浏览器授权、可撤销 Token、管理操作发现及 
 
 ## 操作发现与执行
 
-MCP 只加载三个工具：
+MCP 加载五个工具：
 
 | 工具 | 用途 |
 | --- | --- |
 | `admin_list_operations` | 按模块、关键词发现已授权操作，每页 40 项 |
 | `admin_describe_operation` | 查询操作参数 Schema、业务来源、写入和风险标记 |
 | `admin_execute_operation` | 执行固定操作及参数；写入要求稳定的 `idempotencyKey` |
+| `admin_get_invocation` | 按调用 ID 查询状态、结果或错误；确认后先查状态再决定是否重试 |
+| `admin_cancel_invocation` | 取消本人尚未开始执行的调用；只取消，不执行，也不能撤销已执行副作用 |
 
 操作 ID 使用现有业务方法名，如 `AdminUsers`、`CreateSystemChannel`、`UpdateUser`。输入参数名和大小写以 describe 返回的 Schema 为准；业务校验仍由原 service 完成。出站 MCP 的 `admin` 参数由服务器固定为 true，不能由调用方选择。没有任意 URL、HTTP 路径、SQL 或 shell 执行入口。
 
 MCP 执行保留原始 JSON 数字，调账等 int64 参数不会经 float64 舍入；确认指纹及实际执行均使用原值。客户端也应保留整数精度。
 
 注册表覆盖用户、渠道模型、插件、技能、出站 MCP、系统配置、支付运营、任务日志、素材、工作台及系统更新等后台模块。`internal/app/admin_assistant_catalog.json` 是受版本控制的明确白名单。新增后台业务时，从 backend 目录运行 `go run ./cmd/admin-assistant-catalog`，审查差异、风险标记及权限后更新白名单；测试会比对实际管理入口及方法签名。
-
-普通渠道、技能和公告写入可按权限执行。删除、批量修改、财务额度、权限认证、存储凭据、安装插件和系统更新等操作默认需要网页确认；新增写入默认需要确认，确认机制在服务端强制执行。
 
 逐次审批模式下，普通渠道、技能和公告写入按 scopes 执行，删除、批量修改、财务额度、权限认证、存储凭据、安装插件和系统更新等高风险操作需要网页确认；完全访问模式直接执行这些操作。`UpdateAdminChannelModelLabel` 只修改 `channelLabel`/`displayName`，不触碰价格、能力或路由，因此按字段风险判定为普通写入；`BatchUpdateAdminAllChannelModels` 的 `changes.channelLabel` 支持一次批量修改渠道展示名。渠道模型的跨渠道列表和 `AdminChannelModelCosts` 读操作会投影 `costPricing`，用于写入后核验成本；普通列表仍隐藏成本。
 

@@ -544,6 +544,17 @@ func assistantMCPHandler(svc *service.Service) http.Handler {
 		}
 		return &mcp.CallToolResult{StructuredContent: out, Content: []mcp.Content{&mcp.TextContent{Text: string(encoded)}}}, nil
 	})
+	type invocationInput struct {
+		ID string `json:"id"`
+	}
+	mcp.AddTool(server, &mcp.Tool{Name: "admin_get_invocation", Description: "按调用 ID 查询执行状态、结果或错误。确认后先查状态，不要重复执行或换幂等键。"}, func(ctx context.Context, req *mcp.CallToolRequest, in invocationInput) (*mcp.CallToolResult, any, error) {
+		out, err := svc.GetAssistantInvocation(assistantMCPPrincipal(req), in.ID)
+		return nil, out, err
+	})
+	mcp.AddTool(server, &mcp.Tool{Name: "admin_cancel_invocation", Description: "取消本人尚未开始执行的调用（pending/ready/approved）。只取消，不执行；已执行的调用不会被撤销。"}, func(ctx context.Context, req *mcp.CallToolRequest, in invocationInput) (*mcp.CallToolResult, any, error) {
+		out, err := svc.CancelAssistantInvocation(assistantMCPPrincipal(req), in.ID)
+		return nil, out, err
+	})
 	stream := mcp.NewStreamableHTTPHandler(func(_ *http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{Stateless: true})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		base, _ := service.AssistantBaseURL()

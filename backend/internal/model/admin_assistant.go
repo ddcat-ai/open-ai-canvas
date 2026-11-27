@@ -27,7 +27,7 @@ type AssistantOAuthClient struct {
 func (AssistantOAuthClient) TableName() string { return "assistant_oauth_clients" }
 
 type AssistantOAuthCode struct {
-	ID           string    `gorm:"primaryKey;size:64"` // SHA256 of authorization code
+	ID           string    `gorm:"primaryKey;size:64"` // 仅保存授权码的 SHA256 摘要。
 	ClientID     string    `gorm:"index;size:100"`
 	UserID       string    `gorm:"size:36"`
 	RedirectURI  string    `gorm:"type:text"`

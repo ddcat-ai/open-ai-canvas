@@ -268,6 +268,16 @@
     ]
   },
   {
+    "method": "AdminChannelModelCosts",
+    "module": "channel-models",
+    "write": false,
+    "highRisk": false,
+    "parameters": [],
+    "routes": [
+      "GET /admin/channel-models/costs"
+    ]
+  },
+  {
     "method": "AdminChannelModelHealth",
     "module": "channel-models",
     "write": false,
@@ -2804,6 +2814,20 @@
     "routes": [
       "POST /admin/channel-models/batch-protocol",
       "POST /admin/channels/:id/models/batch-protocol"
+    ]
+  },
+  {
+    "method": "UpdateAdminChannelModelLabel",
+    "module": "channels",
+    "write": true,
+    "highRisk": false,
+    "parameters": [
+      "channelID",
+      "id",
+      "req"
+    ],
+    "routes": [
+      "PATCH /admin/channels/:id/models/:modelId/label"
     ]
   },
   {
