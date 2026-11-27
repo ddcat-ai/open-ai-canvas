@@ -1,10 +1,78 @@
 package app
 
 import (
+	"encoding/json"
+	"reflect"
 	"testing"
 
+	"yingce/backend/internal/canvas/mediatool"
 	"yingce/backend/internal/model"
 )
+
+func TestSharedMediaToolsPartialDraftEditPreservesOtherParameters(t *testing.T) {
+	s, _, args, _ := sharedMediaToolFixture(t, "enhance")
+	run, state := agentMediaRun(t, s, args, "auto")
+	_, plan, err := s.prepareCloudAgentMedia(run, &state, agentMediaCall(args))
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := s.RuntimePolicy()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := createCloudAgentMediaNode(s.repo, "user", "agent-canvas", plan, nil, policy); err != nil {
+		t.Fatal(err)
+	}
+	bitrate := 16000
+	expected := *args.ProcessingParameters
+	expected.Bitrate = &bitrate
+	args.ProcessingParameters, args.SnapshotHash = &mediatool.Parameters{Bitrate: &bitrate}, ""
+	req, restored, err := s.prepareCloudAgentMedia(run, &state, agentMediaCall(args))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(restored.Args.ProcessingParameters, &expected) {
+		t.Fatalf("只修改码率时丢失其他草稿参数: %+v", restored.Args.ProcessingParameters)
+	}
+	req.creationPrepare = &creationTaskPreparation{}
+	task, err := s.CreateTask("user", req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := applyCloudAgentResolvedMediaDefaults(&req, restored, task); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(restored.Args.ProcessingParameters, &expected) {
+		t.Fatalf("任务准入改变了未修改的参数: %+v", restored.Args.ProcessingParameters)
+	}
+}
+
+func TestSharedMediaToolsPartialVersionEditPreservesOtherParameters(t *testing.T) {
+	s, db, _ := agentMediaFixture(t)
+	seedAgentMediaVersion(t, s, db)
+	task, err := s.repo.TaskForUser("user", "original-task")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var input map[string]any
+	if err := json.Unmarshal([]byte(task.InputJSON), &input); err != nil {
+		t.Fatal(err)
+	}
+	fps, bitrate, level := 60, 8000, "high"
+	input["metadata"].(map[string]any)["processingParameters"] = &mediatool.Parameters{FPS: &fps, Bitrate: &bitrate, BitrateLevel: &level}
+	raw, _ := json.Marshal(input)
+	if err := db.Model(task).Updates(map[string]any{"operation": "enhance", "input_json": string(raw)}).Error; err != nil {
+		t.Fatal(err)
+	}
+	bitrate = 16000
+	args := cloudAgentMediaArgs{Mode: "video", NodeID: "new-version", InheritFromNodeID: "original", ReferenceNodeIDs: []string{}, ProcessingParameters: &mediatool.Parameters{Bitrate: &bitrate}}
+	if err := s.inheritCloudAgentMediaConfiguration("user", "agent-canvas", &args, `{"referenceNodeIds":[]}`); err != nil {
+		t.Fatal(err)
+	}
+	if args.Operation != "enhance" || !reflect.DeepEqual(args.ProcessingParameters, &mediatool.Parameters{FPS: &fps, Bitrate: &bitrate, BitrateLevel: &level}) {
+		t.Fatalf("修改版丢失原处理规格: %+v", args)
+	}
+}
 
 func TestSharedMediaToolsQuoteResolvesChannelFPSDefaults(t *testing.T) {
 	for _, policy := range []string{VideoProcessingFPSKeepSource, VideoProcessingFPSUserSelect} {

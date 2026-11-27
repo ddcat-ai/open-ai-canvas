@@ -42,6 +42,30 @@ type Parameters struct {
 	Bitrate      *int    `json:"bitrate,omitempty"`
 }
 
+// MergeParameters 用于续用草稿和继承成品；未提供的字段保留原值。
+// 审批卡提交的是完整设置，不经过此合并，因此仍可清空可选参数。
+func MergeParameters(base, changes *Parameters) *Parameters {
+	if base == nil && changes == nil {
+		return nil
+	}
+	result := Parameters{}
+	if base != nil {
+		result = *base
+	}
+	if changes != nil {
+		if changes.FPS != nil {
+			result.FPS = changes.FPS
+		}
+		if changes.BitrateLevel != nil {
+			result.BitrateLevel = changes.BitrateLevel
+		}
+		if changes.Bitrate != nil {
+			result.Bitrate = changes.Bitrate
+		}
+	}
+	return &result
+}
+
 func number(value int) *int { return &value }
 
 var definitions = []Definition{

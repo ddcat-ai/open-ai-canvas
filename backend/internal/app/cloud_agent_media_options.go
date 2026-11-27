@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"yingce/backend/internal/canvas/contract"
+	"yingce/backend/internal/canvas/mediatool"
 )
 
 // 处理草稿先恢复操作与参数，再执行来源确认，防止省略字段退化为普通视频生成。
@@ -59,9 +60,7 @@ func (s *Service) restoreCloudAgentProcessingDraft(userID, canvasID string, a *c
 		return cloudAgentFieldError("operation", "conflict", "处理操作与当前草稿不一致，请新建对应处理草稿")
 	}
 	a.Operation = spec.Operation
-	if a.ProcessingParameters == nil {
-		a.ProcessingParameters = spec.ProcessingParameters
-	}
+	a.ProcessingParameters = mediatool.MergeParameters(spec.ProcessingParameters, a.ProcessingParameters)
 	if a.ReferenceNodeIDs == nil {
 		for _, reference := range spec.ReferenceBindings {
 			if reference.MediaType == "video" && reference.NodeID != "" {

@@ -276,13 +276,12 @@ func (s *Service) inheritCloudAgentMediaConfiguration(userID, canvasID string, a
 			return fail()
 		}
 		a.Operation = task.Operation
-		if a.ProcessingParameters == nil {
-			encoded, _ := json.Marshal(metadata["processingParameters"])
-			a.ProcessingParameters = &mediatool.Parameters{}
-			if json.Unmarshal(encoded, a.ProcessingParameters) != nil {
-				return fail()
-			}
+		encoded, _ := json.Marshal(metadata["processingParameters"])
+		var parameters mediatool.Parameters
+		if json.Unmarshal(encoded, &parameters) != nil {
+			return fail()
 		}
+		a.ProcessingParameters = mediatool.MergeParameters(&parameters, a.ProcessingParameters)
 	}
 	config, ok := input["config"].(map[string]any)
 	if !ok {
