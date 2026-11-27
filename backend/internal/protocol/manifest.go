@@ -325,6 +325,15 @@ func ValidateManifest(manifest Manifest) error {
 		if len(provider.Capabilities) == 0 || len(provider.Scopes) == 0 {
 			return fmt.Errorf("provider contribution %q requires capabilities and scopes", provider.ID)
 		}
+		switch provider.HostTextPolicy {
+		case "":
+		case HostTextPolicyBeforeMapping:
+			if len(provider.Capabilities) != 1 || provider.Capabilities[0] != CapabilityText {
+				return fmt.Errorf("provider %q hostTextPolicy requires a text-only provider", provider.ID)
+			}
+		default:
+			return fmt.Errorf("provider %q has unsupported hostTextPolicy %q", provider.ID, provider.HostTextPolicy)
+		}
 		switch provider.Kind {
 		case "", ProviderKindGeneration:
 		case ProviderKindProcessing:
@@ -536,6 +545,7 @@ func normalizeManifestForProvider(manifest *Manifest, index int) error {
 	manifest.Metadata.RequiresPublicMediaURLs = provider.RequiresPublicMediaURLs
 	manifest.Metadata.DetachedPolling = provider.DetachedPolling
 	manifest.Metadata.IdempotentCreate = provider.IdempotentCreate
+	manifest.Metadata.HostTextPolicy = provider.HostTextPolicy
 	manifest.Metadata.Kind = provider.Kind
 	manifest.Metadata.Execution = manifest.Runtime.Backend
 	manifest.Create = provider.Create

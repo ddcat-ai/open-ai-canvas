@@ -63,6 +63,11 @@ func runProtocolAdapterTaskWithPolicy(ctx context.Context, input canvasGeneratio
 	// create、poll、download 是同一个外部任务的三个阶段：任一阶段失败都向上返回真实错误，
 	// 不把“已提交但结果未知”伪装成成功，也不把下载失败降级成空结果。
 	request := protocolRequestFromInput(input)
+	if input.Mode == "text" {
+		if err := prepareProtocolTextPolicy(ctx, input, &request); err != nil {
+			return nil, err
+		}
+	}
 	taskID := resumedProviderRequestID(ctx)
 	detached := protocolDetachedPolling(adapter, input.Mode)
 	var created protocol.CreateResult

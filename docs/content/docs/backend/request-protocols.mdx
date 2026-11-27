@@ -22,6 +22,15 @@ description: 基于声明式 .yingce-plugin 发行模型在后台配置、校验
 - 「接口与参数」配置相对渠道 Base URL 的创建、查询与可选独立下载路径；查询和下载支持 `{{taskId}}` 占位符。复杂对象、条件、固定值、签名、上传前置步骤等可在高级 JSON 中编辑。
 - 「校验与发布」通过生产声明式适配器构造请求并解析示例响应，不访问真实供应商、不读取渠道密钥、不创建任务。示例响应表示成功但未解析出作品内容或地址（且未配置独立下载接口）时会拒绝。
 
+## 声明式文本策略顺序
+
+文本 Provider 可在高级 JSON 中声明 `hostTextPolicy: "before_mapping"`：宿主先解析本次流式开关、输出上限和思考策略，再交给插件执行型号差异映射。插件负责最终请求体，宿主不再在映射后追加思考字段或 `stream_options`，也不自动删除插件声明的用量字段并重发。
+
+- Create 从 `request.extra` 接收宿主策略，Agent 从 `request.extra.agent` 的对应线格式请求接收；插件须明确映射这些字段。
+- 该模式下 Create 与 Agent 共用 `requestBindings` 和 `validations`，非法型号或参数不能通过 Agent 绕过。
+- 只允许文本单能力 Provider 使用此值；未知值拒绝加载。省略字段的既有插件保留原策略顺序和 Agent 校验合同。
+- SenseNova 文本协议使用此模式，避免 Kimi 输出预算字段被改回 `max_tokens`，或向 GLM 注入未声明的 `stream_options`。
+
 ## 发布、并发保护与模型绑定
 
 - 发布前必须对当前配置和示例完成校验。请求携带当前发行包的 `expectedSha256`（首次发布为空）；并发修改返回 HTTP 409，避免覆盖其他管理员的新版本。

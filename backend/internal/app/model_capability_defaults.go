@@ -73,6 +73,10 @@ func DefaultImageCapabilityConfig(protocol string, modelName string) *ImageCapab
 		MaxOutputs:            15,
 	}
 	switch model.ChannelInterfaceType(protocol) {
+	case "sensenova-image":
+		if modelName == senseNovaImageModel {
+			return senseNovaImageCapability()
+		}
 	case model.ChannelInterfaceOpenAIImage:
 		// OpenAI Images 只收 WIDTHxHEIGHT：默认配置声明了 1K/2K/4K，就必须自带档位换算表，
 		// 否则运行时换算会被静默跳过（见 imageSizePresetMissing），实际出图档位与所选档位不一致。
@@ -212,6 +216,11 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 	// 文本模型是否支持视觉输入不能从协议或模型名可靠推断，默认关闭，由管理员按真实上游能力开启。
 	streaming := true
 	text := &TextCapabilityConfig{Streaming: &streaming, ContextWindowTokens: 128000, MaxOutputTokens: 16384, References: TextReferenceConfig{PromptMaxChars: 32000}}
+	if protocol == senseNovaTextProtocol {
+		if profile := senseNovaTextCapability(modelName); profile != nil {
+			text = profile
+		}
+	}
 	if profile := officialVideoPreset(protocol, modelName); profile != nil {
 		return &ModelCapabilityConfig{Version: 1, Text: text, Image: DefaultImageCapabilityConfig(protocol, modelName), Video: profile}
 	}

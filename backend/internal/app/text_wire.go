@@ -22,6 +22,11 @@ func declaredTextWire(ctx context.Context, interfaceType string) string {
 	return adapter.Metadata().TextWire
 }
 
+func protocolTextPolicyBeforeMapping(ctx context.Context, interfaceType string) bool {
+	adapter, ok := declarativeProtocolAdapterForContext(ctx, interfaceType)
+	return ok && adapter.Metadata().HostTextPolicy == protocol.HostTextPolicyBeforeMapping
+}
+
 // textModelWire 是模型目录（PublicChannelModel.TextWire）和插件目录下发给浏览器的请求格式：
 // 浏览器直连系统代理的提示词优化、编辑器助手和美术点评按它选择 /chat/completions、/responses
 // 或 /messages；协议的 create 路径识别不出时为空，字段省略。
@@ -69,7 +74,7 @@ func StreamUsageOptionRejectedResponse(statusCode int, body []byte) bool {
 func executeTextWireStream(ctx context.Context, config providerConfig, spec protocol.RequestSpec, body map[string]any, wire string, newParser func() *streamingAgentParser) ([]byte, string, *streamingAgentParser, error) {
 	parser := newParser()
 	data, mimeType, err := executeProtocolBinaryRequestWithConsumer(ctx, config, spec, parser.consume)
-	if err == nil || wire != protocol.TextWireChatCompletion || !streamUsageOptionRejected(err) {
+	if err == nil || wire != protocol.TextWireChatCompletion || protocolTextPolicyBeforeMapping(ctx, config.InterfaceType) || !streamUsageOptionRejected(err) {
 		return data, mimeType, parser, err
 	}
 	delete(body, "stream_options")

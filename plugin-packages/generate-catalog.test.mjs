@@ -15,7 +15,7 @@ const normalize = (value) => value.replace(/\r\n?/g, "\n").trimEnd();
 async function fixture(t) {
   const temp = await mkdtemp(join(tmpdir(), "yingce-catalog-"));
   t.after(() => rm(temp, { recursive: true, force: true }));
-  for (const name of ["generate-catalog.mjs", "embed-documentation.mjs", "package-directories.mjs", "kling-v4-official/protocol.mjs", "kling-v4-official/video-modes.json"]) {
+  for (const name of ["generate-catalog.mjs", "embed-documentation.mjs", "package-directories.mjs", "kling-v4-official/protocol.mjs", "kling-v4-official/video-modes.json", "sensenova-image/protocol.mjs"]) {
     await cp(join(root, name), join(temp, name));
   }
   const ids = [];
@@ -30,7 +30,7 @@ async function fixture(t) {
 }
 
 function generate(temp, ids) {
-  return execFileSync(process.execPath, [join(temp, "generate-catalog.mjs"), ...ids], { cwd: temp, encoding: "utf8" });
+  return execFileSync(process.execPath, [join(temp, "generate-catalog.mjs"), ...ids], { cwd: temp, encoding: "utf8", windowsHide: true });
 }
 
 async function snapshot(dir) {
@@ -128,4 +128,24 @@ test("Seedream regeneration preserves the published layer decomposition contract
   const provider = regenerated.contributes.providers[0];
   assert.ok(provider.create.body.layer_decomposition_options);
   assert.ok(provider.imageParameters.some((parameter) => parameter.name === "layerDecomposition"));
+});
+
+test("SenseNova image regeneration preserves the published contract, documentation and switch defaults", async (t) => {
+  const { temp } = await fixture(t);
+  const id = "sensenova-image";
+  const published = await json(join(root, id, "manifest.json"));
+  await cp(join(root, id), join(temp, id), { recursive: true });
+  generate(temp, [id]);
+  const regenerated = await json(join(temp, id, "manifest.json"));
+  assert.equal(regenerated.version, published.version);
+  assert.deepEqual(runtime(regenerated), runtime(published));
+  const document = await readFile(join(temp, id, "docs", "interface.md"), "utf8");
+  const readme = await readFile(join(temp, id, "README.md"), "utf8");
+  assert.equal(regenerated.documentation, `${readme.trim()}\n\n---\n\n${document.trim()}\n`);
+  const contract = document.split("<!-- YINGCE_MANIFEST_CONTRACT_START -->")[1].split("```json\n")[1].split("\n```")[0];
+  assert.deepEqual(runtime(JSON.parse(contract)), runtime(regenerated));
+  const body = regenerated.contributes.providers[0].create.body;
+  for (const [name, fallback] of [["watermark", false], ["prompt_extend", true], ["self_correction", true]]) {
+    assert.deepEqual(body[name], { $coalesce: [{ $ref: `request.providerOptions.${id}.${name}` }, fallback] });
+  }
 });

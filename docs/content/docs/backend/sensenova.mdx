@@ -1,0 +1,97 @@
+---
+title: SenseNova 文本与图片
+description: SenseNova 两个独立协议的后台配置、模型参数、图片编辑与验收边界
+---
+
+# SenseNova 文本与图片
+
+SenseNova 通过两个独立声明式插件接入：`sensenova-chat`（`1.0.0`）处理文本与工具消息，`sensenova-image`（`2.0.0`）处理 U1.6 Lite 图片生成和编辑。只适配下述精确模型与端点；平台文本接口兼容 Chat Completions，不代表图片接口兼容 OpenAI 的 multipart 编辑。
+
+## 后台配置
+
+| 配置 | 文本 | 图片 |
+| --- | --- | --- |
+| 请求协议 | SenseNova Chat（`sensenova-chat`） | SenseNova U1.6 Lite Image（`sensenova-image`） |
+| 默认 Base URL | `https://token.sensenova.cn/v1` | `https://token.sensenova.cn` |
+| 创建端点 | `POST /v1/chat/completions` | `POST /v1/images/generations` 或 `/v1/images/edits` |
+| 传输 | JSON；支持文本 SSE | 同步 JSON，不使用 multipart 或轮询 |
+| 鉴权 | Bearer | Bearer |
+
+1. 部署这次构建时确保包含 `sensenova-chat.yingce-plugin` 与 `sensenova-image.yingce-plugin`，重启后端加载官方包。在「插件管理」核对两个协议已安装且可用；管理员停用的插件不会因更新而自动启用。
+2. 在「模型与渠道 → 渠道与模型」配置官方站点、访问凭证与精确模型 ID，为文本和图片分别选择对应协议。凭证只在可信后端的请求 Header 中使用，不放入 URL、提示词或公开配置。
+3. 保存并检查「能力与参数」、输出预算、可用用户组及本地计费配置。协议不提供供应商价格，也不替管理员设置费用。
+4. 核对获取到的模型类型与视觉能力。不能把「获取模型目录成功」当作上下文窗口、输出预算或账号权益已正确配置的证明；这些仍以已保存的模型能力和真实上游合同为准。
+
+插件源码分别在 `plugin-packages/sensenova-chat/`、`plugin-packages/sensenova-image/`，完整字段合同见各自的 `docs/interface.md`。功能复用现有渠道、任务、资源、审批与账本，不新增数据库字段或表，**没有数据库迁移**。更新和回退应沿用现有协议发行版与任务绑定流程，不删除已有任务或素材。
+
+## 文本模型合同
+
+| 精确模型 ID | 输出预算字段与文档边界 | 思考 | 图片输入 |
+| --- | --- | --- | --- |
+| `sensenova-6.8-flash` | `max_tokens`，1–131072 | 不可关闭，默认 high | HTTP(S) 图片 URL / Data URL |
+| `sensenova-6.8-flash-lite` | `max_tokens`，1–65536 | 可关闭，默认 high | HTTP(S) 图片 URL / Data URL |
+| `deepseek-flash` | `max_tokens`，1–393216 | 可关闭，默认 high | HTTP(S) 图片 URL / Data URL |
+| `glm-5.3` | `max_tokens`，1–131072 | 不可关闭，默认 max | 仅文本 |
+| `kimi-k3` | `max_completion_tokens`，最大随剩余上下文变化 | 通过 thinking.type 关闭，默认 max | 仅 Base64 Data URL |
+
+表格是字段与模型边界，不保证每个账号都能调用或产生最大输出。Flash Lite 的硬上下文上限未在该模型文档中给出；Kimi 的动态剩余预算由上游决定，不能用固定默认预算冒充硬最大输出。
+
+- 图片只能出现在 user 消息中。Flash/Lite 支持 JPEG、PNG、WebP；DeepSeek 还支持 GIF；Kimi 支持 JPEG、PNG、WebP、GIF、BMP、HEIC、HEIF，但不接受远程图片 URL。GLM 明确拒绝图片，所有型号都不接收此文本协议未声明的视频或音频内容块。
+- 宿主可以比供应商更严格：例如 DeepSeek 文档允许最多 200 张图片，当前宿主文本引用合同上限为 100。未公开的输入体积、提示词长度限制不能当作厂商保证，本地仍按保存的模型能力校验。
+- 模型/任务的输出预算、思考与实际 stream 策略在插件映射前生效，随后按型号再次校验。Kimi 统一输出预算转换为 `max_completion_tokens`；Flash/GLM 不可关闭思考，未声明参数或冲突配置明确失败。
+- Flash 原始协议支持 xhigh，但宿主统一界面没有独立 xhigh 档；不把它重命名为 max 或宣称新增了界面滑块。
+- GLM 流式工具请求显式发送 `tool_stream=true`，不发送未声明的 `stream_options`。其他型号的流式用量按已声明合同采集；文本正文、推理、工具增量和末尾 usage 由宿主处理。
+- Function Calling 的工具定义与历史工具关联沿用宿主能力和审批。插件返回工具调用不代表工具已执行。DeepSeek 工具历史需保留推理内容；Kimi 历史回传规则的文档歧义仍需授权验收。
+- 可调参数只通过 `providerOptions.sensenova-chat` 的文档化字段传递，不开放完整 body 或 `extra_body` 覆盖。采样参数、工具选择、JSON 输出及型号差异见包内完整合同，不能套用其他供应商的默认字段。
+
+## U1.6 Lite 图片生成与编辑
+
+模型 ID 固定为 `sensenova-u1.6-lite`。
+
+- 无参考图：`POST /v1/images/generations`。
+- 参考图总计 1–5 张：`POST /v1/images/edits`，JSON `images: [{"image_url":"..."}]`，按显式 order 保持顺序，首张为主编辑图。
+- 输入支持可公开访问的 HTTP/HTTPS 图片 URL 或带完整 `data:image/{format};base64,` 前缀的 Data URL，不接受裸 Base64；不支持 mask，区域修改用提示词描述。文档没有给出输入图片的完整格式、体积或像素上限。
+- `n` 仅支持 1。不通过扩大单次数量生成多图；需要多候选时属于多个独立任务及费用。
+- size 为 `auto` 或 `宽x高`：**每边** 512–4096、32 的倍数，宽高比例 1:3–3:1。`auto` 编辑适配主图，但文档没有保证保留原像素、补边或裁切方式。
+
+本版提供以下官方推荐尺寸及 `auto`：
+
+| 尺寸 | 文档标注 |
+| --- | --- |
+| `2048x2048` | 2K，1:1 |
+| `2720x1536` | 2K，16:9 |
+| `1536x2720` | 2K，9:16 |
+| `1664x2496` | 2K，2:3 |
+| `2496x1664` | 2K，3:2 |
+| `4096x4096` | 4K，1:1 |
+
+推荐值不是上游全部尺寸枚举。协议校验仍使用完整范围与步长规则；不能把 `16:9`、`2K` 或 `4K` 字面量作为 size，也不能沿用不符合 32 步长的通用图片预设。
+
+| 图片参数 | 默认 | 合同 |
+| --- | --- | --- |
+| 输出格式 | png | png/jpeg/webp |
+| 官方水印 | 参数启用时默认 true | 禁用参数或未提供取值时，明确发送 `watermark:false`；启用后按默认值或本次选择发送 |
+| 提示词扩写 | true | `prompt_extend`，显式 false 保留 |
+| 文字/画质自修正 | true | `self_correction`，显式 false 保留 |
+
+扩展参数绑定在 `providerOptions.sensenova-image`，质量、独立分辨率和透明背景控件停用。`quality`、`background` 在模板中显式占位但不发送，阻止宿主按 OpenAI 图片端点补全；不发送 mask、area、aspect_ratio、output_compression 或 stream。
+
+图片协议 `2.0.0` 调整了水印缺省策略：关闭「官方水印」参数启用开关后，新任务发送 `watermark:false`，不再回退为 true。启用参数后的默认 true、显式 true/false，以及扩写、自修正默认值不变。升级后需要将已锁版模型显式绑定至新发行版，并刷新节点模型配置；已入队任务仍使用旧协议快照。协议包更新不等于旧模型或旧任务已切换版本。
+
+## 图片结果、用量与失败
+
+图片插件固定 `response_format=url`，按官方示例解析 `data[].url`，保留根 size、output_format 和完整 usage。临时 URL **24 小时失效**，声明为 ephemeral，由宿主立即下载持久化；只保存 URL 不等于素材已长期保存。
+
+usage 保留 `input_image_count`、`output_image_count` 及 Token 明细，并将已存在的两项图数分别映射为宿主 `input_images`、`generated_images`，供计费强校验核对。缺失字段不填造数值，0 不会被丢掉；Token/图片用量也不直接等同本站收费标准。
+
+宿主兼容 `data[].b64_json`，但该分支的本地测试使用 synthetic fixture。公开文档展示的是 URL 示例，**不能将此兼容解析视为真实供应商 Base64 schema 已验收**。
+
+成功须恰好一张有效图片。错误对象、空结果、未知响应或意外两张有效结果都失败，不伪造成功素材。同步创建请求不自动重发：超时或取消后，结果与扣费可能未知，文档没有幂等或失败不扣费保证。需要再次调用时先核对供应商用量与原任务状态。
+
+## 验证与未确认边界
+
+本实现依据公开文档、实际插件包及本地受控 HTTP/SSE fixture；没有调用真实付费模型 API。离线测试覆盖字段、媒体和尺寸限制、思考/预算映射、错误语义、流式/工具用量与临时图片下载，但不能替代真实供应商或浏览器验收。
+
+上线前仍需核对账号模型权限、真实文本 SSE/工具/取消及用量、图片生成/编辑/auto/多图顺序、24 小时链接持久化、真实 Base64 响应和实际账单。完整清单见[待测试](/docs/progress/pending-test)。
+
+接口依据：[SenseNova 官方文档](https://platform.sensenova.cn/docs)、[U1.6 Lite](https://platform.sensenova.cn/docs#model-u1-6-lite)。
