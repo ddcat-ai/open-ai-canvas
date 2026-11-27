@@ -20,6 +20,7 @@ export const AGENT_TOOL_NAMES = [
     "canvas_edit_storyboard",
     "canvas_get_state",
     "canvas_inspect_image",
+    "canvas_inspect_video",
     "canvas_list_node_types",
     "canvas_preflight",
     "canvas_read_batch_table",
@@ -106,7 +107,7 @@ export const AGENT_TOOL_METADATA: Record<string, AgentToolMetadataEntry> = {
         },
         failureMessage: "体检未完成",
     },
-    // 看图：只有这个工具会把图片字节真的交给模型，所以只有它可以说"画面/看图"。
+    // 视觉观察工具才会把图片字节交给模型；读取清单不能称为看过画面。
     // 回执字段来源：`backend/internal/app/cloud_agent_runtime.go`（payload["result"] = 回执）。
     canvas_inspect_image: {
         summary: ({ pending, detail }) => {
@@ -119,6 +120,17 @@ export const AGENT_TOOL_METADATA: Record<string, AgentToolMetadataEntry> = {
             return pending ? `准备查看画面${title}` : `已附上${title}的画面`;
         },
         failureMessage: ({ text, detail }) => agentVisionFailureSummary(text, detail),
+    },
+    canvas_inspect_video: {
+        summary: ({ pending, detail }) => {
+            if (pending) return "准备提取视频画面";
+            const result = record(field(detail, "result"));
+            const count = typeof result.frameCount === "number" ? result.frameCount : 0;
+            const start = typeof result.startMs === "number" ? result.startMs / 1000 : 0;
+            const end = typeof result.endMs === "number" ? result.endMs / 1000 : 0;
+            return `已准备 ${count} 帧画面（${start}–${end} 秒，未分析声音）${result.truncated === true ? "，剩余范围未查看" : ""}`;
+        },
+        failureMessage: "视频观察未完成",
     },
     // 收尾闸门（工作项 A）：被拦下时卡片要说清"这次没结束"，而不是千篇一律的"操作已完成"。
     finish_run: {
@@ -153,7 +165,7 @@ export const AGENT_TOOL_METADATA: Record<string, AgentToolMetadataEntry> = {
 const AGENT_CANVAS_READ_TOOLS = new Set(["canvas_get_state", "canvas_list_node_types", "canvas_read_storyboard", "canvas_read_batch_table"]);
 /** 非画布信息的只读工具（模型、任务、技能、偏好）。`skills_load` 是历史事件名，保留兼容。 */
 const AGENT_INFO_READ_TOOLS = new Set(["model_list", "task_get", "skill_search", "skill_market_search", "skill_read_file", "skills_load", "agent_profile_read", "drama_get_context", "canvas_preflight", "memory_search", "mcp_list_tools"]);
-const AGENT_VISION_TOOLS = new Set(["canvas_inspect_image"]);
+const AGENT_VISION_TOOLS = new Set(["canvas_inspect_image", "canvas_inspect_video"]);
 const AGENT_CREATE_TOOLS = new Set(["generate_media", "generate_media_batch", "canvas_build_board", "canvas_create_storyboard", "canvas_create_character", "image_annotation_render"]);
 const AGENT_OPERATE_TOOLS = new Set(["canvas_apply_ops", "canvas_arrange_nodes", "canvas_edit_storyboard", "canvas_edit_batch_table", "image_layer_split", "image_text_detect", "media_batch_control"]);
 

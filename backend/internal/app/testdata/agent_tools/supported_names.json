@@ -22,6 +22,7 @@
   "skill_recommend",
   "task_get",
   "canvas_inspect_image",
+  "canvas_inspect_video",
   "memory_update",
   "image_layer_split",
   "model_list",

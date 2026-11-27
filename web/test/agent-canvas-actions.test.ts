@@ -1,38 +1,50 @@
 import { expect, test } from "bun:test";
 import { agentCanvasActions, agentCanvasActionLabel } from "@/lib/canvas/agent-canvas-actions";
 
+test("video frame preparation is a read and never reports generated media", () => {
+    const actions = agentCanvasActions("canvas_inspect_video", { eventType: "tool_completed", result: { nodeId: "clip", title: "原片", frameCount: 2 } });
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({ nodeId: "clip", nodeType: "video", action: "read" });
+    expect(agentCanvasActions("canvas_inspect_video", { eventType: "tool_failed", result: { nodeId: "clip" } })).toEqual([]);
+});
+
 test("persisted node actions retain human-readable titles without a live canvas", () => {
-    const detail = JSON.parse(JSON.stringify({ actions: [
-        { action: "created", nodeId: "video", title: "满月动画", nodeType: "video" },
-        { action: "referenced", nodeId: "image", title: "满月照片", nodeType: "image" },
-    ] }));
+    const detail = JSON.parse(
+        JSON.stringify({
+            actions: [
+                { action: "created", nodeId: "video", title: "满月动画", nodeType: "video" },
+                { action: "referenced", nodeId: "image", title: "满月照片", nodeType: "image" },
+            ],
+        }),
+    );
     expect(agentCanvasActions("canvas_apply_ops", detail).map(agentCanvasActionLabel)).toEqual(["创建了视频节点《满月动画》", "引用了图片节点《满月照片》"]);
 });
 
 test("server-authored canvas actions explain updated fields, renamed nodes, and both connection endpoints", () => {
-    const detail = JSON.parse(JSON.stringify({ actions: [
-        {
-            action: "updated",
-            nodeId: "video",
-            title: "旧名",
-            nodeType: "video",
-            fields: ["节点名称", "下一版提示词"],
-            resultTitle: "新名",
-        },
-        {
-            action: "referenced",
-            nodeId: "image",
-            title: "参考图",
-            nodeType: "image",
-            targetNodeId: "video",
-            targetTitle: "目标视频",
-            targetNodeType: "video",
-        },
-    ] }));
-    expect(agentCanvasActions("canvas_apply_ops", detail).map(agentCanvasActionLabel)).toEqual([
-        "更新了视频节点《旧名》（修改：节点名称、下一版提示词），名称改为《新名》",
-        "建立引用：图片节点《参考图》 → 视频节点《目标视频》",
-    ]);
+    const detail = JSON.parse(
+        JSON.stringify({
+            actions: [
+                {
+                    action: "updated",
+                    nodeId: "video",
+                    title: "旧名",
+                    nodeType: "video",
+                    fields: ["节点名称", "下一版提示词"],
+                    resultTitle: "新名",
+                },
+                {
+                    action: "referenced",
+                    nodeId: "image",
+                    title: "参考图",
+                    nodeType: "image",
+                    targetNodeId: "video",
+                    targetTitle: "目标视频",
+                    targetNodeType: "video",
+                },
+            ],
+        }),
+    );
+    expect(agentCanvasActions("canvas_apply_ops", detail).map(agentCanvasActionLabel)).toEqual(["更新了视频节点《旧名》（修改：节点名称、下一版提示词），名称改为《新名》", "建立引用：图片节点《参考图》 → 视频节点《目标视频》"]);
 });
 
 test("legacy generation failures retain node name and never claim creation or reference success", () => {
