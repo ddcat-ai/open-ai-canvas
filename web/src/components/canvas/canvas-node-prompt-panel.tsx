@@ -76,7 +76,7 @@ type CanvasNodePromptPanelProps = {
     onConfigChange: (nodeId: string, patch: Partial<CanvasNodeMetadata>) => void;
     onGenerate: (nodeId: string, mode: CanvasNodeGenerationMode, prompt: string) => void;
     mentionReferences?: CanvasResourceReference[];
-    onAddReference?: (nodeId: string, reference: CanvasResourceReference) => CanvasResourceReference | undefined;
+    onAddReference?: (nodeId: string, reference: CanvasResourceReference) => CanvasResourceReference | undefined | Promise<CanvasResourceReference | undefined>;
     onRemoveReference?: (nodeId: string, reference: CanvasResourceReference) => void;
     onReorderReferences?: (nodeId: string, orderedNodeIds: string[]) => void;
     onReplaceReference?: (nodeId: string, oldReference: CanvasResourceReference, sourceNodeId: string) => void;
