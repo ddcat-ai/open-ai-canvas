@@ -61,7 +61,7 @@ const build = await Bun.build({
 expect(build.success).toBe(true);
 const source = await build.outputs[0].text();
 
-function harness() {
+function harness(minRight = 0) {
     const cells = [];
     let cursor = 0;
     let opens = 0;
@@ -95,7 +95,7 @@ function harness() {
     runInNewContext(source, { module, exports: module.exports, hooks, window, localStorage: { getItem: (key) => stored.get(key) ?? null, setItem: (key, value) => stored.set(key, value) }, console });
     const render = () => {
         cursor = 0;
-        return module.exports.useAgentLauncherPosition(() => opens++);
+        return module.exports.useAgentLauncherPosition(() => opens++, 76, 76, true, minRight);
     };
     let current = render();
     let captured = null;
@@ -118,6 +118,10 @@ function harness() {
             window.innerWidth = width;
             window.innerHeight = height;
             listeners.get("resize")();
+            current = render();
+        },
+        setMinRight(next) {
+            minRight = next;
             current = render();
         },
         get state() {
@@ -187,4 +191,24 @@ test("production handlers support keyboard movement and viewport resizing", () =
     expect(h.state.position).toEqual({ right: 12, bottom: 12 });
     h.fire("onClick", { detail: 0 });
     expect(h.opens).toBe(1);
+});
+
+test("the scrollbar clearance moves only the shown position until the launcher is dragged", () => {
+    const h = harness(44);
+    expect(h.state.position).toEqual({ right: 44, bottom: 20 });
+    h.fire("onPointerDown");
+    h.fire("onPointerUp");
+    h.fire("onClick");
+    expect(h.opens).toBe(1);
+    expect(h.saved).toEqual([]);
+    h.setMinRight(0);
+    expect(h.state.position).toEqual(start);
+    h.setMinRight(44);
+    h.fire("onPointerDown");
+    h.fire("onPointerMove", { clientX: 480 });
+    h.fire("onPointerUp", { clientX: 480 });
+    expect(h.state.position).toEqual({ right: 64, bottom: 20 });
+    expect(h.saved).toEqual([{ right: 64, bottom: 20 }]);
+    h.resize(110, 300);
+    expect(h.state.position).toEqual({ right: 17, bottom: 20 });
 });
