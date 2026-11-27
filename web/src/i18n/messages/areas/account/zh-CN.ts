@@ -271,8 +271,8 @@ export const zhCN = {
             kinds: {
                 credits: {
                     description: "用于模型生成、Agent 与工具调用，按实际用量扣减。",
-                    group: "积分套餐",
-                    empty: "暂未上架积分套餐",
+                    group: "加油包套餐",
+                    empty: "暂未上架加油包套餐",
                 },
                 storage: {
                     description: "扩充素材文件与 Agent 会话附件的总容量，支付后立即生效。",
