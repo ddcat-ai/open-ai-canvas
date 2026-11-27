@@ -266,8 +266,12 @@ function CharacterStudio({
     };
 
     return (
-        <div className="grid h-[min(760px,calc(100dvh-48px))] min-h-0 grid-rows-[minmax(260px,40vh)_minmax(0,1fr)] overflow-hidden bg-background text-foreground md:grid-cols-[minmax(0,1fr)_minmax(420px,1.05fr)] md:grid-rows-1">
-            <CharacterStage name={drafts.name.trim() || name} role={drafts.role.trim()} cover={cover} hasCover={Boolean(coverResourceId)} voiceName={voiceName} voiceSampleId={voiceSampleId} version={detail?.character.version} />
+        <div
+            className={`grid h-[min(760px,calc(100dvh-48px))] min-h-0 overflow-hidden bg-background text-foreground ${tab === "dressing" ? "grid-cols-1 grid-rows-1" : "grid-rows-[minmax(260px,40vh)_minmax(0,1fr)] md:grid-cols-[minmax(0,1fr)_minmax(420px,1.05fr)] md:grid-rows-1"}`}
+        >
+            {tab !== "dressing" ? (
+                <CharacterStage name={drafts.name.trim() || name} role={drafts.role.trim()} cover={cover} hasCover={Boolean(coverResourceId)} voiceName={voiceName} voiceSampleId={voiceSampleId} version={detail?.character.version} />
+            ) : null}
             <section className="flex min-h-0 flex-col">
                 <CharacterTabs value={tab} onChange={setTab} />
                 <div ref={tabPanelRef} id={`character-tab-panel-${tab}`} role="tabpanel" aria-labelledby={`character-tab-${tab}`} className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-7 pb-8 pt-6">
@@ -282,6 +286,7 @@ function CharacterStudio({
                                     queryClient.setQueryData(["character-studio", assetId], next);
                                     void queryClient.invalidateQueries({ queryKey: ["characters"] });
                                     setSelectedOutfitId(outfitId);
+                                    setTab("visual");
                                     onUpdated?.(next, outfitId);
                                 }}
                             />

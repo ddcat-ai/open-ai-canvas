@@ -140,7 +140,7 @@ export async function uploadDressingAsset(file: File, category: DressingCategory
     return (await getRemoteAsset(asset.id)).asset;
 }
 
-export async function saveCharacterDressing(task: GenerationTask, resourceId: string, name: string, expectedVersionId: string) {
+export async function saveCharacterDressing(task: GenerationTask, resourceId: string, name: string) {
     const snapshot = dressingSnapshot(task);
     if (!snapshot || !dressingImages(task).some((image) => image.resourceId === resourceId)) throw new Error("生成结果尚未就绪或不属于本次任务");
     if (!name.trim()) throw new Error("请为新形象命名");
@@ -155,6 +155,7 @@ export async function saveCharacterDressing(task: GenerationTask, resourceId: st
     const clothing = snapshot.references?.find((item) => item.category === "clothing")?.title;
     const next: CharacterOutfit = { id: outfitId, name: name.trim(), resourceId, ...(clothing ? { clothing } : {}), source: { taskId: task.id, resourceId, snapshot } };
     const payload = buildCharacterOutfitPersistence(detail.character.definition, [...outfits, next], outfitId, detail.character.representations);
-    const saved = await replaceCharacterRepresentations(detail.asset.id, payload.representations, payload.definition, { expectedVersionId, operationId: `dressing:${task.id}:${outfitId}` });
+    // 合并内容与并发版本必须来自同一次读取；生成期间角色可能已在其他页面更新。
+    const saved = await replaceCharacterRepresentations(detail.asset.id, payload.representations, payload.definition, { expectedVersionId: detail.character.versionId, operationId: `dressing:${task.id}:${outfitId}` });
     return { detail: saved, outfitId };
 }

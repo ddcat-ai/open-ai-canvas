@@ -1,0 +1,344 @@
+.character-dressing {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 28px;
+}
+
+.character-dressing__studio {
+    position: sticky;
+    top: 0;
+    padding: 20px 16px 12px;
+    border: 1px solid var(--workspace-border);
+    border-radius: var(--card-radius);
+    background: var(--muted);
+}
+
+.character-dressing__heading,
+.character-dressing__section-heading,
+.character-dressing__studio-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.character-dressing h3 {
+    margin: 0;
+    font-size: var(--fs-body);
+    font-weight: 600;
+}
+
+.character-dressing__heading p,
+.character-dressing__save p {
+    margin: 6px 0 0;
+    font-size: var(--fs-caption);
+    line-height: 1.6;
+    color: var(--muted-foreground);
+}
+
+.character-dressing__count {
+    flex-shrink: 0;
+    font-size: var(--fs-label);
+    color: var(--muted-foreground);
+}
+
+.character-dressing__orbit {
+    position: relative;
+    display: grid;
+    grid-template-columns: 90px minmax(0, 1fr) 90px;
+    grid-template-rows: repeat(3, 1fr);
+    align-items: center;
+    justify-items: center;
+    gap: 8px;
+    min-height: 450px;
+    padding: 20px 0 50px;
+}
+
+.character-dressing__portrait {
+    grid-area: 1 / 2 / 4 / 3;
+    width: 100%;
+    height: 292px;
+    overflow: hidden;
+    border-radius: var(--card-radius);
+    background: var(--workspace-surface);
+    border: 1px solid var(--workspace-border);
+}
+
+.character-dressing__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    height: 100%;
+    text-align: center;
+    font-size: var(--fs-caption);
+    color: var(--muted-foreground);
+}
+
+.character-dressing__base {
+    position: absolute;
+    bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    width: 100%;
+    font-size: var(--fs-caption);
+}
+
+.character-dressing__base span {
+    color: var(--muted-foreground);
+    font-size: var(--fs-label);
+}
+
+.character-dressing__base strong {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.character-dressing__reference {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 0;
+    width: 100%;
+    gap: 3px;
+}
+
+.character-dressing__reference--clothing {
+    grid-area: 1 / 1;
+}
+.character-dressing__reference--expression {
+    grid-area: 1 / 3;
+}
+.character-dressing__reference--pose {
+    grid-area: 2 / 1;
+}
+.character-dressing__reference--accessory {
+    grid-area: 2 / 3;
+}
+.character-dressing__reference--hairstyle {
+    grid-area: 3 / 1;
+}
+.character-dressing__reference--facial_features {
+    grid-area: 3 / 3;
+}
+
+.character-dressing__slot {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 1px dashed var(--workspace-border-strong);
+    color: var(--muted-foreground);
+    background: var(--workspace-surface);
+    cursor: pointer;
+    transition:
+        border-color 160ms,
+        background 160ms;
+}
+
+.character-dressing__slot:hover,
+.character-dressing__slot.is-filled {
+    color: var(--foreground);
+    border: 1px solid var(--workspace-accent);
+}
+
+.character-dressing__add {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    background: var(--workspace-surface);
+    border-radius: 50%;
+}
+
+.character-dressing__category {
+    font-size: var(--fs-caption);
+    font-weight: 500;
+}
+.character-dressing__reference-title {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--fs-label);
+    color: var(--muted-foreground);
+}
+
+.character-dressing__reference-actions {
+    display: flex;
+    position: absolute;
+    bottom: -25px;
+    gap: 4px;
+}
+
+.character-dressing__studio-footer {
+    border-top: 1px solid var(--workspace-border);
+    padding-top: 10px;
+    font-size: var(--fs-label);
+    color: var(--muted-foreground);
+}
+
+.character-dressing__controls,
+.character-dressing__composer,
+.character-dressing__result {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+.character-dressing__section-heading h3 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.character-dressing__section-heading > span {
+    font-size: var(--fs-label);
+    color: var(--muted-foreground);
+}
+.character-dressing__history {
+    border-top: 1px solid var(--workspace-border);
+    padding-top: 16px;
+}
+.character-dressing__history-list {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 10px 2px 6px;
+}
+.character-dressing__history-item {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    gap: 8px;
+    padding: 6px 10px 6px 6px;
+    border: 1px solid var(--workspace-border);
+    border-radius: var(--control-radius);
+    background: var(--workspace-surface);
+    text-align: left;
+    cursor: pointer;
+}
+.character-dressing__history-item > span {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.character-dressing__history-item > .cached-resource-image-shell {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+}
+
+.character-dressing__portrait > .cached-resource-image-shell,
+.character-dressing__result-image > .cached-resource-image-shell {
+    min-width: 0;
+    min-height: 0;
+}
+.character-dressing__history-item strong {
+    font-size: var(--fs-caption);
+    font-weight: 500;
+}
+.character-dressing__history-item time {
+    font-size: var(--fs-label);
+    color: var(--muted-foreground);
+}
+.character-dressing__history-item[aria-pressed="true"] {
+    border-color: var(--workspace-accent);
+    background: var(--muted);
+}
+.character-dressing__result {
+    padding: 16px;
+    border: 1px solid var(--workspace-border);
+    border-radius: var(--card-radius);
+}
+.character-dressing__results {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 8px;
+}
+.character-dressing__result-image {
+    position: relative;
+    height: 200px;
+    padding: 4px;
+    border: 1px solid var(--workspace-border);
+    border-radius: var(--control-radius);
+    background: var(--muted);
+    cursor: pointer;
+    overflow: hidden;
+}
+.character-dressing__result-image[aria-pressed="true"] {
+    border-color: var(--workspace-accent);
+}
+.character-dressing__selected {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 6px;
+    border-radius: var(--control-radius);
+    background: var(--workspace-surface);
+    font-size: var(--fs-label);
+}
+.character-dressing__save label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: var(--fs-caption);
+    font-weight: 500;
+}
+.character-dressing__save > div {
+    display: flex;
+    gap: 8px;
+}
+.character-dressing__save .ant-input {
+    min-width: 0;
+}
+.character-dressing button:focus-visible {
+    outline: 2px solid var(--workspace-accent);
+    outline-offset: 3px;
+}
+
+@media (max-width: 767px) {
+    .character-dressing {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 20px;
+    }
+    .character-dressing__studio {
+        position: static;
+        padding: 16px 10px 10px;
+    }
+    .character-dressing__orbit {
+        grid-template-columns: 66px minmax(0, 1fr) 66px;
+        gap: 6px;
+    }
+    .character-dressing__slot {
+        width: 56px;
+        height: 56px;
+    }
+    .character-dressing__portrait {
+        height: 270px;
+    }
+    .character-dressing__heading {
+        align-items: flex-start;
+    }
+    .character-dressing__count {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .character-dressing__slot {
+        transition: none;
+    }
+}
