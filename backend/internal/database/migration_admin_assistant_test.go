@@ -28,6 +28,14 @@ func TestAssistantMigrationSQLite(t *testing.T) {
 	if err = RequireSchemaVersion(db); err != nil {
 		t.Fatal(err)
 	}
+	// 上游已发布的兑换迁移身份不可被 MCP 接入占用或改写。
+	var upstreamRecord schemaMigration
+	if err := db.First(&upstreamRecord, "version = ?", 111).Error; err != nil {
+		t.Fatal(err)
+	}
+	if upstreamRecord.Name != "redeem_batch_limits_and_capability_pools" || upstreamRecord.Checksum != "sha256:redeem-batch-limits-and-capability-pools-v111-20261125" {
+		t.Fatalf("upstream migration identity changed: %+v", upstreamRecord)
+	}
 	for _, entity := range []any{&model.AssistantCredential{}, &model.AssistantOAuthClient{}, &model.AssistantOAuthCode{}, &model.AssistantGrant{}, &model.AssistantRefreshUse{}, &model.AssistantInvocation{}, &model.AssistantAttachment{}} {
 		if !db.Migrator().HasTable(entity) {
 			t.Errorf("missing table for %T", entity)
