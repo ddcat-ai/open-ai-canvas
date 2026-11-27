@@ -78,8 +78,11 @@ func RegisterCanvasShareRoutes(r *gin.RouterGroup, svc *service.Service) {
 			return
 		}
 		opts := resourceAccessOptions(c)
-		delivery, err := svc.PrepareSharedCanvasResourceDelivery(c.Param("token"), c.Param("resourceId"), opts, c.GetHeader("Range"))
+		delivery, err := svc.PrepareSharedCanvasResourceDelivery(c.Request.Context(), c.Param("token"), c.Param("resourceId"), opts, c.GetHeader("Range"))
 		if err != nil {
+			if c.Request.Context().Err() != nil {
+				return
+			}
 			fail(c, http.StatusNotFound, errors.New("分享资源不存在"))
 			return
 		}

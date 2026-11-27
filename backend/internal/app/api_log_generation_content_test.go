@@ -136,11 +136,11 @@ func TestGenerationSnapshotSurvivesPollCompactionAndRetry(t *testing.T) {
 		t.Fatalf("detail=%#v content=%#v", detail, detail.GenerationContent)
 	}
 	for _, actor := range []*model.User{nil, {Role: model.UserRoleUser}} {
-		if _, err := s.PrepareAdminAPICallLogReferenceDelivery(actor, root.ID, detail.GenerationContent.References[0].ID, ""); err == nil {
+		if _, err := s.PrepareAdminAPICallLogReferenceDelivery(context.Background(), actor, root.ID, detail.GenerationContent.References[0].ID, ""); err == nil {
 			t.Fatal("non-admin media allowed")
 		}
 	}
-	delivery, err := s.PrepareAdminAPICallLogReferenceDelivery(&model.User{Role: model.UserRoleAdmin}, root.ID, detail.GenerationContent.References[0].ID, "")
+	delivery, err := s.PrepareAdminAPICallLogReferenceDelivery(context.Background(), &model.User{Role: model.UserRoleAdmin}, root.ID, detail.GenerationContent.References[0].ID, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,13 +149,13 @@ func TestGenerationSnapshotSurvivesPollCompactionAndRetry(t *testing.T) {
 	if string(body) != "0123456789" || delivery.Access.URL != "" {
 		t.Fatalf("delivery=%#v body=%s", delivery.Access, body)
 	}
-	if _, err := s.PrepareAdminAPICallLogReferenceDelivery(&model.User{Role: model.UserRoleAdmin}, root.ID, "original", ""); err == nil {
+	if _, err := s.PrepareAdminAPICallLogReferenceDelivery(context.Background(), &model.User{Role: model.UserRoleAdmin}, root.ID, "original", ""); err == nil {
 		t.Fatal("resource ID accepted as reference ID")
 	}
 	if err := db.Model(&task).Update("user_id", "foreign").Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.PrepareAdminAPICallLogReferenceDelivery(&model.User{Role: model.UserRoleAdmin}, root.ID, detail.GenerationContent.References[0].ID, ""); err == nil {
+	if _, err := s.PrepareAdminAPICallLogReferenceDelivery(context.Background(), &model.User{Role: model.UserRoleAdmin}, root.ID, detail.GenerationContent.References[0].ID, ""); err == nil {
 		t.Fatal("foreign task chain allowed")
 	}
 }

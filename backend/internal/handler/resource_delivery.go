@@ -51,6 +51,13 @@ func resourceAccessOptions(c *gin.Context) service.ResourceAccessOptions {
 	}
 }
 
+func failResourceDelivery(c *gin.Context, err error) {
+	if c.Request.Context().Err() != nil {
+		return
+	}
+	failService(c, err)
+}
+
 // serveResourceDelivery is the only HTTP byte/redirect executor. Authorization and
 // delivery selection happen in app; this function only applies the already-resolved
 // contract to an HTTP response.

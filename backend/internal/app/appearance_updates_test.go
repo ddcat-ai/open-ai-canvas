@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -106,10 +107,10 @@ func TestUpdateAnnouncementMediaOwnershipPublicationAndDeletionProtection(t *tes
 	}
 	setting.Updates.Releases[0].Blocks[1].ResourceID = "update-image"
 	setting.Updates.Releases[0].Blocks = append(setting.Updates.Releases[0].Blocks, UpdateBlock{ID: "video-1", Type: "video", ResourceID: "update-video", Layout: "half"})
-	if _, err := svc.PrepareUpdateAnnouncementDelivery(nil, "update-image", ResourceAccessOptions{}, ""); err == nil {
+	if _, err := svc.PrepareUpdateAnnouncementDelivery(context.Background(), nil, "update-image", ResourceAccessOptions{}, ""); err == nil {
 		t.Fatal("unpublished media was public")
 	}
-	if _, err := svc.PrepareUpdateAnnouncementDelivery(admin, "other-image", ResourceAccessOptions{}, ""); err == nil {
+	if _, err := svc.PrepareUpdateAnnouncementDelivery(context.Background(), admin, "other-image", ResourceAccessOptions{}, ""); err == nil {
 		t.Fatal("other admin draft was previewable")
 	}
 	saved, err := svc.UpdateAppearance(admin, setting)
@@ -128,7 +129,7 @@ func TestUpdateAnnouncementMediaOwnershipPublicationAndDeletionProtection(t *tes
 		t.Fatal("announcement resources not protected")
 	}
 	for _, id := range []string{"update-image", "update-video"} {
-		delivery, err := svc.PrepareUpdateAnnouncementDelivery(nil, id, ResourceAccessOptions{}, "")
+		delivery, err := svc.PrepareUpdateAnnouncementDelivery(context.Background(), nil, id, ResourceAccessOptions{}, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -136,7 +137,7 @@ func TestUpdateAnnouncementMediaOwnershipPublicationAndDeletionProtection(t *tes
 			delivery.Stream.Body.Close()
 		}
 	}
-	ranged, err := svc.PrepareUpdateAnnouncementDelivery(nil, "update-video", ResourceAccessOptions{}, "bytes=0-3")
+	ranged, err := svc.PrepareUpdateAnnouncementDelivery(context.Background(), nil, "update-video", ResourceAccessOptions{}, "bytes=0-3")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +150,7 @@ func TestUpdateAnnouncementMediaOwnershipPublicationAndDeletionProtection(t *tes
 	if _, err := svc.UpdateAppearance(admin, setting); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.PrepareUpdateAnnouncementDelivery(nil, "update-image", ResourceAccessOptions{}, ""); err == nil {
+	if _, err := svc.PrepareUpdateAnnouncementDelivery(context.Background(), nil, "update-image", ResourceAccessOptions{}, ""); err == nil {
 		t.Fatal("disabled media remains public")
 	}
 	if len(svc.appearanceResourceReferences([]string{"update-image"})["update-image"]) == 0 {

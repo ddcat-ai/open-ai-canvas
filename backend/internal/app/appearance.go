@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -354,10 +355,10 @@ func (s *Service) OpenAppearanceAsset(slot string, rangeHeader string) (*Resourc
 	if err := validateAppearanceResourceType(slot, resource); err != nil {
 		return nil, err
 	}
-	return s.openResourceRange(resource.UserID, resource, rangeHeader)
+	return s.openResourceRange(context.Background(), resource.UserID, resource, rangeHeader)
 }
 
-func (s *Service) PrepareAppearanceAssetDelivery(slot string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
+func (s *Service) PrepareAppearanceAssetDelivery(ctx context.Context, slot string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
 	_, value, err := s.readAppearance()
 	if err != nil {
 		return nil, err
@@ -366,7 +367,7 @@ func (s *Service) PrepareAppearanceAssetDelivery(slot string, options ResourceAc
 	if resourceID == "" {
 		return nil, NotFound("未配置该外观资源")
 	}
-	resource, err := s.repo.Resource(resourceID)
+	resource, err := s.repo.WithContext(ctx).Resource(resourceID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, NotFound("外观资源不存在")
@@ -379,7 +380,7 @@ func (s *Service) PrepareAppearanceAssetDelivery(slot string, options ResourceAc
 	if options.Purpose == "" {
 		options.Purpose = assets.PurposeDisplay
 	}
-	return s.prepareResourceDelivery(resource.UserID, resource, options, rangeHeader)
+	return s.prepareResourceDelivery(ctx, resource.UserID, resource, options, rangeHeader)
 }
 
 func (s *Service) appearanceResourceReferences(resourceIDs []string) map[string][]AdminResourceReferenceView {

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/url"
@@ -87,7 +88,7 @@ func TestBoundS3ResourcesUseCurrentCDNPolicyFromTheirScope(t *testing.T) {
 			}
 			for _, purpose := range []assets.AccessPurpose{assets.PurposeDisplay, assets.PurposeCopy, assets.PurposeProcess, assets.PurposeDownload} {
 				t.Run(string(purpose), func(t *testing.T) {
-					delivery, err := svc.PrepareResourceDelivery(actor.ID, resource.ID, ResourceAccessOptions{Purpose: purpose, DownloadName: "reference.png"}, "")
+					delivery, err := svc.PrepareResourceDelivery(context.Background(), actor.ID, resource.ID, ResourceAccessOptions{Purpose: purpose, DownloadName: "reference.png"}, "")
 					if err != nil {
 						t.Fatal(err)
 					}

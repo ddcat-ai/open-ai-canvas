@@ -34,7 +34,7 @@ var (
 	getAliyunOSSObjectRange     = storage.GetAliyunOSSObjectRange
 	signedOSSObjectURL          = storage.SignedOSSObjectURL
 	signedOriginObjectURL       = storage.SignedOriginObjectURL
-	getOriginOSSObjectRange     = storage.GetOriginObjectRange
+	getOriginOSSObjectRange     = storage.GetOriginObjectRangeContext
 	signedAliyunOSSObjectURL    = storage.SignedAliyunOSSObjectURL
 	putCOSObject                = storage.PutCOSObject
 	putQiniuObject              = storage.PutQiniuObject

@@ -38,9 +38,9 @@ func registerAdminAPILogRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		delivery, err := svc.PrepareAdminAPICallLogMediaDelivery(user, c.Param("id"), resourceAccessOptions(c), c.GetHeader("Range"))
+		delivery, err := svc.PrepareAdminAPICallLogMediaDelivery(c.Request.Context(), user, c.Param("id"), resourceAccessOptions(c), c.GetHeader("Range"))
 		if err != nil {
-			failService(c, err)
+			failResourceDelivery(c, err)
 			return
 		}
 		var disposition string
@@ -67,9 +67,9 @@ func registerAdminAPILogRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, service.BadAuthRequest("原始媒体接口不接受查询参数"))
 			return
 		}
-		delivery, err := svc.PrepareAdminAPICallLogReferenceDelivery(user, c.Param("id"), c.Param("refId"), c.GetHeader("Range"))
+		delivery, err := svc.PrepareAdminAPICallLogReferenceDelivery(c.Request.Context(), user, c.Param("id"), c.Param("refId"), c.GetHeader("Range"))
 		if err != nil {
-			failService(c, err)
+			failResourceDelivery(c, err)
 			return
 		}
 		serveResourceDelivery(c, delivery, "private, no-store", "")

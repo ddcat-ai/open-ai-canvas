@@ -224,9 +224,9 @@ func RegisterArkPortraitRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		delivery, err := svc.PrepareArkPortraitAssetDelivery(user, c.Param("id"), resourceAccessOptions(c), c.GetHeader("Range"))
+		delivery, err := svc.PrepareArkPortraitAssetDelivery(c.Request.Context(), user, c.Param("id"), resourceAccessOptions(c), c.GetHeader("Range"))
 		if err != nil {
-			failService(c, err)
+			failResourceDelivery(c, err)
 			return
 		}
 		serveResourceDelivery(c, delivery, "private, no-cache", "")

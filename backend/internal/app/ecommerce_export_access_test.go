@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -54,7 +55,7 @@ func TestEcommerceProcessingReadsOwnedOriginBytesWithoutCDNRedirect(t *testing.T
 	originalGet := getOriginOSSObjectRange
 	t.Cleanup(func() { getOriginOSSObjectRange = originalGet })
 	reads := 0
-	getOriginOSSObjectRange = func(actual storage.Settings, key, _ string) (*storage.ObjectStream, error) {
+	getOriginOSSObjectRange = func(_ context.Context, actual storage.Settings, key, _ string) (*storage.ObjectStream, error) {
 		reads++
 		if actual.Endpoint != setting.Endpoint || actual.Bucket != setting.Bucket || key != resource.ObjectKey {
 			t.Fatal("processing did not retain the resource's actual storage identity")
@@ -63,18 +64,18 @@ func TestEcommerceProcessingReadsOwnedOriginBytesWithoutCDNRedirect(t *testing.T
 	}
 	options := ResourceAccessOptions{Purpose: assets.PurposeEcommerceExport}
 	for _, user := range []string{"", "other-owner"} {
-		if _, err := svc.PrepareResourceDelivery(user, resource.ID, options, ""); err == nil {
+		if _, err := svc.PrepareResourceDelivery(context.Background(), user, resource.ID, options, ""); err == nil {
 			t.Fatalf("processing accepted unowned resource for %q", user)
 		}
 	}
 	if reads != 0 {
 		t.Fatal("authorization refusal read origin bytes")
 	}
-	display, err := svc.PrepareResourceDelivery("owner", resource.ID, ResourceAccessOptions{Purpose: assets.PurposeDisplay}, "")
+	display, err := svc.PrepareResourceDelivery(context.Background(), "owner", resource.ID, ResourceAccessOptions{Purpose: assets.PurposeDisplay}, "")
 	if err != nil || display.Access.Delivery != assets.DeliveryCDN || display.Stream != nil || reads != 0 {
 		t.Fatalf("display policy changed: %#v, %v", display, err)
 	}
-	delivery, err := svc.PrepareResourceDelivery("owner", resource.ID, options, "")
+	delivery, err := svc.PrepareResourceDelivery(context.Background(), "owner", resource.ID, options, "")
 	if err != nil {
 		t.Fatal(err)
 	}

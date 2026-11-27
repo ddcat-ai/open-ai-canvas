@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"time"
@@ -131,14 +132,14 @@ func (s *Service) OpenResourceRangeAsAdmin(actor *model.User, id string, rangeHe
 		return nil, err
 	}
 	resource.Provider = normalizedResourceProvider(resource.Provider)
-	return s.openResourceRange(resource.UserID, resource, rangeHeader)
+	return s.openResourceRange(context.Background(), resource.UserID, resource, rangeHeader)
 }
 
-func (s *Service) PrepareResourceDeliveryAsAdmin(actor *model.User, id string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
+func (s *Service) PrepareResourceDeliveryAsAdmin(ctx context.Context, actor *model.User, id string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
-	resource, err := s.repo.Resource(strings.TrimSpace(id))
+	resource, err := s.repo.WithContext(ctx).Resource(strings.TrimSpace(id))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, NotFound("资源不存在")
@@ -149,7 +150,7 @@ func (s *Service) PrepareResourceDeliveryAsAdmin(actor *model.User, id string, o
 	if options.Purpose == "" {
 		options.Purpose = assets.PurposeDisplay
 	}
-	return s.prepareResourceDelivery(resource.UserID, resource, options, rangeHeader)
+	return s.prepareResourceDelivery(ctx, resource.UserID, resource, options, rangeHeader)
 }
 
 func normalizeAdminResourceQuery(query AdminResourceQuery) (repository.AdminResourceFilter, int, int, error) {

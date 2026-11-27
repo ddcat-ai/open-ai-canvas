@@ -458,12 +458,12 @@ func (s *Service) AddArkPortraitAssetToLibrary(actor *model.User, id string) (st
 
 // PrepareArkPortraitAssetDelivery 返回方舟素材的预览文件。素材上传者、授权用户和管理员可以查看，
 // 文件仍按上传者的资源与存储配置读取。
-func (s *Service) PrepareArkPortraitAssetDelivery(actor *model.User, id string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
+func (s *Service) PrepareArkPortraitAssetDelivery(ctx context.Context, actor *model.User, id string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
 	asset, _, err := s.arkViewableAsset(actor, id)
 	if err != nil {
 		return nil, err
 	}
-	resource, err := s.repo.ResourceForUser(asset.UserID, asset.ResourceID)
+	resource, err := s.repo.WithContext(ctx).ResourceForUser(asset.UserID, asset.ResourceID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, NotFound("素材文件已删除")
 	}
@@ -475,7 +475,7 @@ func (s *Service) PrepareArkPortraitAssetDelivery(actor *model.User, id string, 
 	if err != nil {
 		return nil, err
 	}
-	return s.prepareResourceDelivery(resource.UserID, resource, options, rangeHeader)
+	return s.prepareResourceDelivery(ctx, resource.UserID, resource, options, rangeHeader)
 }
 
 func (s *Service) arkUserGroupForUser(userID, id string) (*model.ArkPortraitGroup, error) {

@@ -201,7 +201,7 @@ func TestMeasureCompleteAudioOrigin(t *testing.T) {
 	tag := "original"
 	body := data
 	calls := 0
-	getOriginOSSObjectRange = func(actual storage.Settings, key, rng string) (*storage.ObjectStream, error) {
+	getOriginOSSObjectRange = func(_ context.Context, actual storage.Settings, key, rng string) (*storage.ObjectStream, error) {
 		calls++
 		if actual.Bucket != res.Bucket || key != res.ObjectKey || rng != "" {
 			t.Fatal(key, rng)
@@ -225,7 +225,7 @@ func TestMeasureCompleteAudioOrigin(t *testing.T) {
 	if _, _, err := svc.measuredAudioOutput(task); err == nil {
 		t.Fatal("accepted partial body")
 	}
-	getOriginOSSObjectRange = func(storage.Settings, string, string) (*storage.ObjectStream, error) {
+	getOriginOSSObjectRange = func(context.Context, storage.Settings, string, string) (*storage.ObjectStream, error) {
 		return nil, errors.New("synthetic storage outage")
 	}
 	_, _, err = svc.measuredAudioOutput(task)

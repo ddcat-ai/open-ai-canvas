@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -47,7 +48,7 @@ func TestPersonalCharacterRetainsOfficialResourcesAfterUnpublish(t *testing.T) {
 			t.Fatalf("other %s: %v", id, err)
 		}
 	}
-	delivery, err := svc.PrepareResourceDelivery("user", "shared-audio", ResourceAccessOptions{Purpose: assets.PurposeDisplay}, "")
+	delivery, err := svc.PrepareResourceDelivery(context.Background(), "user", "shared-audio", ResourceAccessOptions{Purpose: assets.PurposeDisplay}, "")
 	if err != nil || delivery.Stream == nil {
 		t.Fatalf("delivery: %+v, %v", delivery, err)
 	}

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"net/url"
 	"strconv"
@@ -97,27 +98,30 @@ func (s *Service) resolveResourceAccess(resource *model.Resource, options Resour
 	})
 }
 
-func (s *Service) PrepareResourceDelivery(userID, id string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
+func (s *Service) PrepareResourceDelivery(ctx context.Context, userID, id string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
 	options, err := assets.NormalizeAccessOptions(options, false)
 	if err != nil {
 		return nil, err
 	}
-	resource, err := s.resourceForUserOrOfficial(userID, id)
+	resource, err := s.resourceForUserOrOfficialContext(ctx, userID, id)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, NotFound("资源不存在或不可访问")
 	}
 	if err != nil {
 		return nil, err
 	}
-	return s.prepareResourceDelivery(userID, resource, options, rangeHeader)
+	return s.prepareResourceDelivery(ctx, userID, resource, options, rangeHeader)
 }
 
-func (s *Service) prepareResourceDelivery(userID string, resource *model.Resource, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
+func (s *Service) prepareResourceDelivery(ctx context.Context, userID string, resource *model.Resource, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if resource == nil {
 		return nil, Forbidden("资源不可访问")
 	}
 	if resource.UserID != userID {
-		_, err := s.resourceForUserOrOfficial(userID, resource.ID)
+		_, err := s.resourceForUserOrOfficialContext(ctx, userID, resource.ID)
 		if err != nil {
 			return nil, Forbidden("资源不可访问")
 		}
@@ -131,9 +135,9 @@ func (s *Service) prepareResourceDelivery(userID string, resource *model.Resourc
 		return delivery, nil
 	}
 	if access.ActualVariant == assets.VariantPlayback {
-		delivery.Stream, err = s.OpenResourcePlaybackRange(userID, resource.ID)
+		delivery.Stream, err = s.openResourcePlaybackRange(ctx, userID, resource.ID)
 	} else {
-		delivery.Stream, err = s.openResourceRange(userID, resource, rangeHeader)
+		delivery.Stream, err = s.openResourceRange(ctx, userID, resource, rangeHeader)
 	}
 	if err != nil {
 		return nil, err
@@ -146,32 +150,37 @@ func (s *Service) prepareResourceDelivery(userID string, resource *model.Resourc
 // resource behind a published official asset. Official references deliberately
 // do not create per-user asset rows.
 func (s *Service) resourceForUserOrOfficial(userID, resourceID string) (*model.Resource, error) {
-	resource, err := s.repo.ResourceForUser(userID, resourceID)
+	return s.resourceForUserOrOfficialContext(context.Background(), userID, resourceID)
+}
+
+func (s *Service) resourceForUserOrOfficialContext(ctx context.Context, userID, resourceID string) (*model.Resource, error) {
+	repo := s.repo.WithContext(ctx)
+	resource, err := repo.ResourceForUser(userID, resourceID)
 	if err == nil || !errors.Is(err, gorm.ErrRecordNotFound) {
 		return resource, err
 	}
-	published, checkErr := s.repo.PublishedOfficialResource(resourceID)
+	published, checkErr := repo.PublishedOfficialResource(resourceID)
 	if checkErr != nil {
 		return nil, checkErr
 	}
 	if published {
-		return s.repo.Resource(resourceID)
+		return repo.Resource(resourceID)
 	}
-	official, officialErr := s.repo.OfficialAssetByResourceID(resourceID)
+	official, officialErr := repo.OfficialAssetByResourceID(resourceID)
 	if officialErr != nil {
 		return nil, err
 	}
 	allowed := official.Status == model.OfficialAssetStatusPublished
 	if !allowed {
-		allowed, officialErr = s.repo.OfficialAssetImportedByUser(official.ID, userID)
+		allowed, officialErr = repo.OfficialAssetImportedByUser(official.ID, userID)
 	}
 	if officialErr == nil && !allowed {
-		allowed, officialErr = s.repo.RetainedOfficialResourceByUser(userID, resourceID)
+		allowed, officialErr = repo.RetainedOfficialResourceByUser(userID, resourceID)
 	}
 	if officialErr != nil || !allowed {
 		return nil, gorm.ErrRecordNotFound
 	}
-	return s.repo.Resource(resourceID)
+	return repo.Resource(resourceID)
 }
 
 func (s *Service) signedResourceAccessURL(resource *model.Resource, variant assets.ResourceVariant, expires time.Time, public bool) (string, error) {
@@ -196,7 +205,7 @@ func (s *Service) signedResourceAccessURL(resource *model.Resource, variant asse
 	return base.ResolveReference(u).String(), nil
 }
 
-func (s *Service) PreparePublicResourceDelivery(id, expires, signature string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
+func (s *Service) PreparePublicResourceDelivery(ctx context.Context, id, expires, signature string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
 	options, err := assets.NormalizeAccessOptions(options, false)
 	if err != nil {
 		return nil, err
@@ -204,7 +213,7 @@ func (s *Service) PreparePublicResourceDelivery(id, expires, signature string, o
 	if err := s.verifyPublicResourceSignature(id+"\n"+string(options.Variant), expires, signature); err != nil {
 		return nil, err
 	}
-	resource, err := s.repo.Resource(id)
+	resource, err := s.repo.WithContext(ctx).Resource(id)
 	if err != nil {
 		return nil, Forbidden("匿名下载链接无效")
 	}
@@ -213,5 +222,5 @@ func (s *Service) PreparePublicResourceDelivery(id, expires, signature string, o
 	}
 	seconds, _ := strconv.ParseInt(expires, 10, 64)
 	options.ExpiresAt = time.Unix(seconds, 0)
-	return s.prepareResourceDelivery(resource.UserID, resource, options, rangeHeader)
+	return s.prepareResourceDelivery(ctx, resource.UserID, resource, options, rangeHeader)
 }

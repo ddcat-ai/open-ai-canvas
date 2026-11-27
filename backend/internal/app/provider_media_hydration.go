@@ -6,6 +6,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -126,7 +127,7 @@ func (s *Service) hydrateProviderMedia(userID string, media *providerMedia, poli
 	if !policy.imageOnly && !policy.forceBase64 && strings.HasPrefix(strings.TrimSpace(media.DataURL), "data:") {
 		return nil
 	}
-	stream, err := s.openResourceRange(resource.UserID, resource, "")
+	stream, err := s.openResourceRange(context.Background(), resource.UserID, resource, "")
 	if err != nil {
 		return fmt.Errorf("读取任务参考资源失败：%w", err)
 	}

@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"hash/crc64"
@@ -465,7 +466,7 @@ func TestPrepareResourceDeliveryPrefersConfiguredCDN(t *testing.T) {
 	if err := svc.repo.CreateResource(&resource); err != nil {
 		t.Fatal(err)
 	}
-	delivery, err := svc.PrepareResourceDelivery("user-1", resource.ID, ResourceAccessOptions{Purpose: assets.PurposeDisplay}, "")
+	delivery, err := svc.PrepareResourceDelivery(context.Background(), "user-1", resource.ID, ResourceAccessOptions{Purpose: assets.PurposeDisplay}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -492,7 +493,7 @@ func TestPrepareResourceDeliveryUsesPublicCDNForDownloadWhenOriginIsPrivate(t *t
 	if err := svc.repo.CreateResource(&resource); err != nil {
 		t.Fatal(err)
 	}
-	delivery, err := svc.PrepareResourceDelivery("user-1", resource.ID, ResourceAccessOptions{Purpose: assets.PurposeDownload, DownloadName: "下载图片.png"}, "")
+	delivery, err := svc.PrepareResourceDelivery(context.Background(), "user-1", resource.ID, ResourceAccessOptions{Purpose: assets.PurposeDownload, DownloadName: "下载图片.png"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -526,7 +527,7 @@ func TestPrepareResourceDeliveryFallsBackToOriginWhenCDNAuthIsMissing(t *testing
 	if err := svc.repo.CreateResource(&resource); err != nil {
 		t.Fatal(err)
 	}
-	delivery, err := svc.PrepareResourceDelivery("user-1", resource.ID, ResourceAccessOptions{Purpose: assets.PurposeDisplay}, "")
+	delivery, err := svc.PrepareResourceDelivery(context.Background(), "user-1", resource.ID, ResourceAccessOptions{Purpose: assets.PurposeDisplay}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -553,7 +554,7 @@ func TestPrepareResourceDeliverySignsPrivateQiniuCDNURL(t *testing.T) {
 	if err := svc.repo.CreateResource(&resource); err != nil {
 		t.Fatal(err)
 	}
-	delivery, err := svc.PrepareResourceDelivery("user-1", resource.ID, ResourceAccessOptions{Purpose: assets.PurposeDisplay}, "")
+	delivery, err := svc.PrepareResourceDelivery(context.Background(), "user-1", resource.ID, ResourceAccessOptions{Purpose: assets.PurposeDisplay}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -620,7 +621,7 @@ func TestCurrentUserCDNSettingAppliesToHistoricalResourcesInSameStorage(t *testi
 	}); err != nil {
 		t.Fatal(err)
 	}
-	delivery, err := svc.PrepareResourceDelivery(actor.ID, resource.ID, ResourceAccessOptions{Purpose: assets.PurposeDisplay}, "")
+	delivery, err := svc.PrepareResourceDelivery(context.Background(), actor.ID, resource.ID, ResourceAccessOptions{Purpose: assets.PurposeDisplay}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -669,7 +670,7 @@ func TestBoundHistoricalUserResourceDoesNotFollowCurrentProviderCDN(t *testing.T
 	if err := svc.repo.CreateResource(&resource); err != nil {
 		t.Fatal(err)
 	}
-	delivery, err := svc.PrepareResourceDelivery(actor.ID, resource.ID, ResourceAccessOptions{Purpose: assets.PurposeDisplay}, "")
+	delivery, err := svc.PrepareResourceDelivery(context.Background(), actor.ID, resource.ID, ResourceAccessOptions{Purpose: assets.PurposeDisplay}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -714,7 +715,7 @@ func TestHistoricalUserResourceWithoutStorageSettingIDKeepsItsProviderCDN(t *tes
 	if err := svc.repo.CreateResource(&resource); err != nil {
 		t.Fatal(err)
 	}
-	delivery, err := svc.PrepareResourceDelivery(actor.ID, resource.ID, ResourceAccessOptions{Purpose: assets.PurposeDisplay}, "")
+	delivery, err := svc.PrepareResourceDelivery(context.Background(), actor.ID, resource.ID, ResourceAccessOptions{Purpose: assets.PurposeDisplay}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -742,7 +743,7 @@ func TestPrepareResourceDeliveryUsesSignedOriginWithoutCDN(t *testing.T) {
 	if err := svc.repo.CreateResource(&resource); err != nil {
 		t.Fatal(err)
 	}
-	delivery, err := svc.PrepareResourceDelivery("user-1", resource.ID, ResourceAccessOptions{Purpose: assets.PurposeDisplay}, "")
+	delivery, err := svc.PrepareResourceDelivery(context.Background(), "user-1", resource.ID, ResourceAccessOptions{Purpose: assets.PurposeDisplay}, "")
 	if err != nil {
 		t.Fatal(err)
 	}

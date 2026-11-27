@@ -337,11 +337,11 @@ func (s *Service) decorateAPILogGeneration(log *model.ApiCallLog) error {
 	return nil
 }
 
-func (s *Service) PrepareAdminAPICallLogReferenceDelivery(actor *model.User, logID, referenceID, rangeHeader string) (*ResourceDelivery, error) {
+func (s *Service) PrepareAdminAPICallLogReferenceDelivery(ctx context.Context, actor *model.User, logID, referenceID, rangeHeader string) (*ResourceDelivery, error) {
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
-	log, err := s.repo.APICallLog(strings.TrimSpace(logID))
+	log, err := s.repo.WithContext(ctx).APICallLog(strings.TrimSpace(logID))
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, NotFound("请求日志不存在")
 	}
@@ -363,7 +363,7 @@ func (s *Service) PrepareAdminAPICallLogReferenceDelivery(actor *model.User, log
 		if err != nil {
 			return nil, err
 		}
-		stream, err := s.openResourceRange(log.UserID, resource, rangeHeader)
+		stream, err := s.openResourceRange(ctx, log.UserID, resource, rangeHeader)
 		if err != nil {
 			return nil, NotFound("原始媒体暂不可用")
 		}

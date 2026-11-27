@@ -146,7 +146,7 @@ func (s *Service) probeStoredResourceMedia(ctx context.Context, resource *model.
 	if resource.Provider == "local" {
 		return probeMediaFile(ctx, filepath.Join(s.dataDir, "resources", filepath.FromSlash(resource.ObjectKey)))
 	}
-	stream, err := s.openResourceRange(resource.UserID, resource, fmt.Sprintf("bytes=0-%d", mediaProbeRemoteHeadBytes-1))
+	stream, err := s.openResourceRange(ctx, resource.UserID, resource, fmt.Sprintf("bytes=0-%d", mediaProbeRemoteHeadBytes-1))
 	if err != nil {
 		return mediaProbeInfo{}, err
 	}

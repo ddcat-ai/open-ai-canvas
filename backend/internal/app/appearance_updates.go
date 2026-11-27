@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"net/url"
 	"strings"
 	"time"
@@ -185,7 +186,7 @@ func publicUpdateAnnouncement(value UpdateAnnouncement, revision string) UpdateA
 
 // Public delivery is limited to the currently enabled announcement references.
 // Draft previews require an administrator and never expose unrelated resources.
-func (s *Service) PrepareUpdateAnnouncementDelivery(actor *model.User, id string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
+func (s *Service) PrepareUpdateAnnouncementDelivery(ctx context.Context, actor *model.User, id string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
 	if actor != nil {
 		if err := s.RequireAdmin(actor); err != nil {
 			return nil, err
@@ -199,7 +200,7 @@ func (s *Service) PrepareUpdateAnnouncementDelivery(actor *model.User, id string
 	if actor == nil && (!value.Updates.Enabled || !referenced) {
 		return nil, NotFound("公告媒体未发布")
 	}
-	resource, err := s.repo.Resource(id)
+	resource, err := s.repo.WithContext(ctx).Resource(id)
 	if err != nil {
 		return nil, NotFound("公告媒体不存在")
 	}
@@ -215,5 +216,5 @@ func (s *Service) PrepareUpdateAnnouncementDelivery(actor *model.User, id string
 	if options.Purpose == "" {
 		options.Purpose = assets.PurposeDisplay
 	}
-	return s.prepareResourceDelivery(resource.UserID, resource, options, rangeHeader)
+	return s.prepareResourceDelivery(ctx, resource.UserID, resource, options, rangeHeader)
 }

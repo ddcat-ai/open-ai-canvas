@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 
@@ -48,14 +49,14 @@ func (h canvasHost) OpenResourceRange(userID string, resource *model.Resource, r
 	if h.svc == nil {
 		return nil, nil
 	}
-	return h.svc.openResourceRange(userID, resource, rangeHeader)
+	return h.svc.openResourceRange(context.Background(), userID, resource, rangeHeader)
 }
 
-func (h canvasHost) PrepareResourceDelivery(userID string, resource *model.Resource, options assets.AccessOptions, rangeHeader string) (*assets.ResourceDelivery, error) {
+func (h canvasHost) PrepareResourceDelivery(ctx context.Context, userID string, resource *model.Resource, options assets.AccessOptions, rangeHeader string) (*assets.ResourceDelivery, error) {
 	if h.svc == nil {
 		return nil, nil
 	}
-	return h.svc.prepareResourceDelivery(userID, resource, options, rangeHeader)
+	return h.svc.prepareResourceDelivery(ctx, userID, resource, options, rangeHeader)
 }
 
 func (h canvasHost) WithStorageLock(fn func() error) error {
@@ -169,8 +170,8 @@ func (s *Service) OpenSharedCanvasResourceRange(token string, resourceID string,
 	return s.canvasDomain().OpenSharedCanvasResourceRange(token, resourceID, rangeHeader)
 }
 
-func (s *Service) PrepareSharedCanvasResourceDelivery(token string, resourceID string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
-	return s.canvasDomain().PrepareSharedCanvasResourceDelivery(token, resourceID, options, rangeHeader)
+func (s *Service) PrepareSharedCanvasResourceDelivery(ctx context.Context, token string, resourceID string, options ResourceAccessOptions, rangeHeader string) (*ResourceDelivery, error) {
+	return s.canvasDomain().PrepareSharedCanvasResourceDelivery(ctx, token, resourceID, options, rangeHeader)
 }
 
 func (s *Service) validateCanvasMediaAssets(userID string, raw json.RawMessage) error {

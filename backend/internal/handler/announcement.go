@@ -37,9 +37,9 @@ func RegisterAnnouncementRoutes(r *gin.RouterGroup, svc *service.Service) {
 			failService(c, err)
 			return
 		}
-		delivery, err := svc.PrepareAnnouncementImageDelivery(user, c.Param("id"), resourceAccessOptions(c), c.GetHeader("Range"))
+		delivery, err := svc.PrepareAnnouncementImageDelivery(c.Request.Context(), user, c.Param("id"), resourceAccessOptions(c), c.GetHeader("Range"))
 		if err != nil {
-			failService(c, err)
+			failResourceDelivery(c, err)
 			return
 		}
 		serveResourceDelivery(c, delivery, "private, no-cache", "")
