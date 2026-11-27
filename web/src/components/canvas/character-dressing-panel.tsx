@@ -69,9 +69,10 @@ export function CharacterDressingPanel({
         initialPageParam: undefined as string | undefined,
         queryFn: ({ pageParam, signal }) => listCharacterDressingTasks(detail.asset.id, pageParam, signal),
         getNextPageParam: (page) => (page.length === 40 ? page.at(-1)?.id : undefined),
+        refetchInterval: (query) => (query.state.data?.pages.some((page) => page.some((item) => item.status === "queued" || item.status === "running")) ? 2000 : false),
     });
-    const history = historyQuery.data?.pages.flat() || [];
-    const selectedTask = submitted || history[0];
+    const historyTasks = historyQuery.data?.pages.flat() || [];
+    const selectedTask = submitted || historyTasks[0];
     const [references, setReferences] = useState<Partial<Record<DressingCategory, DressingAssetReference>>>({});
     const [pickerCategory, setPickerCategory] = useState<DressingCategory | null>(null);
     const [poseOpen, setPoseOpen] = useState(false);
@@ -91,6 +92,8 @@ export function CharacterDressingPanel({
         },
     });
     const task = taskQuery.data || selectedTask;
+    // 详情轮询通常先于历史列表到达；同一任务只展示最新详情，避免“已就绪”与“生成中”并存。
+    const history = historyTasks.map((item) => (item.id === task?.id ? task : item));
     const active = task?.status === "queued" || task?.status === "running";
     const images = task ? dressingImages(task) : [];
     const image = images.find((item) => item.resourceId === selectedResource) || images[0];
@@ -124,7 +127,7 @@ export function CharacterDressingPanel({
             message.success("已保存到「形象」中的造型列表");
             void historyQuery.refetch();
         } catch (error) {
-            setError(error instanceof Error ? error.message : "保存失败，生成结果已保留");
+            setError(`保存造型失败，生成结果已保留，可重试保存。${error instanceof Error ? error.message : ""}`);
             onRefresh();
         } finally {
             setSaving(false);
@@ -315,6 +318,8 @@ export function CharacterDressingPanel({
                         title="操作未完成"
                         description={error || String(taskQuery.error || historyQuery.error)}
                         onRetry={() => {
+                            setError("");
+                            onRefresh();
                             void taskQuery.refetch();
                             void historyQuery.refetch();
                         }}

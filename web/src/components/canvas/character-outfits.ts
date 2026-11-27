@@ -124,7 +124,8 @@ export function buildCharacterOutfitPersistence(
           ]
         : [];
     normalized.forEach((item, index) => {
-        const safeRole = `outfit:${item.id.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40) || index + 1}`;
+        // role 是版本内的表达槽位，数据库只允许 32 字符；完整造型标识保留在 metadata 中。
+        const safeRole = `outfit:${index + 1}`;
         if (!representations.some((entry) => entry.role === safeRole)) {
             representations.push({
                 role: safeRole,

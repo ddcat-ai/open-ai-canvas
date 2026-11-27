@@ -660,6 +660,8 @@ docker compose -f docker-compose.deploy.yml up -d backend web
 
 角色形象显式操作以用户、角色和操作标识的摘要派生不可变版本 ID，版本 `note` 保存请求摘要作为持久回执，不新增表。相同操作重放不新增版本，主版本指针在同一事务中比较并写入。`definition.outfits[].source` 保存生成任务及输入快照，形象重命名时保留，只记录稳定资源 ID。梳妆台历史从现有 `tasks.input_json` 的 `metadata.dressing.characterAssetId` 按当前空间筛选，再以创建时间和 ID 游标分页，不新增任务表。
 
+`asset_representations.role` 上限为 32 字符。造型表达使用版本内短槽位 `outfit:1`、`outfit:2` 等，完整造型 ID 与名称保存在 `metadata_json`，不把资源 ID 拼入槽位名称；服务端对超长槽位返回参数错误，避免 PostgreSQL 长度约束导致保存失败。本规则不修改表结构。
+
 | 表 | 用途 | 关键边界 |
 | --- | --- | --- |
 | `projects` | 保存短剧项目基础设置、画幅、画风快照、项目主图和默认图片/视频模型 | `default_image_model` / `default_video_model` 保存前端模型选择器的渠道限定引用；模型下架或渠道停用时前端回退当前全局默认。`cover_resource_id` 只能引用当前用户已就绪的图片资源；资源删除检查会阻止仍被项目主图使用的图片被回收 |

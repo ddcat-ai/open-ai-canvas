@@ -4,6 +4,18 @@ import { refreshCanvasCharacterReferenceNodes } from "../src/lib/canvas/canvas-c
 import { CanvasNodeType, type CanvasNodeData } from "../src/types/canvas";
 import type { ProjectAsset } from "../src/services/api/projects";
 
+test("长资源标识生成的造型使用短表达槽位，完整造型标识不截断也不碰撞", () => {
+    const prefix = "a".repeat(40);
+    const outfits = [
+        { id: prefix + "-one", name: "冬装", resourceId: "a".repeat(32) },
+        { id: prefix + "-two", name: "夏装", resourceId: "b".repeat(32) },
+    ];
+    const persisted = buildCharacterOutfitPersistence({}, outfits, outfits[1].id);
+    expect(persisted.representations.every((item) => item.role.length <= 32)).toBe(true);
+    expect(persisted.representations.filter((item) => item.role.startsWith("outfit:")).map((item) => item.metadata?.outfitId)).toEqual(outfits.map((item) => item.id));
+    expect(parseCharacterOutfits(persisted.definition).map((item) => item.id)).toEqual(outfits.map((item) => item.id));
+});
+
 test("形象重命名后保留来源与其他图像表达，其他节点继续锁定原造型", () => {
     const source = { taskId: "task-1", prompt: "换成红衣" };
     const definition = {

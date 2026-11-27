@@ -914,7 +914,8 @@ func voiceProfileSummary(profile model.VoiceProfile) VoiceProfileSummary {
 }
 
 func validCharacterRepresentationRole(role string) bool {
-	if strings.HasPrefix(role, "outfit:") && len(strings.TrimSpace(strings.TrimPrefix(role, "outfit:"))) > 0 && len(role) <= 64 {
+	// 与 asset_representations.role 的 varchar(32) 对齐，超长输入应在入库前返回参数错误。
+	if strings.HasPrefix(role, "outfit:") && len(strings.TrimSpace(strings.TrimPrefix(role, "outfit:"))) > 0 && len(role) <= 32 {
 		return true
 	}
 	switch role {
