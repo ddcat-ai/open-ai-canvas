@@ -156,6 +156,7 @@ const adminNavigation: AdminNavigationGroup[] = [
             { path: "/admin/settings/email", keywords: "邮件 SMTP 发信 邮箱", label: "邮件服务", shortLabel: "邮件", icon: <Mail className="size-4" /> },
             { path: "/admin/settings/storage", keywords: "存储 OSS S3 对象存储 上传", label: "存储服务", shortLabel: "存储", icon: <HardDrive className="size-4" /> },
             { path: "/admin/settings/runtime-policy", keywords: "资源 策略 并发 限流 配额 worker", label: "资源与策略", shortLabel: "策略", icon: <Settings2 className="size-4" /> },
+            { path: "/admin/settings/database-backups", keywords: "数据库 备份 恢复 存储", label: "数据库备份", shortLabel: "备份", icon: <Database className="size-4" /> },
             { path: "/admin/settings/ark-private-assets", keywords: "方舟 素材库 火山", label: "方舟素材库", shortLabel: "方舟", icon: <CloudUpload className="size-4" /> },
             { path: "/admin/settings/third-party", keywords: "第三方 参数 配置 密钥 LibTV", label: "第三方参数配置", shortLabel: "三方", icon: <KeyRound className="size-4" /> },
             { path: "/admin/settings/response-interception", keywords: "模型 响应 拦截 敏感词 过滤", label: "模型响应拦截", shortLabel: "拦截", icon: <ShieldAlert className="size-4" /> },
