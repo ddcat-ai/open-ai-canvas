@@ -247,6 +247,7 @@ export type ModelCatalogResponse = {
     source: ModelCatalogSource;
     models?: PublicLogicalModel[];
     channels?: PublicChannelCatalog[];
+    displayGroupOrder?: string[];
 };
 
 // 创作目录直接读取系统渠道模型，不使用逻辑模型及其功能开关。

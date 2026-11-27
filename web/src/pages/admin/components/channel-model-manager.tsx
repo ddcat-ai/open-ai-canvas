@@ -189,6 +189,7 @@ export function ChannelModelManager({
             const result = await fetchAdminChannelModels(channel.id);
             if (sequence !== fetchSequence.current) return;
             setCatalogDiff(result);
+            if (result.disabled?.length) await reload();
             setCatalogStatus({ models: result.models, readAt: result.readAt, stale: false });
             setFetchPreviewModels(result.models);
             setSelectedFetchModels(
@@ -658,9 +659,10 @@ export function ChannelModelManager({
                                 读取时间：{new Date(catalogDiff.readAt).toLocaleString()} · {catalogDiff.firstRead ? "首次读取" : catalogDiff.baselineReset ? "Key 或连接变化，已重新建立基线" : "与上次成功读取比较"}
                             </p>
                             <p>
-                                新增 {catalogDiff.added?.length || 0} · 仍在目录 {catalogDiff.retained?.length || 0} · 本次未返回 {catalogDiff.missing?.length || 0}
+                                新增 {catalogDiff.added?.length || 0} · 仍在目录 {catalogDiff.retained?.length || 0} · 失效／未返回 {catalogDiff.unavailable?.length || 0}
                             </p>
-                            {Boolean(catalogDiff.missing?.length) && <p className="break-words">本次未返回：{catalogDiff.missing.join("、")}。不代表确认下架，已有模型配置和启用状态保留。</p>}
+                            {!!catalogDiff.unavailable?.length && <p className="break-words">失效／未返回：{catalogDiff.unavailable.join("、")}</p>}
+                            {!!catalogDiff.disabled?.length && <p className="break-words">已自动停用：{catalogDiff.disabled.join("、")}</p>}
                             <p className="text-xs text-foreground/50">目录可见不代表能够生成；协议、能力参数及价格仍按本组单独配置。</p>
                         </div>
                     )}

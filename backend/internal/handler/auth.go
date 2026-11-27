@@ -260,6 +260,7 @@ func RegisterAdminRoutes(r *gin.RouterGroup, svc *service.Service) {
 	registerAdminUserRoutes(r, svc)
 	registerAdminUserGroupRoutes(r, svc)
 	registerAdminChannelRoutes(r, svc)
+	registerModelGroupOrderRoutes(r, svc)
 	registerAdminSettingRoutes(r, svc)
 	registerAdminAPILogRoutes(r, svc)
 	registerAdminLoginLogRoutes(r, svc)

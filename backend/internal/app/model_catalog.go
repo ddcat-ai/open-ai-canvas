@@ -25,6 +25,8 @@ type ModelCatalogResponse struct {
 	Source   ModelCatalogSource     `json:"source"`
 	Models   []PublicLogicalModel   `json:"models"`
 	Channels []PublicChannelCatalog `json:"channels"`
+	// DisplayGroupOrder 是一级目录的展示顺序；未配置时为空，前台按名称排序。
+	DisplayGroupOrder []string `json:"displayGroupOrder,omitempty"`
 }
 
 // PublicModelAvailability is the historical signal shown next to a model
@@ -121,6 +123,9 @@ func (s *Service) ModelCatalog(access *userGroupAccess, intent *ModelRequestInte
 	}
 	response.Source = ModelCatalogSourceSystem
 	response.Channels = append(response.Channels, channels...)
+	if order, orderErr := s.publicModelGroupOrder(); orderErr == nil && len(order) > 0 {
+		response.DisplayGroupOrder = order
+	}
 	if availability, availabilityErr := s.publicModelAvailability(response.Channels, time.Now().UTC()); availabilityErr != nil {
 		// Historical analytics are additive. A delayed or unavailable log store
 		// must not hide the existing catalog or change route selection behavior.
