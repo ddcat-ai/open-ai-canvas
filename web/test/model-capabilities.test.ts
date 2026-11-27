@@ -6,6 +6,25 @@ import { DEFAULT_VIDEO_PROMPT_MAX_CHARS, defaultModelCapabilityConfig, normalize
 import { imageTierAvailable, imageResolutionTiers } from "../src/lib/image-size-presets.ts";
 import { workflowFieldIsRatioChoices } from "../src/lib/model-capabilities-workflow.ts";
 
+test("Comfly video processing exposes only its operation and single video input", () => {
+    for (const [provider, operation] of [
+        ["subtitle-removal", "remove_subtitles"],
+        ["depth", "depth"],
+        ["upscale", "upscale"],
+    ]) {
+        const video = defaultModelCapabilityConfig(`starrouter-comfly-video-${provider}`).video!;
+        assert.deepEqual(video.operations, [operation]);
+        assert.equal(video.defaultOperation, operation);
+        assert.equal(video.references.maxVideos, 1);
+        assert.equal(video.references.maxImages, 0);
+        assert.equal(video.references.maxAudios, 0);
+        assert.equal(video.references.maxVideoBytes, 100 * 1024 * 1024);
+        assert.deepEqual(video.resolutions, []);
+        assert.deepEqual(video.ratios, []);
+        assert.equal(video.processing?.maxSourceSeconds, 180);
+    }
+});
+
 test("workflow ratio choices use the direct selection control only for ratio values", () => {
     const field = { fieldName: "aspectRatio", fieldType: "SELECT", options: ["auto", "9:16", "16:9", "21:9"] };
     assert.equal(workflowFieldIsRatioChoices(field), true);

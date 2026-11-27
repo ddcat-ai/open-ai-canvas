@@ -72,6 +72,9 @@ export type GenerationTask = {
         status: TaskBillingStatus;
     };
     clientContext?: {
+        operation?: string;
+        processingParameters?: import("@/lib/canvas/media-tool-contract").ProcessingParameters;
+        resolution?: string;
         assetTitle?: string;
         conversationId?: string;
         messageId?: string;

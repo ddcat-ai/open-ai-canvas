@@ -94,9 +94,9 @@ export type ToolbarHandlers = {
     onNodeExtractAudioFromVideo: (node: CanvasNodeData) => void;
     onNodeRemakeVideo?: (node: CanvasNodeData) => void;
     onNodeTrimVideoSegments: (node: CanvasNodeData) => void;
-    /** 视频画质增强；只在存在 processing 视频模型时由项目页提供。 */
-    onNodeEnhanceVideo?: (node: CanvasNodeData) => void;
-    onNodeDepthVideo?: (node: CanvasNodeData) => void;
+    /** 同一处理入口消费业务注册表，新增操作无需再扩展 handler 清单。 */
+    onNodeProcessVideo?: (node: CanvasNodeData, operation: string) => void;
+    canProcessVideo?: (operation: string) => boolean;
     onNodeDownloadSubtitles?: (node: CanvasNodeData) => void;
     /** 打开媒体版本面板；只读分享页不提供。 */
     onNodeVersions?: (node: CanvasNodeData) => void;

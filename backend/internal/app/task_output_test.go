@@ -32,6 +32,54 @@ func TestTaskForOutputRedactsRoutingAndSecrets(t *testing.T) {
 	}
 }
 
+func TestCompletedMediaInputRetainsInheritanceWithoutSecrets(t *testing.T) {
+	for _, mode := range []string{"image", "video", "audio"} {
+		t.Run(mode, func(t *testing.T) {
+			raw := `{"mode":"` + mode + `","metadata":{"nodeId":"original"},"config":{"channelId":"channel","channelModelKey":"model","size":"9:16","videoSeconds":"2","vquality":"480p","videoGenerateAudio":"false","imageResolution":"2k","audioVoice":"voice","apiKey":"private-key","baseUrl":"https://private.invalid","headers":[{"name":"Authorization","value":"private-key"}]},"referenceImages":[{"id":"ref","storageKey":"resource:ref-one","url":"https://private.invalid/image","dataUrl":"private-inline-media"}],"referenceVideos":[{"id":"external","url":"https://private.invalid/video"}],"referenceAudios":[],"mask":{"url":"https://private.invalid/mask"},"audioVoiceBindings":[{"characterNodeId":"character","audioNodeId":"voice","secret":"private-key"}]}`
+			retained := completedTaskInputJSON(raw)
+			for _, secret := range []string{"private-key", "private.invalid", "private-inline-media", "headers", "apiKey", "baseUrl"} {
+				if strings.Contains(retained, secret) {
+					t.Fatalf("终态输入泄露 %s", secret)
+				}
+			}
+			if retained != completedTaskInputJSON(retained) {
+				t.Fatal("再次压缩改变了继承快照")
+			}
+			var input map[string]any
+			if err := json.Unmarshal([]byte(retained), &input); err != nil {
+				t.Fatal(err)
+			}
+			config, _ := input["config"].(map[string]any)
+			if config["channelId"] != "channel" || config["channelModelKey"] != "model" {
+				t.Fatal("执行模型身份丢失")
+			}
+			if mode == "video" && (config["size"] != "9:16" || config["videoSeconds"] != "2" || config["vquality"] != "480p" || config["videoGenerateAudio"] != "false") {
+				t.Fatal("视频规格或 false 值丢失")
+			}
+			if (mode == "image" && config["imageResolution"] != "2k") || (mode == "audio" && config["audioVoice"] != "voice") {
+				t.Fatal("图片或音频规格丢失")
+			}
+			refs := creationMaps(input["referenceImages"])
+			if len(refs) != 1 || refs[0]["id"] != "ref" || refs[0]["storageKey"] != "resource:ref-one" {
+				t.Fatal("资源身份丢失")
+			}
+			unverifiable := creationMaps(input["referenceVideos"])
+			if len(unverifiable) != 1 || stringValue(unverifiable[0]["id"]) != "" || input["mask"] == nil {
+				t.Fatal("不可验证引用或蒙版被静默删除")
+			}
+			var public map[string]any
+			if err := json.Unmarshal([]byte(taskForOutput(model.Task{InputJSON: retained}).InputJSON), &public); err != nil {
+				t.Fatal(err)
+			}
+			for _, key := range []string{"config", "referenceImages", "referenceVideos", "audioVoiceBindings", "mask"} {
+				if _, exists := public[key]; exists {
+					t.Fatalf("公开任务接口暴露内部字段 %s", key)
+				}
+			}
+		})
+	}
+}
+
 func TestTaskForOutputRedactsHistoricalFailure(t *testing.T) {
 	task := model.Task{Error: `模型服务暂时不可用（HTTP 503）；上游：{"error":{"code":"model_not_found","message":"request id abc at https://private.example/task_abc123"}}`, ProviderCancelError: "取消失败 task_abc123"}
 	output := taskForOutput(task)
@@ -68,6 +116,13 @@ func TestTaskOutputIncludesOnlySafeWorkbenchRestoreData(t *testing.T) {
 	reference := references[0].(map[string]any)
 	if reference["resourceId"] != "resource-1" || reference["kind"] != "image" || reference["role"] != "first_frame" || reference["slotKey"] != "subject" {
 		t.Fatalf("safe reference fields not preserved: %#v", reference)
+	}
+}
+
+func TestCompletedTaskPreservesWorkbenchRestoreData(t *testing.T) {
+	raw := `{"mode":"video","metadata":{"source":"workbench","workbenchKind":"video"},"config":{"videoSeconds":"2","size":"9:16","vquality":"480p","videoGenerateAudio":"false"},"referenceImages":[{"id":"ref","storageKey":"resource:ref-one","role":"first_frame","slotKey":"subject","url":"https://private.invalid/image"}]}`
+	if before, after := publicTaskInputJSON(raw), publicTaskInputJSON(completedTaskInputJSON(raw)); before != after {
+		t.Fatalf("终态压缩改变了工作台恢复数据：before=%s after=%s", before, after)
 	}
 }
 

@@ -86,7 +86,7 @@ func cloudAgentMediaDependencyHash(doc map[string]any, args cloudAgentMediaArgs)
 			return "", err
 		}
 		metadata, _ := target["metadata"].(map[string]any)
-		for _, key := range []string{"locked", "taskId", "generationTaskId", "agentDraftRunId", "status"} {
+		for _, key := range []string{"locked", "taskId", "generationTaskId", "agentDraftRunId", "status", "inheritFromNodeId"} {
 			input[key] = metadata[key]
 		}
 		targetInput = map[string]any{"id": target["id"], "type": target["type"], "locked": target["locked"], "input": input, "resource": resourceProjection(metadata)}
@@ -163,6 +163,8 @@ func cloudAgentResolvedMediaHash(task *model.Task) (string, error) {
 	}
 	config, _ := input["config"].(map[string]any)
 	public := map[string]any{}
+	metadata, _ := input["metadata"].(map[string]any)
+	public["providerOptions"], public["processingParameters"], public["operation"] = metadata["providerOptions"], metadata["processingParameters"], metadata["operation"]
 	if values, exists := config["imageParameters"]; exists {
 		public["imageParameters"] = values
 	}

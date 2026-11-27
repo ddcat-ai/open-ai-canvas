@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"yingce/backend/internal/canvas/mediatool"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
 )
@@ -15,23 +16,29 @@ import (
 // Only user-editable media options cross the approval boundary. Targets,
 // references, prompt, snapshot and generation mode remain server-authored.
 type CloudAgentMediaSettings struct {
-	LogicalModelID             string `json:"logicalModelId,omitempty"`
-	ChannelID                  string `json:"channelId,omitempty"`
-	ChannelModelKey            string `json:"channelModelKey,omitempty"`
-	Size                       string `json:"size"`
-	ImageResolution            string `json:"imageResolution,omitempty"`
-	ImageParameters            string `json:"imageParameters,omitempty"`
-	Quality                    string `json:"quality"`
-	DurationSeconds            *int   `json:"durationSeconds,omitempty"`
-	VideoGenerateAudio         *bool  `json:"videoGenerateAudio,omitempty"`
-	VideoWatermark             *bool  `json:"videoWatermark,omitempty"`
-	VideoArkPrivateAssetUpload *bool  `json:"videoArkPrivateAssetUpload,omitempty"`
+	ProcessingParameters *mediatool.Parameters `json:"processingParameters,omitempty"`
+	// 非 nil 仅用于来源确认阶段；空字符串是用户明确选择独立创作。
+	InheritFromNodeID          *string `json:"inheritFromNodeId,omitempty"`
+	LogicalModelID             string  `json:"logicalModelId,omitempty"`
+	ChannelID                  string  `json:"channelId,omitempty"`
+	ChannelModelKey            string  `json:"channelModelKey,omitempty"`
+	Size                       string  `json:"size"`
+	ImageResolution            string  `json:"imageResolution,omitempty"`
+	ImageParameters            string  `json:"imageParameters,omitempty"`
+	Quality                    string  `json:"quality"`
+	DurationSeconds            *int    `json:"durationSeconds,omitempty"`
+	VideoGenerateAudio         *bool   `json:"videoGenerateAudio,omitempty"`
+	VideoWatermark             *bool   `json:"videoWatermark,omitempty"`
+	VideoArkPrivateAssetUpload *bool   `json:"videoArkPrivateAssetUpload,omitempty"`
 }
 
 // updateCloudAgentMediaApproval rebuilds the complete prepared admission for an
 // edited approval. It is called inside MutateCloudAgent so the new prepared
 // hash, resource lease set and runtime checkpoint commit atomically.
 func (s *Service) updateCloudAgentMediaApproval(repo *repository.Repository, run *model.CloudAgentExecution, state *cloudAgentRuntime, settings CloudAgentMediaSettings) error {
+	if settings.InheritFromNodeID != nil {
+		return BadAuthRequest("生成报价已准备，不能绕过来源确认直接改变版本来源")
+	}
 	if state == nil || state.Approval == nil {
 		return creationConflict("审批不存在或已过期")
 	}
@@ -112,6 +119,9 @@ func applyCloudAgentMediaApprovalSettings(args *cloudAgentMediaArgs, settings Cl
 	args.ConfigurationChange = nil
 	args.Size, args.ImageResolution, args.Quality = settings.Size, settings.ImageResolution, settings.Quality
 	args.ImageParameters = settings.ImageParameters
+	if args.Operation != "" {
+		args.ProcessingParameters = settings.ProcessingParameters
+	}
 	if args.Mode == "video" {
 		if settings.DurationSeconds != nil {
 			if *settings.DurationSeconds < 0 {

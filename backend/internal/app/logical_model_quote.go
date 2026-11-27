@@ -3,6 +3,7 @@ package app
 import (
 	"strings"
 
+	"yingce/backend/internal/canvas/mediatool"
 	"yingce/backend/internal/imagebilling"
 	"yingce/backend/internal/model"
 )
@@ -65,6 +66,14 @@ func (s *Service) QuoteChannelModel(userID string, req ChannelModelQuoteRequest)
 func validateQuoteIntent(intent ModelRequestIntent) error {
 	if intent.Capability != "text" && intent.Capability != "image" && intent.Capability != "video" && intent.Capability != "audio" {
 		return BadAuthRequest("报价请求缺少有效的模型能力类型")
+	}
+	if intent.ProcessingParameters != nil {
+		if intent.Capability != "video" {
+			return BadAuthRequest("只有视频处理报价接受处理参数")
+		}
+		if err := mediatool.ValidateParameters(intent.Operation, intent.ProcessingParameters); err != nil {
+			return BadAuthRequest(err.Error())
+		}
 	}
 	for _, count := range intent.Inputs {
 		if count < 0 || count > 128 {
@@ -162,8 +171,7 @@ func (s *Service) QuoteLogicalModel(userID string, logicalModelID string, intent
 	if capability == "" {
 		return nil, BadAuthRequest("报价请求缺少模型能力类型")
 	}
-	resolvedIntent := intent
-	resolvedIntent.Options = mergeIntentDefaults(intent.Options, routed.Defaults)
+	resolvedIntent := routed.Intent
 	input := quoteInput(resolvedIntent, routed.ChannelModel.ModelKey)
 	providerModelKey := routed.ChannelModel.ProviderModelKey
 	if routed.PriceTier != nil {
@@ -266,6 +274,9 @@ func quoteInput(intent ModelRequestIntent, modelKey string) map[string]any {
 	}
 	config["model"] = modelKey
 	input := map[string]any{"mode": intent.Capability, "config": config}
+	if intent.ProcessingParameters != nil {
+		input["metadata"] = map[string]any{"processingParameters": intent.ProcessingParameters}
+	}
 	for kind, key := range map[string]string{"image": "referenceImages", "video": "referenceVideos", "audio": "referenceAudios"} {
 		if count := intent.Inputs[kind]; count > 0 {
 			references := make([]any, count)

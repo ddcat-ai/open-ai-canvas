@@ -7,6 +7,8 @@ description: 可选 MediaKit 深度插件、视频节点入口、计量与验收
 
 相对深度工具逐帧估计视频空间层次，生成时间连续的深度视频，用于动作、角色替换和运镜参考。产物是视频，不是骨骼、BVH 或三维动画文件。
 
+同一个画布入口也支持 StarRouter Comfly `comfly/1776`，只输入单个视频，共用报价、结果节点和重试。下文的 600 秒、2K、standard 档、HEVC 与临时链接期限均针对 MediaKit，不能套用于 Comfly；Comfly 配置见[渠道与模型](/docs/backend/channel-configuration)。
+
 ## 管理员配置
 
 1. 在插件中心启用独立插件 `volcengine-mediakit-depth`。插件默认关闭，不随已有画质增强插件启用，无需安装推理模型。

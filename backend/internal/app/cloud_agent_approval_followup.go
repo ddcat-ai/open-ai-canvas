@@ -150,6 +150,9 @@ func (s *Service) continueApprovedCloudAgentCall(userID, id, approvalID string) 
 		if err != nil {
 			return err
 		}
+		if latest.Status == "waiting_approval" && state.Approval != nil && state.Approval.Decision == "" {
+			return nil
+		}
 		return s.resumeCloudAgentAfterApproval(userID, id, &state)
 	}
 	// 媒体生成可能要几分钟：审批请求立即返回，等待与回写在后台完成后再恢复运行。

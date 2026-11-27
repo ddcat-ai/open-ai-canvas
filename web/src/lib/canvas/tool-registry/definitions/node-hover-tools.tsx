@@ -32,6 +32,7 @@ import {
 
 import { CONTENT_MODERATION_ERROR_CODE, isContentModerationError } from "@/lib/generation-error";
 import { registerToolbarTools, type ToolContext, type ToolDefinition } from "@/lib/canvas/tool-registry";
+import { videoProcessingTools } from "@/lib/canvas/media-tool-contract";
 import { CanvasNodeType } from "@/types/canvas";
 import { isCanvasImageSourceNode } from "@/lib/canvas/canvas-image-source";
 import { canRotateCanvasImage, currentImageRotation } from "@/lib/canvas/canvas-image-rotation";
@@ -223,33 +224,20 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         disabled: (ctx) => ctx.extractingAudio || ctx.trimmingVideo,
         run: (ctx) => ctx.handlers.onNodeTrimVideoSegments(ctx.node!),
     },
-    {
-        id: "enhanceVideo",
+    ...videoProcessingTools.map((tool, index): ToolDefinition => ({
+        id: tool.id,
         toolbar: "node-hover",
         category: "node-state",
-        label: "画质增强：提升视频分辨率与细节，生成新视频节点",
-        displayLabel: "画质增强",
+        label: tool.description,
+        displayLabel: tool.label,
         icon: <ImageUpscale className="size-3.5" />,
         defaultVisible: true,
-        defaultOrder: 45,
-        nodeToolbar: { group: "process", order: 30, section: "画质", description: "AI 提升清晰度，另存为新视频" },
-        applicable: (ctx) => hasVideo(ctx) && !simpleMode(ctx) && Boolean(ctx.handlers.onNodeEnhanceVideo) && ctx.nodeMetadata?.status !== "loading",
+        defaultOrder: 45 + index,
+        nodeToolbar: { group: "process", order: 30 + index, section: "视频处理", description: tool.description },
+        applicable: (ctx) => hasVideo(ctx) && !simpleMode(ctx) && Boolean(ctx.handlers.onNodeProcessVideo) && Boolean(ctx.handlers.canProcessVideo?.(tool.operation)) && ctx.nodeMetadata?.status !== "loading",
         disabled: (ctx) => !ctx.nodeMetadata?.storageKey && !ctx.nodeMetadata?.content,
-        run: (ctx) => ctx.handlers.onNodeEnhanceVideo?.(ctx.node!),
-    },
-    {
-        id: "depthVideo",
-        toolbar: "node-hover",
-        category: "node-state",
-        label: "生成逐帧相对深度视频，用于动作与运镜参考",
-        displayLabel: "相对深度",
-        icon: <Layers className="size-3.5" />,
-        defaultVisible: true,
-        defaultOrder: 46,
-        nodeToolbar: { group: "process", order: 31, section: "深度", description: "提取相对深度，另存为新视频" },
-        applicable: (ctx) => hasVideo(ctx) && !simpleMode(ctx) && Boolean(ctx.handlers.onNodeDepthVideo) && ctx.nodeMetadata?.status !== "loading",
-        run: (ctx) => ctx.handlers.onNodeDepthVideo?.(ctx.node!),
-    },
+        run: (ctx) => ctx.handlers.onNodeProcessVideo?.(ctx.node!, tool.operation),
+    })),
     {
         id: "saveAsset",
         toolbar: "node-hover",

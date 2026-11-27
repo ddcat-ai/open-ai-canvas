@@ -28,10 +28,11 @@ func cloudAgentApplyUniqueModelListSelection(state *cloudAgentRuntime, raw strin
 			return false
 		}
 		var query struct {
+			Operation        string   `json:"operation"`
 			Mode             string   `json:"mode"`
 			ReferenceNodeIDs []string `json:"referenceNodeIds"`
 		}
-		if err := json.Unmarshal([]byte(stringValue(event.Payload["arguments"])), &query); err != nil || query.Mode != a.Mode || !sameStringSlice(query.ReferenceNodeIDs, a.ReferenceNodeIDs) {
+		if err := json.Unmarshal([]byte(stringValue(event.Payload["arguments"])), &query); err != nil || query.Mode != a.Mode || query.Operation != a.Operation || !sameStringSlice(query.ReferenceNodeIDs, a.ReferenceNodeIDs) {
 			return false
 		}
 		result, ok := event.Payload["result"].(map[string]any)

@@ -1,4 +1,5 @@
 import { defaultModelCapabilityConfig } from "@/lib/model-capabilities";
+import { mediaToolForOperation, videoProcessingTools } from "@/lib/canvas/media-tool-contract";
 import { imageHostControls, imageParameterAccepts, initializeImageRatioDefaults, resolveImageParameters, type ImageParameter } from "@/lib/image-parameters";
 import { imageResolutionTiers } from "@/lib/image-size-presets";
 import { normalizeTierResolution } from "@/lib/model-pricing";
@@ -121,12 +122,12 @@ export function pricingDimensions(values: PricingContext): PricingDimension[] {
         add(
             "operation",
             "生成方式",
-            video.operations.filter((operation) => ["text_to_video", "image_to_video", "video_to_video", "enhance", "depth"].includes(operation)),
+            video.operations.filter((operation) => ["text_to_video", "image_to_video", "video_to_video", ...videoProcessingTools.map((tool) => tool.operation)].includes(operation)),
         );
         add("resolution", "分辨率", [...video.resolutions, ...(video.fixedScreenSpec?.resolutions || [])].map(normalizeTierResolution));
         // processing 的计价合同固定声明三档（后端 videoProcessingFPSBands）；
         // fpsOptions 只限制用户可选的输出帧率，keep_source 不需要提供该列表。
-        if (video.processing && video.defaultOperation !== "depth") add("fpsBand", "输出帧率档", ["le30", "le60", "le120"]);
+        if (video.processing && mediaToolForOperation(video.defaultOperation)?.parameters.fps) add("fpsBand", "输出帧率档", ["le30", "le60", "le120"]);
     }
     return dimensions;
 }

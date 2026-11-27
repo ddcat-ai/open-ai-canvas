@@ -42,9 +42,7 @@ import {
 import { imageLayerBackgroundPatch, imageLayerExtractionTargets, resolveImageLayerExtractions, type ImageLayerExtraction } from "@/lib/canvas/canvas-image-layer-strategy";
 import { buildAngleLabel, buildAnglePrompt, createCanvasNode } from "@/lib/canvas/canvas-project-domain";
 import { validateVideoSegmentBatch } from "@/lib/canvas/canvas-video-regeneration";
-import { videoEnhanceTaskInput, type VideoEnhanceParams } from "@/lib/canvas/canvas-video-enhance";
-import { videoDepthTaskInput, type VideoDepthParams } from "@/lib/canvas/canvas-video-depth";
-import { listVideoProcessingModels, videoProcessingSourceReference, type VideoProcessingOperation } from "@/lib/canvas/canvas-video-processing";
+import { listVideoProcessingModels, videoProcessingSourceReference, videoProcessingTaskInput, VIDEO_PROCESSING_LABELS, type VideoProcessingOperation, type VideoProcessingParams } from "@/lib/canvas/canvas-video-processing";
 import { resolveCanvasStyleExecution } from "@/lib/canvas/canvas-style-execution";
 import { buildGenerationConfig, buildImageGenerationMetadata, nodeReferenceImage, isGenerationCanceled, runBackendCanvasGenerationTask, runCanvasGenerationTaskToConsumer } from "@/lib/canvas/canvas-project-generation";
 import { canvasImageNodeDimensions } from "@/lib/canvas/canvas-reference-image-size";
@@ -1998,11 +1996,11 @@ export function useCanvasMediaTools({
     const openVideoProcessing = useCallback(
         (node: CanvasNodeData, operation: VideoProcessingOperation) => {
             if (!node.metadata?.storageKey && !node.metadata?.content) {
-                message.warning(translate(operation === "depth" ? "canvasPage.mediaTools.emptyVideoDepth" : "canvasPage.mediaTools.emptyVideoEnhance"));
+                message.warning(`视频节点为空，无法${VIDEO_PROCESSING_LABELS[operation]}`);
                 return;
             }
             if (!listVideoProcessingModels(effectiveConfig, operation).length) {
-                message.warning(translate(operation === "depth" ? "canvasPage.mediaTools.noDepthModel" : "canvasPage.mediaTools.noEnhanceModel"));
+                message.warning(`管理员尚未配置可用的${VIDEO_PROCESSING_LABELS[operation]}模型`);
                 return;
             }
             setHoveredNodeId(null);
@@ -2014,19 +2012,27 @@ export function useCanvasMediaTools({
 
     // 确认处理后才创建结果节点、连线与任务，统一结果回写保留原视频。
     const processVideoNode = useCallback(
-        async (node: CanvasNodeData, request: { operation: "enhance"; params: VideoEnhanceParams } | { operation: "depth"; params: VideoDepthParams }) => {
-            setVideoProcessingDialog(null);
+        async (node: CanvasNodeData, request: { operation: VideoProcessingOperation; params: VideoProcessingParams }) => {
+            // 确认期间模型可能被停用；无有效源视频或模型时不能先创建结果节点。
+            if ((!node.metadata?.storageKey && !node.metadata?.content) || !listVideoProcessingModels(effectiveConfig, request.operation).includes(request.params.model)) {
+                message.warning("源视频或处理模型已不可用，请重新选择");
+                return;
+            }
             const { operation, params } = request;
             const source = videoProcessingSourceReference(node);
             const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Video];
             const childId = nanoid();
             const inputOptions = { config: effectiveConfig, source, sourceNodeId: node.id, projectId, nodeId: childId };
-            const input = request.operation === "depth" ? videoDepthTaskInput({ ...inputOptions, params: request.params }) : videoEnhanceTaskInput({ ...inputOptions, params: request.params });
-            const processingMetadata = request.operation === "depth" ? { videoDepth: { sourceNodeId: node.id, ...request.params } } : { videoEnhance: { sourceNodeId: node.id, ...request.params }, vquality: request.params.resolution };
-            const title =
-                request.operation === "depth"
-                    ? translate("canvasPage.mediaTools.titleDepth", { title: node.title || translate("canvasPage.common.video") })
-                    : translate("canvasPage.mediaTools.titleEnhance", { title: node.title || translate("canvasPage.common.video"), resolution: request.params.resolution.toUpperCase() });
+            let input: ReturnType<typeof videoProcessingTaskInput>;
+            try {
+                input = videoProcessingTaskInput({ ...inputOptions, operation, params });
+            } catch (error) {
+                message.error(error instanceof Error ? error.message : "视频处理参数无效");
+                return;
+            }
+            setVideoProcessingDialog(null);
+            const processingMetadata = { generationSpec: input.metadata.generationSpec, processingParameters: input.metadata.processingParameters, vquality: params.resolution };
+            const title = `${node.title || translate("canvasPage.common.video")} · ${VIDEO_PROCESSING_LABELS[operation]}`;
             setRunningNodeId(childId);
             setNodes((current) => [
                 ...current,

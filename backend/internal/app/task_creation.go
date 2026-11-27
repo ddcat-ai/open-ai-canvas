@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"strings"
+	"yingce/backend/internal/canvas/mediatool"
 
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/repository"
@@ -81,6 +82,25 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 	}
 	// 视频处理（kind=processing）以源视频为主体，不要求 prompt；提示词由服务端生成，
 	// 源时长、帧率档和处理参数在这里按资源记录与后台配置重算。
+	if _, registered := mediatool.Lookup(req.Operation); registered {
+		metadata, _ := normalizedInput["metadata"].(map[string]any)
+		if metadata == nil {
+			metadata = map[string]any{}
+			normalizedInput["metadata"] = metadata
+		}
+		if explicit := stringValue(metadata["operation"]); explicit != "" && explicit != req.Operation {
+			return nil, BadAuthRequest("任务处理操作不一致")
+		}
+		metadata["operation"] = req.Operation
+	}
+	processingOperation, err := s.preparePublicVideoProcessingIntent(userID, normalizedInput)
+	if err != nil {
+		return nil, err
+	}
+	if processingOperation != "" {
+		req.Operation = processingOperation
+		prompt = stringValue(normalizedInput["prompt"])
+	}
 	processing, err := s.prepareVideoProcessingTask(userID, normalizedInput)
 	if err != nil {
 		return nil, err
@@ -132,6 +152,18 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 		routed, normalizedInput, err = s.resolveTaskModelSelection(userID, normalizedInput, logicalModelID, taskType, req.Operation, frontendEnabled)
 		if err != nil {
 			return nil, err
+		}
+		// 逻辑路由在此才获得具体渠道，必须再次执行处理准入和最终参数映射。
+		processing, err = s.prepareVideoProcessingTask(userID, normalizedInput)
+		if err != nil {
+			return nil, err
+		}
+		if processingOperation != "" && processing == nil {
+			return nil, BadAuthRequest("所选模型不是可执行的视频处理模型")
+		}
+		if processing != nil {
+			prompt = processing.Prompt
+			normalizedInput["prompt"] = prompt
 		}
 	}
 
@@ -681,6 +713,19 @@ func (s *Service) resolveSystemChannelModelSelection(access *userGroupAccess, in
 	input["capabilityOptions"] = capabilityOptionsFromConfig(channelModel.Capability, nextConfig, declaredOptions)
 
 	intent := ModelRequestIntentFromTaskInput(input, taskType, operation)
+	if _, processing := mediatool.Lookup(intent.Operation); processing {
+		// 报价与真实任务共用渠道默认值，保持源帧率时也必须解析出一致的计价档。
+		intent, err = s.resolveVideoProcessingRouteDefaults(intent, *channelModel)
+		if err != nil {
+			return input, err
+		}
+		input["capabilityOptions"] = maps.Clone(intent.Options)
+		for _, key := range []string{"vquality", "fpsBand"} {
+			if value, exists := intent.Options[key]; exists {
+				nextConfig[key] = value
+			}
+		}
+	}
 	if capabilitySpec != nil && normalizeCapability(intent.Capability) == "image" {
 		intent = normalizeImageSizeIntent(*capabilitySpec, intent)
 		input["capabilityOptions"] = maps.Clone(intent.Options)

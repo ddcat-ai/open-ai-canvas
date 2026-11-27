@@ -27,6 +27,8 @@ export type ModelRequestIntent = {
     operation?: string;
     inputs?: Record<string, number>;
     options?: Record<string, unknown>;
+    /** 视频处理公开参数；精确帧率用于渠道筛选，帧率档仅用于计价。 */
+    processingParameters?: import("@/lib/canvas/media-tools.generated").ProcessingParameters;
     /** 仅报价：按顺序给出参考视频时长（毫秒），长度必须等于 inputs.video；真实任务由后端实测。 */
     referenceVideoDurationsMs?: number[];
 };

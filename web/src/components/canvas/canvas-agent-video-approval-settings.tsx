@@ -9,6 +9,11 @@ import { preserveVideoSettings } from "@/lib/media-settings";
 import { resolveCompatibleModel, type ModelRequirements } from "@/lib/model-selection";
 import type { AgentMediaSettings } from "@/services/api/agent";
 import { PUBLIC_MODEL_CATALOG_ID, resolveModelRequestConfig, useEffectiveConfig } from "@/stores/use-config-store";
+import { listVideoProcessingModels, videoProcessingFields } from "@/lib/canvas/canvas-video-processing";
+import { mediaToolForOperation } from "@/lib/canvas/media-tool-contract";
+import { MediaToolParameterFields } from "./canvas-video-processing-dialog";
+import { Select } from "@/components/ui/base/select";
+import { modelDisplayName } from "@/stores/use-config-store";
 
 export function CanvasAgentVideoApprovalSettings({ initial, value, theme, disabled, onChange }: { initial: AgentVideoApproval; value?: AgentMediaSettings; theme: CanvasTheme; disabled: boolean; onChange: (value: AgentMediaSettings) => void }) {
     const { t } = useTranslation();
@@ -76,6 +81,61 @@ export function CanvasAgentVideoApprovalSettings({ initial, value, theme, disabl
         // 保留用户选择的模型身份；参数与素材校验不会借用其他 Key 的能力。
         onChange({ ...nextSettings, logicalModelId: undefined, channelId: undefined, channelModelKey: undefined, ...agentApprovalModelSelection(config, selected || model) });
     };
+
+    if (initial.operation) {
+        const operation = initial.operation;
+        const tool = mediaToolForOperation(operation);
+        const models = listVideoProcessingModels(config, operation);
+        const fields = videoProcessingFields(config, model, operation);
+        const values = { ...settings.processingParameters, ...(settings.quality ? { resolution: settings.quality } : {}) };
+        return (
+            <fieldset disabled={disabled} className="min-w-0 space-y-3 border-0 p-0" data-canvas-no-zoom data-canvas-wheel-scroll aria-label={`${tool?.label || "视频处理"}参数`}>
+                <p className="text-sm">
+                    {tool?.label} · 源视频 {duration} 秒
+                </p>
+                <Select
+                    ariaLabel="处理模型"
+                    disabled={disabled}
+                    value={model}
+                    options={models.map((value) => ({ value, label: modelDisplayName(config, value) }))}
+                    onChange={(next) => {
+                        if (disabled) return;
+                        const nextFields = videoProcessingFields(config, next, operation);
+                        const defaults = Object.fromEntries(
+                            Object.entries(nextFields)
+                                .filter(([, field]) => field.default !== undefined)
+                                .map(([key, field]) => [key, field.default]),
+                        );
+                        const { resolution, ...processingParameters } = defaults;
+                        onChange({ ...agentApprovalModelSelection(config, next), size: "", quality: typeof resolution === "string" ? resolution : "", processingParameters });
+                    }}
+                />
+                <MediaToolParameterFields
+                    fields={fields}
+                    values={values}
+                    disabled={disabled}
+                    onChange={(key, next) => {
+                        if (disabled) return;
+                        if (key === "resolution") {
+                            onChange({ ...settings, quality: typeof next === "string" ? next : "" });
+                            return;
+                        }
+                        const parameters = { ...settings.processingParameters } as Record<string, string | number>;
+                        if (next === undefined) delete parameters[key];
+                        else parameters[key] = next;
+                        if (key === "bitrate" && next !== undefined) delete parameters.bitrateLevel;
+                        onChange({ ...settings, processingParameters: parameters });
+                    }}
+                />
+                {!models.includes(model) ? (
+                    <p role="alert" className="text-sm text-destructive">
+                        处理模型不可用，请重新选择。
+                    </p>
+                ) : null}
+                <p className="text-xs text-muted-foreground">修改参数后由服务端重新核算规格与报价，原视频保留。</p>
+            </fieldset>
+        );
+    }
 
     return (
         <fieldset disabled={disabled} className="min-w-0 space-y-3 border-0 p-0" data-canvas-no-zoom data-canvas-wheel-scroll aria-label={t("canvasA.approval.videoSettings")}>

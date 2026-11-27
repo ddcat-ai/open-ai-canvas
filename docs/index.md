@@ -12,6 +12,8 @@
 
 ## 设计沉淀
 
+- [画布与 Agent 共用业务工具规格](design/shared-canvas-agent-tools-spec.md)：一次注册投影画布入口与 Agent 合同，统一视频处理的准入、参数、审批、计费及重试（首批视频处理已本地实现，待真实验收）。
+
 - [短剧拆镜与段间连续性调研](design/short-drama-shot-continuity-research.md)：对照制作台、同类产品和公开 Skill，区分同镜续拍、同场换镜与换场，附真实样片回查方法（调研建议，未实施）。
 
 - [团队空间、积分划拨与素材共享](design/team-workspace-design.md)：自由画布、创作页和素材库在个人与团队之间复用，按空间隔离作品与费用。使用入口见[功能清单](content/docs/overview/features.mdx)。

@@ -67,13 +67,16 @@ func cloudAgentGenerationSpec(a cloudAgentMediaArgs, refs map[string]any, resolv
 	if a.SourceNodeID != "" {
 		bindings = append(bindings, contract.ReferenceBinding{ID: "node:" + a.SourceNodeID, NodeID: a.SourceNodeID, MediaType: "text", Role: "source-text", Order: len(bindings), Resolution: "latest"})
 	}
-	spec := contract.GenerationSpec{Version: contract.GenerationVersion, Mode: a.Mode, Prompt: a.Prompt, ModelSelection: selection, Options: options, ReferenceBindings: bindings, TextInputMode: "prompt-only"}
+	spec := contract.GenerationSpec{Version: contract.GenerationVersion, Mode: a.Mode, Prompt: a.Prompt, ModelSelection: selection, Options: options, ReferenceBindings: bindings, TextInputMode: "prompt-only", Operation: a.Operation, ProcessingParameters: a.ProcessingParameters}
 	return spec, spec.Validate()
 }
 
 func cloudAgentMediaOptions(a cloudAgentMediaArgs) contract.Options {
 	options := contract.Options{}
-	// Absence stays absent until capability admission resolves model defaults.
+	// 从已执行版本继承的公开选项包含音色等工具未直接暴露的字段，不能在适配时丢失。
+	if a.InheritedOptions != nil {
+		options = *a.InheritedOptions
+	}
 	if (a.Mode == "image" || a.Mode == "video") && strings.TrimSpace(a.Size) != "" {
 		options.Size = &a.Size
 	}
@@ -83,6 +86,9 @@ func cloudAgentMediaOptions(a cloudAgentMediaArgs) contract.Options {
 		}
 		options.GenerateAudio = a.VideoGenerateAudio
 		options.Watermark = a.VideoWatermark
+		if a.VideoArkPrivateAssetUpload != nil {
+			options.ArkPrivateAssetUpload = a.VideoArkPrivateAssetUpload
+		}
 		if a.Quality != "" {
 			options.Resolution = &a.Quality
 		}

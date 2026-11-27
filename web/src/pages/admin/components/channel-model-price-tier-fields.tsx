@@ -316,7 +316,16 @@ function operationOptions(capability: EditableCapability | undefined) {
     const options = [{ label: "任意生成方式", value: "*" }];
     if (capability === "image") return [...options, { label: "文生图", value: "text_to_image" }, { label: "图生图", value: "image_to_image" }];
     if (capability === "video")
-        return [...options, { label: "文生视频", value: "text_to_video" }, { label: "图生视频", value: "image_to_video" }, { label: "视频生视频", value: "video_to_video" }, { label: "画质增强", value: "enhance" }, { label: "相对深度", value: "depth" }];
+        return [
+            ...options,
+            { label: "文生视频", value: "text_to_video" },
+            { label: "图生视频", value: "image_to_video" },
+            { label: "视频生视频", value: "video_to_video" },
+            { label: "画质增强", value: "enhance" },
+            { label: "相对深度", value: "depth" },
+            { label: "视频超分", value: "upscale" },
+            { label: "去字幕", value: "remove_subtitles" },
+        ];
     if (capability === "text") return [...options, { label: "文本生成", value: "text_generation" }];
     return options;
 }

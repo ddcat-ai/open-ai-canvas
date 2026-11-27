@@ -432,6 +432,9 @@ func (s *Service) DecideCloudAgentApproval(userID, id, approvalID, decision, rea
 	if run.Status != "waiting_approval" || state.Approval == nil || state.Approval.ID != approvalID {
 		return creationConflict("审批不存在或已过期")
 	}
+	if decision == "approve" && len(state.Approval.SourceChoices) > 0 {
+		return s.decideCloudAgentMediaSource(run, &state, settings)
+	}
 	// 批准后的收尾由本请求负责，先登记再落库：决定一落库运行就是 running，Pi 会话据登记
 	// 让出执行权，不会抢在收尾前用原始提示词另起一轮。同一审批的并发请求只有一个能登记，
 	// 其余只记录决定。见 cloud_agent_approval_followup.go。
@@ -497,7 +500,7 @@ func (s *Service) DecideCloudAgentApproval(userID, id, approvalID, decision, rea
 				// follow-up model request may be produced from this decision.
 				rejectionText := "已拒绝本次操作，本次操作未执行。"
 				rejectionEndText := "本轮已结束：已拒绝本次操作"
-				if state.Approval != nil && cloudAgentMediaTool(state.Approval.Call.Function.Name) {
+				if state.Approval != nil && cloudAgentMediaTool(state.Approval.Call.Function.Name) && len(state.Approval.SourceChoices) == 0 {
 					rejectionText = "已拒绝本次生成，草稿节点仍保留在画布中；未提交任务、未产生扣费。你可以继续编辑后重新申请。"
 					rejectionEndText = "本轮已结束：已拒绝本次生成"
 				}
