@@ -7,31 +7,34 @@ export function dramaIsWorking(summary?: DramaSummary) {
     return Boolean(summary && (summary.production.status === "running" || (summary.jobCounts.running || 0) > 0));
 }
 
-export function useDramaCast(projectId: string, summary?: DramaSummary) {
+export function useDramaCast(projectId: string, summary?: DramaSummary, visible?: boolean) {
     const client = useQueryClient();
     const active = dramaIsWorking(summary);
     const query = useQuery({
         queryKey: dramaKeys.cast(projectId),
         queryFn: ({ signal }) => listDramaCast(projectId, signal),
         enabled: Boolean(projectId),
-        refetchOnMount: "always",
+        refetchOnMount: visible === false ? true : "always",
         refetchInterval: active ? 4_000 : false,
     });
-    const previous = useRef<{ projectId: string; active: boolean; cast?: DramaCast[] } | null>(null);
+    const refreshKey = summary ? [summary.castCount, summary.jobCounts.succeeded || 0, summary.jobCounts.failed || 0, summary.jobCounts.canceled || 0].join(":") : undefined;
+    const previous = useRef<{ projectId: string; active: boolean; visible?: boolean; refreshKey?: string; cast?: DramaCast[] } | null>(null);
     const casts = query.data?.cast;
     useEffect(() => {
         const prior = previous.current;
-        previous.current = { projectId, active, cast: casts };
+        previous.current = { projectId, active, visible, refreshKey, cast: casts };
         if (!projectId || prior?.projectId !== projectId) return;
         const settled = prior.active && !active;
-        if (settled) void client.invalidateQueries({ queryKey: dramaKeys.cast(projectId), exact: true });
+        const entered = visible && !prior.visible;
+        const changed = prior.refreshKey !== undefined && refreshKey !== undefined && prior.refreshKey !== refreshKey;
+        if (settled || entered || changed) void client.invalidateQueries({ queryKey: dramaKeys.cast(projectId), exact: true });
         // React Query 对相同的数据保留数组引用。引用数也可能随分镜写入而变化。
         if (prior.cast === casts && !settled) return;
         void client.invalidateQueries({ queryKey: dramaKeys.episodes(projectId) });
         void client.invalidateQueries({ queryKey: ["drama", projectId, "cast-impact"] });
         void client.invalidateQueries({ queryKey: ["drama", projectId, "takes", "cast"] });
         void client.invalidateQueries({ queryKey: ["project-asset-picker", projectId] });
-    }, [active, casts, client, projectId]);
+    }, [active, casts, client, projectId, refreshKey, visible]);
     const byId = useMemo(() => new Map((casts || []).map((cast) => [cast.id, cast] as const)), [casts]);
     return { ...query, cast: casts || [], byId };
 }
