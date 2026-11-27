@@ -1,0 +1,371 @@
+.audio-stem-config,
+.audio-stem-task {
+    color: var(--foreground);
+    background: var(--surface);
+    font-size: var(--fs-body);
+    line-height: 1.5;
+}
+.audio-stem-config-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 24px 20px 20px 24px;
+}
+.audio-stem-feature-icon {
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    background: var(--accent-soft);
+}
+.audio-stem-config h2 {
+    margin: 0;
+    font-size: var(--fs-title);
+    font-weight: 600;
+    line-height: 1.4;
+}
+.audio-stem-config-header p {
+    margin: 4px 0 0;
+    color: var(--text-secondary);
+}
+.audio-stem-icon-button {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: var(--r-md);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+.audio-stem-icon-button:hover {
+    background: var(--surface-hover);
+    color: var(--foreground);
+}
+.audio-stem-icon-button:focus-visible,
+.audio-stem-task-action:focus-visible,
+.audio-stem-help summary:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+}
+.audio-stem-config-body {
+    display: grid;
+    gap: 20px;
+    padding: 0 24px 24px;
+}
+.audio-stem-source {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 12px;
+    background: var(--surface-card);
+}
+.audio-stem-source > svg {
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+.audio-stem-source > span:first-of-type {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+}
+.audio-stem-source-badge {
+    flex-shrink: 0;
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+}
+.audio-stem-options {
+    padding: 0;
+    margin: 0;
+    border: 0;
+    min-width: 0;
+}
+.audio-stem-options legend {
+    margin-bottom: 12px;
+    font-weight: 600;
+    font-size: var(--fs-ui);
+}
+.audio-stem-option-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+.audio-stem-choice {
+    position: relative;
+    cursor: pointer;
+}
+.audio-stem-choice input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+}
+.audio-stem-choice-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    height: 100%;
+    padding: 14px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    transition:
+        background 160ms ease,
+        border-color 160ms ease;
+}
+.audio-stem-choice:hover .audio-stem-choice-body {
+    background: var(--surface-hover);
+}
+.audio-stem-choice input:checked + .audio-stem-choice-body {
+    border-color: var(--foreground);
+    background: var(--accent-soft);
+}
+.audio-stem-choice input:focus-visible + .audio-stem-choice-body {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+}
+.audio-stem-choice-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.audio-stem-choice-check {
+    display: grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-full);
+}
+.audio-stem-choice input:checked + .audio-stem-choice-body .audio-stem-choice-check {
+    color: var(--background);
+    background: var(--foreground);
+    border-color: var(--foreground);
+}
+.audio-stem-choice-label {
+    font-weight: 600;
+}
+.audio-stem-choice-detail {
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+}
+.audio-stem-promise {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+}
+.audio-stem-promise svg {
+    flex-shrink: 0;
+}
+.audio-stem-help {
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+}
+.audio-stem-help summary {
+    width: fit-content;
+    cursor: pointer;
+    padding: 4px 0;
+}
+.audio-stem-help p {
+    margin: 8px 0 0;
+    line-height: 1.7;
+}
+.audio-stem-config-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    background: var(--surface-card);
+}
+.audio-stem-config-footer > span {
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+}
+.audio-stem-task {
+    position: absolute;
+    left: 16px;
+    bottom: 96px;
+    z-index: var(--z-panel-floating);
+    width: min(360px, calc(100% - 32px));
+    border: 1px solid var(--border);
+    border-radius: var(--r-2xl);
+    box-shadow: var(--elevation-overlay);
+}
+.audio-stem-task-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 8px 6px 16px;
+}
+.audio-stem-task-icon {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    border-radius: var(--r-lg);
+    background: var(--accent-soft);
+}
+.audio-stem-task[data-status="succeeded"] .audio-stem-task-icon {
+    color: var(--status-success);
+}
+.audio-stem-task[data-status="failed"] .audio-stem-task-icon {
+    color: var(--status-error);
+}
+.audio-stem-task-header h3 {
+    margin: 0;
+    font-size: var(--fs-ui);
+    font-weight: 600;
+}
+.audio-stem-task-header p {
+    margin: 2px 0 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+}
+.audio-stem-task-body {
+    padding: 8px 16px 0;
+}
+.audio-stem-phase {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+}
+.audio-stem-progress {
+    height: 4px;
+    margin: 10px 0 12px;
+    overflow: hidden;
+    border-radius: var(--r-full);
+    background: var(--surface-active);
+}
+.audio-stem-progress > span {
+    display: block;
+    height: 100%;
+    width: 100%;
+    transform-origin: left;
+    background: var(--foreground);
+    transition: transform 160ms ease;
+}
+.audio-stem-progress > .audio-stem-progress-pending {
+    width: 30%;
+    animation: audio-stem-pending 1.8s ease-in-out infinite;
+}
+.audio-stem-task-detail {
+    margin: 0 0 12px;
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+.audio-stem-task-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 48px;
+    border-top: 1px solid var(--border);
+}
+.audio-stem-task-footer > span,
+.audio-stem-task-collapsed > span {
+    color: var(--text-secondary);
+    font-size: var(--fs-caption);
+}
+.audio-stem-task-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 44px;
+    border: 0;
+    border-radius: var(--r-md);
+    padding: 0 8px;
+    background: transparent;
+    color: var(--foreground);
+    font-size: var(--fs-caption);
+    cursor: pointer;
+}
+.audio-stem-task-action:hover {
+    background: var(--surface-hover);
+}
+.audio-stem-task-action:disabled {
+    cursor: default;
+    color: var(--text-secondary);
+    background: transparent;
+}
+.audio-stem-config-footer .ant-btn {
+    min-height: 44px;
+}
+.audio-stem-task-collapsed {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 44px;
+    padding: 0 16px;
+}
+@keyframes audio-stem-pending {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(340%);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .audio-stem-choice-body,
+    .audio-stem-progress > span {
+        transition: none;
+    }
+    .audio-stem-progress > .audio-stem-progress-pending {
+        animation: none;
+    }
+}
+@media (max-width: 480px) {
+    .audio-stem-config-header {
+        padding: 20px 12px 16px 20px;
+        gap: 10px;
+    }
+    .audio-stem-config h2 {
+        font-size: var(--fs-heading);
+    }
+    .audio-stem-config-body {
+        padding: 0 20px 20px;
+        gap: 16px;
+    }
+    .audio-stem-option-grid {
+        gap: 8px;
+    }
+    .audio-stem-choice-body {
+        padding: 12px 8px;
+    }
+    .audio-stem-choice-detail {
+        line-height: 1.6;
+    }
+    .audio-stem-config-footer {
+        padding: 16px 20px;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .audio-stem-config-footer .ant-btn {
+        flex: 1;
+    }
+}

@@ -16,6 +16,7 @@ const apiProxyTarget = process.env.VITE_API_PROXY_TARGET?.trim() || "http://127.
 
 export default defineConfig({
     plugins: [react(), resilientPreload(), startupChunks()],
+    worker: { format: "es" },
     define: {
         __APP_VERSION__: JSON.stringify(appVersion),
         __APP_CHANGELOG__: JSON.stringify(appChangelog),

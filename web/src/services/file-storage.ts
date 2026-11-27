@@ -1,7 +1,7 @@
 import localforage from "localforage";
 import { nanoid } from "nanoid";
 
-import { getActiveUserScope } from "@/lib/user-scope";
+import { assertCurrentUserSession, captureUserSession, getActiveUserScope } from "@/lib/user-scope";
 import { captureVideoPoster, detectVideoAudioTrackFromBlob } from "@/lib/video-poster";
 import { getResourceAccess, resolveResourceAccessURL, resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, ResourceUploadError, uploadResourceFile, type ResourceAccessVariant } from "@/services/api/resources";
 import { uploadImage, type UploadedImage } from "@/services/image-storage";
@@ -29,9 +29,20 @@ export type UploadedFile = {
 
 const store = localforage.createInstance({ name: "yingce", storeName: "media_files" });
 
-export async function uploadMediaFile(input: Blob, prefix = "file", onProgress?: (uploadedBytes: number, totalBytes: number) => void): Promise<UploadedFile> {
+export type MediaUploadOptions = { signal?: AbortSignal; expectedUserId?: string };
+
+export async function uploadMediaFile(input: Blob, prefix = "file", onProgress?: (uploadedBytes: number, totalBytes: number) => void, options: MediaUploadOptions = {}): Promise<UploadedFile> {
     // 直传和失败后的本地同步必须复用同一上传身份，避免响应丢失后创建第二个对象。
     const session = localMediaSession();
+    const userSession = captureUserSession();
+    const signal = options.signal ? AbortSignal.any([options.signal, userSession.signal]) : userSession.signal;
+    const assertUploadActive = () => {
+        signal.throwIfAborted();
+        assertCurrentUserSession(userSession);
+        assertLocalMediaSession(session);
+        if (options.expectedUserId && options.expectedUserId !== session.scope) throw new DOMException("上传所属账号已变化", "AbortError");
+    };
+    assertUploadActive();
     const storageKey = `${prefix}:${session.scope}:${nanoid()}`;
     const blob = input;
     const previewUrl = URL.createObjectURL(blob);
@@ -41,8 +52,9 @@ export async function uploadMediaFile(input: Blob, prefix = "file", onProgress?:
         let captured: Awaited<ReturnType<typeof captureVideoPoster>> | undefined;
         if (blob.type.startsWith("video/")) {
             try {
-                captured = await captureVideoPoster(previewUrl);
+                captured = await captureVideoPoster(previewUrl, { signal });
             } catch (error) {
+                assertUploadActive();
                 // 封面和轨道信息属于展示增强：失败不阻断原文件上传，但必须留下可诊断信号。
                 console.warn("读取视频封面与媒体信息失败，继续上传原文件", { mimeType: blob.type, bytes: blob.size, error });
             }
@@ -53,8 +65,9 @@ export async function uploadMediaFile(input: Blob, prefix = "file", onProgress?:
         let parsedHasAudio: boolean | undefined;
         if (blob.type.startsWith("video/") && captured?.hasAudio !== true) {
             try {
-                parsedHasAudio = await detectVideoAudioTrackFromBlob(blob);
+                parsedHasAudio = await waitForMediaOperation(() => detectVideoAudioTrackFromBlob(blob), signal);
             } catch (error) {
+                assertUploadActive();
                 console.warn("解析视频音轨失败，继续上传但不写入音轨结论", { mimeType: blob.type, bytes: blob.size, error });
             }
         }
@@ -65,8 +78,9 @@ export async function uploadMediaFile(input: Blob, prefix = "file", onProgress?:
             meta = { width: captured.width, height: captured.height, durationMs: captured.durationMs, hasAudio: resolvedHasAudio };
         } else if (blob.type.startsWith("audio/")) {
             try {
-                meta = await readAudioMeta(previewUrl);
+                meta = await readAudioMeta(previewUrl, signal);
             } catch (error) {
+                assertUploadActive();
                 console.warn("读取音频时长失败，继续上传原文件", { mimeType: blob.type, bytes: blob.size, error });
                 meta = {};
             }
@@ -74,27 +88,31 @@ export async function uploadMediaFile(input: Blob, prefix = "file", onProgress?:
             meta = { hasAudio: resolvedHasAudio };
         }
 
+        assertUploadActive();
         let poster: UploadedImage | undefined;
         if (captured?.poster) {
             try {
                 poster = await uploadImage(captured.poster);
             } catch (error) {
+                assertUploadActive();
                 // 预览图失败不应把已经可用的视频降级成本地文件；视频本体仍按强校验上传。
                 console.warn("上传视频预览图失败，继续保存视频本体", { mimeType: blob.type, bytes: blob.size, error });
             }
         }
 
+        assertUploadActive();
         let remoteUploadError = "";
         try {
             const kind = blob.type.startsWith("video/") ? "video" : blob.type.startsWith("audio/") ? "audio" : "file";
-            const resource = await uploadResourceFile(blob, kind, { ...meta, fileName: input instanceof File ? input.name : undefined, idempotencyKey: storageKey }, onProgress);
-            assertLocalMediaSession(session);
+            const resource = await uploadResourceFile(blob, kind, { ...meta, fileName: input instanceof File ? input.name : undefined, idempotencyKey: storageKey, signal, expectedUserId: session.scope }, onProgress);
+            assertUploadActive();
             try {
                 await primeResourceBlobCache(resourceStorageKey(resource.id), blob);
             } catch (error) {
                 // 缓存只影响后续读取性能，服务端资源已经成功落盘，不得把缓存失败误报为上传失败。
                 console.warn("预热媒体缓存失败，服务端资源已保存", { resourceId: resource.id, error });
             }
+            assertUploadActive();
             return {
                 url: resource.publicUrl || resourceFileUrl(resource.id),
                 storageKey: resourceStorageKey(resource.id),
@@ -107,14 +125,17 @@ export async function uploadMediaFile(input: Blob, prefix = "file", onProgress?:
                 preview: poster,
             };
         } catch (error) {
+            assertUploadActive();
+            if (error instanceof Error && error.name === "AbortError") throw error;
             // 与图片上传同一套判定：永久性失败必须当场暴露，不能混进“稍后自动同步”。
             if (error instanceof ResourceUploadError && error.permanent) throw error;
             remoteUploadError = error instanceof Error ? error.message : "媒体直传失败";
         }
 
         // 瞬时失败退回本机：文件仍可用，且云端数据同步会用同一幂等键重传。
-        assertLocalMediaSession(session);
+        assertUploadActive();
         await store.setItem(storageKey, blob);
+        assertUploadActive();
         storeLocalMediaObjectUrl("media", storageKey, blob, session, { replace: true, url: previewUrl });
         retainPreviewUrl = true;
         return { url: previewUrl, storageKey, bytes: blob.size, mimeType: blob.type || "application/octet-stream", ...meta, preview: poster, pendingRemoteUpload: true, remoteUploadError };
@@ -145,9 +166,9 @@ export function resolveVideoMediaUrl(storageKey?: string, fallback = "") {
     return resolveMediaUrl(storageKey, fallback, "playback");
 }
 
-export async function getMediaBlob(storageKey: string) {
-    if (resourceIdFromStorageKey(storageKey)) return getCachedResourceBlob(storageKey);
-    return store.getItem<Blob>(storageKey);
+export async function getMediaBlob(storageKey: string, signal?: AbortSignal) {
+    // 缓存下载可能由播放器等调用方共享，只取消本次等待，不中止其他调用方的读取。
+    return waitForMediaOperation(() => (resourceIdFromStorageKey(storageKey) ? getCachedResourceBlob(storageKey) : store.getItem<Blob>(storageKey)), signal);
 }
 
 export async function setMediaBlob(storageKey: string, blob: Blob) {
@@ -185,12 +206,57 @@ export function collectMediaStorageKeys(value: unknown, keys = new Set<string>()
     return keys;
 }
 
-function readAudioMeta(url: string) {
-    return new Promise<{ durationMs?: number }>((resolve) => {
+function waitForMediaOperation<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    signal?.throwIfAborted();
+    if (!signal) return operation();
+    return new Promise((resolve, reject) => {
+        const cleanup = () => signal.removeEventListener("abort", abort);
+        const abort = () => {
+            cleanup();
+            reject(signal.reason || new DOMException("操作已取消", "AbortError"));
+        };
+        signal.addEventListener("abort", abort, { once: true });
+        Promise.resolve()
+            .then(() => {
+                signal.throwIfAborted();
+                return operation();
+            })
+            .then(
+                (value) => {
+                    cleanup();
+                    signal.aborted ? abort() : resolve(value);
+                },
+                (error) => {
+                    cleanup();
+                    reject(error);
+                },
+            );
+    });
+}
+
+function readAudioMeta(url: string, signal: AbortSignal) {
+    signal.throwIfAborted();
+    return new Promise<{ durationMs?: number }>((resolve, reject) => {
         const audio = document.createElement("audio");
-        const done = () => resolve({ durationMs: Number.isFinite(audio.duration) ? Math.round(audio.duration * 1000) : undefined });
+        const cleanup = () => {
+            signal.removeEventListener("abort", abort);
+            audio.onloadedmetadata = null;
+            audio.onerror = null;
+            audio.removeAttribute("src");
+            audio.load();
+        };
+        const abort = () => {
+            cleanup();
+            reject(signal.reason || new DOMException("操作已取消", "AbortError"));
+        };
+        const done = () => {
+            const durationMs = Number.isFinite(audio.duration) ? Math.round(audio.duration * 1000) : undefined;
+            cleanup();
+            resolve({ durationMs });
+        };
         audio.onloadedmetadata = done;
         audio.onerror = done;
+        signal.addEventListener("abort", abort, { once: true });
         audio.src = url;
     });
 }

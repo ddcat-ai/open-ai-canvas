@@ -65,6 +65,7 @@ type CanvasNodeToolbarProps = {
     onViewImage: (node: CanvasNodeData) => void;
     onExtractVideoFrames: (node: CanvasNodeData) => void;
     onExtractAudioFromVideo: (node: CanvasNodeData) => void;
+    onSeparateAudio?: (node: CanvasNodeData) => void;
     onRemakeVideo?: (node: CanvasNodeData) => void;
     onTrimVideoSegments: (node: CanvasNodeData) => void;
     onEnhanceVideo?: (node: CanvasNodeData) => void;
@@ -140,6 +141,7 @@ export function CanvasNodeToolbar({
     onViewImage,
     onExtractVideoFrames,
     onExtractAudioFromVideo,
+    onSeparateAudio,
     onRemakeVideo,
     onTrimVideoSegments,
     onEnhanceVideo,
@@ -338,6 +340,7 @@ export function CanvasNodeToolbar({
         onNodeViewImage: onViewImage,
         onNodeExtractVideoFrames: onExtractVideoFrames,
         onNodeExtractAudioFromVideo: onExtractAudioFromVideo,
+        onNodeSeparateAudio: onSeparateAudio,
         onNodeRemakeVideo: onRemakeVideo,
         onNodeTrimVideoSegments: onTrimVideoSegments,
         onNodeEnhanceVideo: onEnhanceVideo,
