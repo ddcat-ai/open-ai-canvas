@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/sync/singleflight"
 	videoobserve "yingce/backend/internal/agent/video"
 	"yingce/backend/internal/model"
 )
@@ -22,7 +21,11 @@ import (
 const cloudAgentVideoMaxBytes int64 = 128 << 20
 
 var cloudAgentVideoSlots = make(chan struct{}, 2)
-var cloudAgentVideoCacheGroup singleflight.Group
+
+type cloudAgentVideoPreparation struct {
+	Cache cloudAgentVideoCache
+	Err   error
+}
 
 type cloudAgentVideoFrame struct {
 	ResourceID  string `json:"resourceId"`
@@ -126,8 +129,12 @@ func (s *Service) prepareCloudAgentVideoInspection(parent context.Context, userI
 		}()
 	}
 	key := creationHash(map[string]any{"user": userID, "version": version, "start": args.StartMs, "end": args.EndMs, "frames": remaining, "sampler": 1})
-	// 同资源同参共用有界工作；进程内合并不构成权限，调用前后仍单独校验。
-	cacheResult := cloudAgentVideoCacheGroup.DoChan(s.dataDir+":"+key, func() (any, error) { return s.cloudAgentVideoFrames(ctx, userID, source, args, remaining, key) })
+	// 每个请求只拥有自己的工作和取消上下文；缓存准备串行，前一请求取消后等待者可继续。
+	cacheResult := make(chan cloudAgentVideoPreparation, 1)
+	go func() {
+		cache, err := s.cloudAgentVideoFrames(ctx, userID, source, args, remaining, key)
+		cacheResult <- cloudAgentVideoPreparation{Cache: cache, Err: err}
+	}()
 	var cached cloudAgentVideoCache
 	select {
 	case <-ctx.Done():
@@ -143,7 +150,7 @@ func (s *Service) prepareCloudAgentVideoInspection(parent context.Context, userI
 			}
 			return nil, result.Err
 		}
-		cached = result.Val.(cloudAgentVideoCache)
+		cached = result.Cache
 	}
 	fresh, err := s.repo.ResourceForUser(userID, sourceID)
 	if err != nil || fresh.Status != model.ResourceStatusReady || cloudAgentVideoVersion(fresh) != version {
@@ -261,6 +268,15 @@ func cloudAgentVideoContextError(err error) error {
 
 func (s *Service) cloudAgentVideoFrames(ctx context.Context, userID string, source *model.Resource, args cloudAgentVideoArgs, count int, key string) (cloudAgentVideoCache, error) {
 	var cache cloudAgentVideoCache
+	if s.coordinator == nil {
+		return cache, cloudAgentVideoError("video_cache_unavailable", "视频观察缓存协调暂不可用")
+	}
+	// 复用现有协调器，锁住同一缓存的检查、解码与上传，避免取消串扰及重复上传竞争。
+	release, err := s.coordinator.AcquireWithWait(ctx, "agent-video-cache:"+key, 1, time.Minute)
+	if err != nil {
+		return cache, err
+	}
+	defer release()
 	select {
 	case cloudAgentVideoSlots <- struct{}{}:
 		defer func() { <-cloudAgentVideoSlots }()

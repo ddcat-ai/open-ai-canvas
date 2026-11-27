@@ -18,6 +18,7 @@ import (
 
 	"gorm.io/gorm"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/platform"
 	"yingce/backend/internal/repository"
 )
 
@@ -41,6 +42,7 @@ func cloudAgentVideoFixture(t *testing.T) (*Service, *gorm.DB) {
 		t.Skip("需要 FFprobe 验证视频观察")
 	}
 	s, db, _ := cloudAgentVisionFixture(t)
+	s.coordinator = platform.NewCoordinatorWithRedis(nil, "video-observation-test")
 	path := filepath.Join(s.dataDir, "resources", "observation.mp4")
 	cmd := exec.Command(ffmpeg, "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=4:duration=2", "-an", "-c:v", "mpeg4", path)
 	if output, err := cmd.CombinedOutput(); err != nil {
@@ -327,5 +329,78 @@ func TestCloudAgentVideoStopsWhenRunCancelled(t *testing.T) {
 		}
 	case <-ctx.Done():
 		t.Fatal("会话取消后仍在等待解码")
+	}
+}
+
+func TestCloudAgentVideoLeaderCancellationKeepsOtherRequestAlive(t *testing.T) {
+	s, _ := cloudAgentVideoFixture(t)
+	ffmpeg, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ffprobe, err := exec.LookPath("ffprobe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	wrapper := filepath.Join(dir, "ffmpeg")
+	// 首次解码停在可观测屏障，后续解码使用真实 FFmpeg，确保另一个请求确实成功。
+	script := "#!/bin/sh\nif mkdir \"${0}.first\" 2>/dev/null; then\n  : > \"${0}.started\"\n  exec sleep 30\nfi\nexec \"$PIXELSHORT_TEST_REAL_FFMPEG\" \"$@\"\n"
+	if err := os.WriteFile(wrapper, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(ffprobe, filepath.Join(dir, "ffprobe")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PIXELSHORT_TEST_REAL_FFMPEG", ffmpeg)
+	t.Setenv(renderFfmpegEnv, wrapper)
+	ctx1, cancel1 := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel1()
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel2()
+	state1 := cloudAgentRuntime{Request: agentTestRequest()}
+	state2 := cloudAgentRuntime{Request: agentTestRequest()}
+	call := cloudAgentVideoCall(t, nil)
+	done1, done2 := make(chan error, 1), make(chan error, 1)
+	go func() {
+		_, err := s.prepareCloudAgentVideoInspection(ctx1, "user", "agent-canvas", &state1, call)
+		done1 <- err
+	}()
+	for {
+		if _, err := os.Stat(wrapper + ".started"); err == nil {
+			break
+		}
+		select {
+		case <-ctx1.Done():
+			t.Fatal("首个请求未进入解码阶段")
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	go func() {
+		result, err := s.prepareCloudAgentVideoInspection(ctx2, "user", "agent-canvas", &state2, call)
+		if err == nil && len(result.(cloudAgentImageInspectionBatch).Inspections) != 2 {
+			err = errors.New("第二个请求未取得真实视频帧")
+		}
+		done2 <- err
+	}()
+	// 留出第二个请求完成资源准入并进入缓存等待的时间；成功断言不依赖固定完成耗时。
+	time.Sleep(100 * time.Millisecond)
+	cancel1()
+	select {
+	case err := <-done1:
+		var admission *cloudAgentMediaAdmissionError
+		if !errors.As(err, &admission) || admission.Reason != "video_observation_cancelled" {
+			t.Fatalf("首个请求取消结果: %v", err)
+		}
+	case <-ctx2.Done():
+		t.Fatal("首个请求未响应取消")
+	}
+	select {
+	case err := <-done2:
+		if err != nil {
+			t.Fatalf("首个请求取消不应影响第二个请求: %v", err)
+		}
+	case <-ctx2.Done():
+		t.Fatal("第二个请求未完成独立观察")
 	}
 }
