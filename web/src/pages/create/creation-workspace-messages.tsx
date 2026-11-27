@@ -710,16 +710,17 @@ export function CreationMessageReferences({ references }: { references: Creation
             {references.map((reference) => {
                 const Icon = reference.kind === "skill" ? Blocks : reference.kind === "image" ? ImageIcon : reference.kind === "video" ? Film : reference.kind === "audio" ? Music2 : FileText;
                 const imageUrl = reference.kind === "image" ? resolveResourceUrl(reference.storageKey, reference.previewUrl) : reference.previewUrl;
+                const displayLabel = reference.displayLabel || reference.label;
                 return (
-                    <span key={reference.id} className="creation-user-message-reference">
+                    <span key={reference.id} className="creation-user-message-reference" title={displayLabel}>
                         {imageUrl && reference.kind === "video" ? (
-                            <CreationSignedVideo storageKey={reference.storageKey} src={imageUrl} muted playsInline preload="metadata" aria-label={reference.label} />
+                            <CreationSignedVideo storageKey={reference.storageKey} src={imageUrl} muted playsInline preload="metadata" aria-label={displayLabel} />
                         ) : imageUrl && reference.kind === "image" ? (
                             <CachedResourceImage storageKey={reference.storageKey} src={imageUrl} alt="" loading="lazy" decoding="async" />
                         ) : (
                             <Icon />
                         )}
-                        <span>{reference.label}</span>
+                        <span>{displayLabel}</span>
                     </span>
                 );
             })}
@@ -794,14 +795,14 @@ export function CreationAttachmentThumbnail({ item, onPreview, onRemove }: { ite
     return (
         <div className="creation-reference-card-content">
             {previewable ? (
-                <button type="button" className="creation-reference-card-preview" onClick={() => onPreview(kind === "video" ? "video" : "image", previewUrl, item.storageKey)} aria-label={`放大预览 ${item.name}`} disabled={!previewUrl}>
+                <button type="button" className="creation-reference-card-preview" title={item.name} onClick={() => onPreview(kind === "video" ? "video" : "image", previewUrl, item.storageKey)} aria-label={`放大预览 ${item.name}`} disabled={!previewUrl}>
                     {content}
                     <span aria-hidden="true">
                         <Maximize2 />
                     </span>
                 </button>
             ) : (
-                <div className="creation-reference-card-preview is-file" aria-label={item.name}>
+                <div className="creation-reference-card-preview is-file" title={item.name} aria-label={item.name}>
                     {content}
                 </div>
             )}
