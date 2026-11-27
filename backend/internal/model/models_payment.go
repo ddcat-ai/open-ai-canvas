@@ -51,6 +51,7 @@ const (
 // TopupProduct is the server-owned price and credit snapshot source. Clients
 // select a product ID and can never submit their own payable amount or credits.
 type TopupProduct struct {
+	MembershipTerms
 	ID          string           `json:"id" gorm:"primaryKey;size:36"`
 	Name        string           `json:"name" gorm:"size:120"`
 	Description string           `json:"description,omitempty" gorm:"size:500"`
@@ -98,6 +99,9 @@ type PaymentProviderConfig struct {
 }
 
 type PaymentOrder struct {
+	MembershipTerms
+	MembershipStartsAt    *time.Time       `json:"membershipStartsAt,omitempty"`
+	MembershipEndsAt      *time.Time       `json:"membershipEndsAt,omitempty" gorm:"index"`
 	ID                    string           `json:"id" gorm:"primaryKey;size:36"`
 	UserID                string           `json:"userId" gorm:"size:36;index;uniqueIndex:idx_payment_user_idempotency,priority:1"`
 	IdempotencyKey        string           `json:"idempotencyKey" gorm:"size:120;uniqueIndex:idx_payment_user_idempotency,priority:2"`

@@ -17,11 +17,13 @@ type User struct {
 	Status          UserStatus `json:"status" gorm:"index;size:24"`
 	IsPromoter      bool       `json:"isPromoter" gorm:"not null;default:false;index"`
 	// UserGroup 是用户分组编码；空串归入 default 分组。
-	UserGroup    string     `json:"userGroup" gorm:"size:40;not null;default:'';index"`
-	PasswordHash string     `json:"-"`
-	LastLoginAt  *time.Time `json:"lastLoginAt"`
-	CreatedAt    time.Time  `json:"createdAt"`
-	UpdatedAt    time.Time  `json:"updatedAt"`
+	UserGroup string `json:"userGroup" gorm:"size:40;not null;default:'';index"`
+	// 仅会员支付事务更新。普通资料保存不能用旧快照覆盖已购买的期限。
+	MembershipUntil *time.Time `json:"-" gorm:"<-:create"`
+	PasswordHash    string     `json:"-"`
+	LastLoginAt     *time.Time `json:"lastLoginAt"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	UpdatedAt       time.Time  `json:"updatedAt"`
 }
 
 type AuthSession struct {
