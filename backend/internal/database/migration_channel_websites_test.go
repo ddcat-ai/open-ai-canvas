@@ -89,6 +89,7 @@ func TestChannelWebsiteMigrationUpgradesVersion96(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = sqlDB.Close() })
+	createPreMembershipTables(t, db)
 	if err := db.AutoMigrate(&schemaMigration{}, &model.ModelChannel{}); err != nil {
 		t.Fatal(err)
 	}

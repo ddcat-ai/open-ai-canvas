@@ -41,6 +41,7 @@ func TestSiteTrafficMigration99IsAdditiveAndPreservesPublishedLedger(t *testing.
 	}
 	connection.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = connection.Close() })
+	createPreMembershipTables(t, db)
 	if err := db.AutoMigrate(&schemaMigration{}); err != nil {
 		t.Fatal(err)
 	}

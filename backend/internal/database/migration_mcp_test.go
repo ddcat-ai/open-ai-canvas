@@ -34,6 +34,7 @@ func agentMCPMigrationFixture(t *testing.T) (*gorm.DB, migration, []schemaMigrat
 	}
 	sqlDB.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = sqlDB.Close() })
+	createPreMembershipTables(t, db)
 	if err := db.AutoMigrate(&schemaMigration{}); err != nil {
 		t.Fatal(err)
 	}
