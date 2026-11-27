@@ -22,6 +22,7 @@ docs/content/docs/backend/*
 !docs/content/docs/backend/task-runtime-stability.mdx
 !docs/content/docs/backend/agent-prompt-policy.mdx
 !docs/content/docs/backend/agent-mcp.mdx
+!docs/content/docs/backend/admin-assistant.mdx
 !docs/content/docs/backend/canvas-agent-appearance.mdx
 !docs/content/docs/backend/update-announcements.mdx
 !docs/content/docs/backend/http-api.mdx
@@ -67,6 +68,8 @@ coverage/
 dist/
 *.log
 *.tsbuildinfo
+__pycache__/
+*.py[cod]
 *.db
 *.db-*
 *.sqlite

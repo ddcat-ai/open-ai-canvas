@@ -22,7 +22,7 @@ func cloudAgentHandleMCPListTools(_ *repository.Repository, userID string, _ *cl
 		return nil, BadAuthRequest("MCP 服务不可用")
 	}
 	connections, err := svc.mcpDomain().AvailableTools(userID, args.ConnectionID, args.ToolName)
-	return map[string]any{"connections": connections, "requiresApproval": true, "untrustedData": true}, err
+	return map[string]any{"connections": connections, "untrustedData": true}, err
 }
 
 func cloudAgentDecodeMCPCall(call cloudAgentCall) (mcpintegration.ToolCall, error) {
@@ -53,32 +53,42 @@ func cloudAgentPreviewMCPCall(repo *repository.Repository, userID, _ string, cal
 }
 
 func cloudAgentHandleMCPCall(_ *repository.Repository, userID string, state *cloudAgentRuntime, call cloudAgentCall, services ...*Service) (any, error) {
-	if !cloudAgentMCPCallApproved(state, call) {
-		return nil, Forbidden("MCP 外部工具必须先取得本次调用的明确审批")
-	}
 	args, err := cloudAgentDecodeMCPCall(call)
 	if err != nil {
 		return nil, err
+	}
+	if state == nil || state.Request.PermissionMode == "read_only" {
+		return nil, Forbidden("只读模式不能调用外部 MCP 工具")
 	}
 	svc := cloudAgentToolService(services)
 	if svc == nil {
 		return nil, BadAuthRequest("MCP 服务不可用")
 	}
-	return svc.mcpDomain().Call(context.Background(), userID, state.RuntimeRunID, call.ID, args, func(run *model.CloudAgentExecution) error {
-		// The caller's snapshot may predate cancellation or a new approval. Check
-		// the locked durable checkpoint immediately before claiming external IO.
+	return svc.mcpDomain().Call(context.Background(), userID, state.RuntimeRunID, call.ID, args, func(run *model.CloudAgentExecution, connection *model.MCPConnection) error {
+		// 持久检查点可能已取消或换成其他调用，完全授权也必须复验。
 		current, err := cloudAgentDecode(run)
 		if err != nil {
 			return err
 		}
-		if (run.Status != "running" && run.Status != "queued") ||
-			!cloudAgentMCPCallApproved(&current, call) || current.Approval.ID != state.Approval.ID ||
+		approved := cloudAgentMCPCallApproved(&current, call) && cloudAgentMCPCallApproved(state, call) && current.Approval.ID == state.Approval.ID
+		trusted := mcpintegration.ApprovalMode(connection.ApprovalMode) == "full_access"
+		if (run.Status != "running" && run.Status != "queued") || current.Request.PermissionMode == "read_only" ||
+			(!trusted && !approved) ||
 			current.CallIndex < 0 || current.CallIndex >= len(current.Calls) ||
 			current.Calls[current.CallIndex].ID != call.ID || !cloudAgentToolCallsEquivalent(current.Calls[current.CallIndex], call) {
 			return Forbidden("MCP 调用审批或运行状态已变化，本次操作未执行")
 		}
 		return nil
 	})
+}
+
+func cloudAgentMCPRequiresApproval(repo *repository.Repository, userID string, call cloudAgentCall) bool {
+	args, err := cloudAgentDecodeMCPCall(call)
+	if err != nil {
+		return true
+	}
+	connection, err := mcpintegration.AuthorizeCall(repo, userID, args)
+	return err != nil || mcpintegration.ApprovalMode(connection.ApprovalMode) != "full_access"
 }
 
 func cloudAgentMCPCallApproved(state *cloudAgentRuntime, call cloudAgentCall) bool {

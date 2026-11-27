@@ -183,6 +183,8 @@ func (s *Service) ImportResourceURL(userID string, rawURL string, kind string, w
 // storeFetchedResource 保存服务端已取得的字节（远程导入、姿势库选用），
 // 与普通上传共用媒体探测、上传幂等键和每日上传额度。
 func (s *Service) storeFetchedResource(userID string, existing *model.Resource, uploadKey *string, fileName string, data []byte, width int, height int, durationMs int64) (*model.Resource, error) {
+	digest := sha256.Sum256(data)
+	contentSHA256 := hex.EncodeToString(digest[:])
 	mimeType, err := detectUploadedMimeType(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
@@ -196,13 +198,21 @@ func (s *Service) storeFetchedResource(userID string, existing *model.Resource, 
 	}
 	size := int64(len(data))
 	if existing != nil {
+		if err := validateFetchedResourceContent(existing, contentSHA256); err != nil {
+			return nil, err
+		}
 		return s.retryStoredResource(userID, existing, kind, mimeType, size, bytes.NewReader(data))
 	}
 	day, err := s.reserveUserUploadQuota(userID, size)
 	if err != nil {
 		return nil, err
 	}
-	resource, stored, err := s.storeResource(userID, kind, fileName, mimeType, size, width, height, durationMs, bytes.NewReader(data), uploadKey, false)
+	writeObject := func(resource *model.Resource, name string, body io.Reader) (string, error) {
+		// 失败记录同样保存摘要，不能在对象存储失败后用相同标识上传另一份内容。
+		resource.ContentSHA256 = contentSHA256
+		return s.storeResourceObject(resource, name, body)
+	}
+	resource, stored, err := s.storeResourceWithWriter(userID, kind, fileName, mimeType, size, width, height, durationMs, bytes.NewReader(data), uploadKey, false, writeObject)
 	if err != nil {
 		s.releaseUserUploadQuota(userID, day, size)
 	} else if stored {
@@ -210,7 +220,21 @@ func (s *Service) storeFetchedResource(userID string, existing *model.Resource, 
 	} else {
 		s.releaseUserUploadQuota(userID, day, size)
 	}
+	if err == nil {
+		// 并发创建可能返回另一请求刚存好的资源，返回前仍须核对内容身份。
+		err = validateFetchedResourceContent(resource, contentSHA256)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return resource, err
+}
+
+func validateFetchedResourceContent(resource *model.Resource, contentSHA256 string) error {
+	if resource.ContentSHA256 != contentSHA256 {
+		return NewAppError(http.StatusConflict, "上传幂等标识已用于其他内容或缺少内容摘要，请使用新的上传标识")
+	}
+	return nil
 }
 
 func normalizedResourceUploadKey(values []string) *string {

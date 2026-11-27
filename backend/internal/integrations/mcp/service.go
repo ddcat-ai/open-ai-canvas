@@ -146,6 +146,10 @@ func (s *Service) ownedConnection(userID, id string, admin bool) (*model.MCPConn
 }
 
 func (s *Service) SaveConnection(userID, id string, admin bool, input ConnectionInput) (ConnectionView, error) {
+	if input.ApprovalMode != "" && input.ApprovalMode != "full_access" && input.ApprovalMode != "request_approval" {
+		return ConnectionView{}, kernel.BadAuthRequest("MCP 授权模式无效")
+	}
+	input.ApprovalMode = ApprovalMode(input.ApprovalMode)
 	if userID == "" {
 		return ConnectionView{}, kernel.Unauthorized("请先登录")
 	}
@@ -274,6 +278,7 @@ func (s *Service) saveConnection(userID, id string, admin bool, input Connection
 	}
 	row.Name, row.TemplateID, row.ServerURL, row.Transport = input.Name, input.TemplateID, input.ServerURL, input.Transport
 	row.ParametersCiphertext, row.Enabled, row.AllowedToolsJSON = ciphertext, input.Enabled, string(allowedJSON)
+	row.ApprovalMode = input.ApprovalMode
 	row.AllowedUserIDsJSON, row.ToolPoliciesJSON = string(usersJSON), string(policiesJSON)
 	if id == "" {
 		err = s.repo.CreateMCPConnection(row)

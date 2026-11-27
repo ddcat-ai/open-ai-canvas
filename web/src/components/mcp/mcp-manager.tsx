@@ -31,7 +31,9 @@ function ConnectionCard({ connection, editable, busy, disabled, onEdit, onTest, 
                             {status}
                         </span>
                     </div>
-                    <p className="mcp-card-subtitle">{connection.scope === "platform" ? "平台提供" : "个人连接"}</p>
+                    <p className="mcp-card-subtitle">
+                        {connection.scope === "platform" ? "平台提供" : "个人连接"} · {connection.approvalMode === "full_access" ? "全权委托" : "逐次确认"}
+                    </p>
                 </div>
                 {connection.enabled ? <ShieldCheck className="mcp-card-status-icon" aria-label="已启用" /> : null}
             </header>
@@ -86,7 +88,7 @@ function ConnectionCard({ connection, editable, busy, disabled, onEdit, onTest, 
                 ) : (
                     <span className="mcp-card-note">
                         <ShieldCheck className="size-3.5" />
-                        平台管理员维护，执行前仍需确认
+                        平台管理员维护，按连接授权模式执行
                     </span>
                 )}
             </footer>
@@ -298,7 +300,7 @@ function MCPManagerContent({ scope, userId, initialTab, onTabChange }: { scope: 
                 <ShieldCheck className="size-4" aria-hidden="true" />
                 <span>{admin ? "平台连接仅向指定账号开放，并按工具限制访问范围；市场条目供用户独立安装和配置。" : "安装连接并授权工具后，Agent 可在后续会话中使用。平台连接由管理员指定使用账号和访问范围。"}</span>
                 <span className="mcp-manager-note-separator" aria-hidden="true" />
-                <span>每次执行 MCP 工具前都会请求确认。</span>
+                <span>全权委托可直接执行已授权工具；逐次确认会在调用前请求批准。</span>
             </div>
             <div className="mcp-manager-search shrink-0">
                 <Search className="size-4" aria-hidden="true" />

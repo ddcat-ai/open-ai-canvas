@@ -21,6 +21,7 @@ type MCPConnection struct {
 	ServerURL            string `gorm:"type:text;not null"`
 	ParametersCiphertext string `gorm:"type:text;not null" json:"-"`
 	Enabled              bool   `gorm:"index;not null;default:false"`
+	ApprovalMode         string `gorm:"size:30;not null;default:request_approval"`
 	ToolsJSON            string `gorm:"type:text;not null;default:'[]'"`
 	ToolsSummaryJSON     string `gorm:"type:text;not null;default:'[]'"`
 	AllowedToolsJSON     string `gorm:"type:text;not null;default:'[]'"`

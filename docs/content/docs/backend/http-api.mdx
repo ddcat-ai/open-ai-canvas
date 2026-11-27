@@ -5,6 +5,13 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## MCP 授权方式
+
+后台管理 Token 创建和同源 OAuth consent POST 支持 `approvalMode: full_access|request_approval`。全权委托覆盖当前管理员的全部管理能力并免逐操作确认；逐次确认继续校验模块 scopes，并对高风险操作返回 `pending_confirmation`。服务端省略模式及历史授权保持逐次确认，授权页面新建时默认选中全权委托，须点击授权才生效；OAuth authorize 查询参数不能自行提权。
+
+`PUT /admin-assistant/tokens/:id/authorization` 与 `PUT /admin-assistant/grants/:id/authorization` 接收 `{approvalMode}`，仅允许同源管理员 Cookie 会话修改本人有效授权，Bearer 不能调用。切换即时影响后续执行和刷新，切回逐次确认保留模块权限；账号停用、撤销及管理员降权始终生效。模式不改变幂等键和结果不确定时的防重约束。
+
+出站 `/agent/mcp/connections` 与 `/admin/mcp/connections` 的输入、返回值同样包含 `approvalMode`，按连接决定是否逐次确认。全权委托不扩大可用工具、平台用户或参数范围，Agent 只读模式仍禁止执行。细节见 [后台管理 MCP 与 Skill](/docs/backend/admin-assistant) 与 [Agent MCP](/docs/backend/agent-mcp)。
 ## 团队空间
 
 以下接口均在 `/api` 下，使用登录 Cookie。`teamId`、`membershipId`、素材 ID 只用于定位；操作权限由服务端根据当前账号及其有效成员关系决定。成员不能访问其他团队或冒用所有者，待处理邀请不授予读取权限。
@@ -58,6 +65,8 @@ description: 信封、错误码与 OpenAPI
 启用后，公开 `GET /auth/settings` 返回 `turnstileEnabled: true` 和用于浏览器渲染组件的 `turnstileSiteKey`。登录页和注册页先通过 Cloudflare Turnstile 获取一次性令牌，并把令牌作为 `turnstileToken` 提交给密码登录、验证码登录、普通注册或微信注册补全接口。服务端固定调用 Cloudflare 的 Siteverify 地址校验令牌，并把客户端 IP 一并提交；未提交、过期、无效、网络失败或响应格式异常都拒绝登录/注册。首次创建管理员账号也受此校验保护。关闭机器人保护时保持原有登录和注册流程，令牌字段可省略。
 
 ## 官方素材扩展
+
+管理员网络媒体导入使用 `POST /api/admin/official-assets/resources/import-url`，正文为 `{ url, uploadKey }`，成功返回资源对象（`data.id` 用于新建素材的 `resourceId`）。仅接收实际图片／视频／音频，保留出站 SSRF、上传和存储配额限制。Agent OAuth 通过 `ImportOfficialAssetResourceURL` 管理操作调用，要求 `official-assets:write`、幂等键及网页确认；普通资源上传接口的登录方式保持不变。
 
 用户浏览和详情使用 `/api/official-assets`，画布通过 `/api/official-assets/:id/reference` 获取引用；管理员管理使用 `/api/admin/official-assets`，发布、下架为对应资源的 PATCH 操作。推荐提交、详情和审核由官方素材推荐路由提供，保留登录及管理员鉴权。角色引用不自动创建个人素材副本。
 

@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 type ChannelModelRequest struct {
 	ExpectedUpdatedAt                time.Time               `json:"expectedUpdatedAt,omitempty"`
 	ExpectedPriceVersion             int64                   `json:"expectedPriceVersion,omitempty"`
+	Refresh                          bool                    `json:"refresh,omitempty"`
 	ProtocolSelectionExplicit        *bool                   `json:"protocolSelectionExplicit,omitempty"`
 	ModelKey                         string                  `json:"modelKey"`
 	ProviderModelKey                 string                  `json:"providerModelKey"`
@@ -195,8 +197,8 @@ func (s *Service) SaveAdminChannelModel(actor *model.User, channelID string, id 
 	if conflict != nil && conflict.ID != strings.TrimSpace(id) {
 		return nil, BadAuthRequest("该渠道已存在模型 " + modelKey + "，请直接编辑已有模型")
 	}
-	if id != "" && (req.ExpectedUpdatedAt.IsZero() || !req.ExpectedUpdatedAt.Equal(item.UpdatedAt) || req.ExpectedPriceVersion != item.PriceVersion) {
-		return nil, BadAuthRequest("模型已被修改或缺少编辑版本，请刷新后重新编辑；本次未保存任何修改")
+	if id != "" && !req.Refresh && (req.ExpectedUpdatedAt.IsZero() || !req.ExpectedUpdatedAt.Equal(item.UpdatedAt) || req.ExpectedPriceVersion != item.PriceVersion) {
+		return nil, BadAuthRequest(fmt.Sprintf("模型已被修改或缺少编辑版本，请刷新后重新编辑；本次未保存任何修改（期望 updatedAt=%s priceVersion=%d，当前 updatedAt=%s priceVersion=%d）", req.ExpectedUpdatedAt.UTC().Format(time.RFC3339Nano), req.ExpectedPriceVersion, item.UpdatedAt.UTC().Format(time.RFC3339Nano), item.PriceVersion))
 	}
 	if capability == "text" || capability == "image" || capability == "video" {
 		validated, validateErr := NormalizeModelCapabilityConfigForModel(capability, string(protocol), providerModelKey, req.CapabilityConfig, release.Registry)

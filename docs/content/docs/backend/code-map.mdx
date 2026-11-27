@@ -5,6 +5,13 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## 后台管理 MCP 与 Skill
+
+- HTTP/MCP/OAuth 入口：`internal/handler/admin_assistant.go`；业务权限、Token 与执行状态：`internal/app/admin_assistant_auth.go`、`admin_assistant_operations.go`，通过 service 别名导出。
+- 操作白名单：`internal/app/admin_assistant_catalog.json`，`cmd/admin-assistant-catalog` 核对管理路由和业务入口；持久化在 `internal/repository/admin_assistant.go`，Schema 112 建表。
+- 后台页面：`pages/admin/agent-access/agent-access-page.tsx`；授权模式控件在 `assistant-authorization-mode.tsx`，确认卡片在 `assistant-consent-card.tsx`，中文操作预览在 `assistant-call-presentation.ts`。Schema 114 在 `database/migration_admin_assistant.go` 为入站授权与出站连接增加模式；已有授权保持逐次确认。
+- Skill 源码：`internal/app/admin_assistant_skill/`，由 `admin_assistant_skill.go` 嵌入和分发。
+
 ## 团队空间
 
 - `web/src/router.tsx` 为个人和团队挂载相同的 `pages/canvas`、`pages/create`、`pages/assets`；`lib/workspace-routes.ts` 选择 API 前缀，`lib/user-scope.ts` 隔离本地缓存。`pages/teams` 只负责空间、成员、邀请和钱包。

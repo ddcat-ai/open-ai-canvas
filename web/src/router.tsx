@@ -38,6 +38,7 @@ const AdminPluginsPage = lazyAdminPage(() => import("@/pages/admin/plugins/plugi
 const AdminOfficialAssetsPage = lazyAdminPage(() => import("@/pages/admin/official-assets-page"));
 const AdminOfficialAssetRecommendationsPage = lazyAdminPage(() => import("@/pages/admin/official-asset-recommendations-page"));
 const AdminMCPPage = lazyAdminPage(() => import("@/pages/admin/mcp/mcp-page"));
+const AgentAccessPage = lazyAdminPage(() => import("@/pages/admin/agent-access/agent-access-page"));
 const SkillCurationPage = lazyAdminPage(() => import("@/pages/admin/skill-curation-page"));
 const AdminSkillsPage = lazyAdminPage(() => import("@/pages/admin/skills/skills-page"));
 const AdminSkillWorkbenchPage = lazyAdminPage(() => import("@/pages/admin/skills/admin-skill-workbench-page"));
@@ -310,6 +311,8 @@ const routes: RouteObject[] = [
                     { path: "official-assets", element: <AdminOfficialAssetsPage /> },
                     { path: "official-asset-recommendations", element: <AdminOfficialAssetRecommendationsPage /> },
                     { path: "mcp", element: <AdminMCPPage /> },
+                    { path: "agent-access", element: <AgentAccessPage /> },
+                    { path: "agent-access/authorize", element: <AgentAccessPage /> },
                     { path: "workbench-tools", element: <WorkbenchToolsPage /> },
                     { path: "pose-library", element: <PoseLibraryAdminPage /> },
                     { path: "skills", element: <AdminSkillsPage /> },

@@ -15,6 +15,7 @@ export function mcpParameters(template?: MCPServerTemplate, connection?: MCPConn
 export function createMCPConnectionDraft(template?: MCPServerTemplate, connection?: MCPConnection): MCPConnectionInput {
     const parameters = Object.fromEntries(mcpParameters(template, connection).map((parameter) => [parameter.name, parameter.type === "secret" ? "" : (connection?.parameters[parameter.name] ?? parameter.defaultValue ?? "")]));
     return {
+        approvalMode: connection ? (connection.approvalMode ?? "request_approval") : "full_access",
         name: connection?.name ?? template?.name ?? "",
         templateId: connection?.templateId ?? template?.id,
         transport: connection?.transport ?? template?.transport ?? "streamable_http",

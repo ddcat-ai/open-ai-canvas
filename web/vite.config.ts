@@ -25,6 +25,8 @@ export default defineConfig({
     },
     server: {
         proxy: {
+            "/.well-known/oauth-protected-resource": { target: apiProxyTarget, changeOrigin: true },
+            "/.well-known/oauth-authorization-server": { target: apiProxyTarget, changeOrigin: true },
             "/api": {
                 target: apiProxyTarget,
                 changeOrigin: true,

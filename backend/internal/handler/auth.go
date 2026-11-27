@@ -328,6 +328,9 @@ func shortSystemProxyPath(rawPath string) (string, string, bool) {
 // short proxy from interpreting /api/tasks/unknown (or /api/plugins/unknown)
 // as a channel request when a business route returns 404.
 func isReservedAPIPathPrefix(value string) bool {
+	if value == "admin-assistant" || value == ".well-known" {
+		return true
+	}
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "admin", "agent", "ai", "announcements", "banner-announcements", "assets", "auth", "canvas-projects", "channels", "diagnostics", "dramas", "features", "files", "model-catalog", "models", "oauth", "plugins", "projects", "public", "resources", "sessions", "settings", "skills", "style-profiles", "tasks", "team-invitations", "teams", "timeline", "user-data", "voice-profiles", "wallet":
 		return true

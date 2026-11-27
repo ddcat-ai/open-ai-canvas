@@ -5,6 +5,17 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 后台管理 Agent（Schema 112、114）
+
+Schema 114 为 `assistant_credentials`、`assistant_oauth_codes`、`assistant_grants` 增加 `approval_mode`，取值 `full_access` 或 `request_approval`。历史空值及新增列默认值均按 `request_approval` 处理，迁移不会自动提权。OAuth 授权码记录用户在同源授权页选择的模式，兑换后写入 grant 和 access credential；刷新锁定并重新读取 grant，模式修改在同一事务同步全部 access credential。执行抢占与模式修改共享授权父行锁，防止降级后旧 ready 调用绕过审批。
+
+同次迁移为出站 `mcp_connections` 增加 `approval_mode`；`request_approval` 保持原工具审批策略，`full_access` 表示用户明确授予该连接免逐次审批，连接归属及密钥访问约束仍生效。
+
+新增 `assistant_credentials`（Token 哈希及权限）、`assistant_oauth_clients`（回调登记）、`assistant_oauth_codes`（授权码哈希和 PKCE）、`assistant_grants`（可撤销 OAuth grant 及当前刷新哈希）、`assistant_refresh_uses`（刷新重放检测）、`assistant_invocations`（确认、参数指纹、幂等与结果）、`assistant_attachments`（限时附件）。全部纳入 `Models()` 和 SQLite→PostgreSQL 迁移清单，PostgreSQL 启用 RLS 且不给普通 PostgREST 角色添加策略。
+
+调用按 `(credential_id, idempotency_key)` 唯一。个人 Token 绑定自身 ID，OAuth 绑定 grant ID，刷新后可继续原调用。确认只在 pending 且未过期时 CAS 为 approved/rejected，执行前 CAS 为 running；结果与调用审计在同一事务保存，崩溃留下 running，需核实后处理，不自动重执行。参数仅保存哈希和脱敏预览，不保存原始密钥。
+
+临时附件 1 小时过期，上传时与后台启动/每小时清理；授权码及过期 OAuth access token 额外保留 24 小时后清理。个人 Token、授权 grant 和写入幂等记录保留供撤销及核实。接入合同见 [后台管理 MCP 与 Skill](/docs/backend/admin-assistant)。
 ## 兑换码单账号限兑与能力池（Schema 111）
 
 版本 111 `redeem_batch_limits_and_capability_pools` 为 `redeem_batches` 增加非空布尔列 `one_per_user`（默认 `false`）和 `allowed_capability`（默认 `''` 无限制，可选 `'image'` / `'video'`），为 `redeem_codes` 增加复合索引 `idx_redeem_codes_batch_status_user`（`batch_id`、`status`、`redeemed_by`）。开启单账号限兑后同一用户在同一批次下仅能成功核销 1 个兑换码；历史批次默认保持不限次数。
@@ -514,7 +525,7 @@ Schema 45 新增 `upload_reservations`：`id`、`user_id`、`size`、`day`、`ex
 
 `auth_sessions.reauthenticated_at` 记录当前会话的 Linux.do 重新核验时间，有效 5 分钟；`o_auth_states.reauth_user_id/reauth_session_id` 绑定发起重新核验的账号及会话。重新核验只允许原绑定的第三方身份，不创建账号或新登录会话。`auth_verifications.session_id/credential_hash` 将 `profile_email` 用途的验证码绑定到当前用户、当前会话和密码状态。密码、邮箱修改及旧会话撤销在同一事务提交；登录会话签发同时检查账号凭据，阻止并发旧密码登录在撤销之后再创建会话。升级执行 `migrate-schema up` / `verify`，禁止手工修改既有迁移记录。
 
-当前结构版本为 107。版本 107 增加公司与小组关系，106 引入团队空间与积分账户，105 增加图片用量计费，104 增加 Agent 存储账本，103 增加 MCP 用户授权、工具参数策略和存储账本，102 增加微信 OAuth 状态字段，101 为创作对话同步，100 为 MCP 基础连接，99 为匿名访问事件。升级影响与回退约束见本页对应节。
+当前结构版本为 114。版本 114 为入站授权和出站 MCP 连接增加审批模式，113 为远程导入资源增加内容摘要，112 引入后台管理 Agent 接入，111 保留兑换码能力池，110 保留 Agent 历史归档，109 固定模型协议版本，108 增加共享工作区内容，107 增加公司与小组关系，106 引入团队空间与积分账户，105 增加图片用量计费，104 增加 Agent 存储账本，103 增加 MCP 用户授权、工具参数策略和存储账本，102 增加微信 OAuth 状态字段，101 为创作对话同步，100 为 MCP 基础连接，99 为匿名访问事件。升级影响与回退约束见本页对应节。
 
 版本 98 的视频请求生成快照、版本 97 的渠道网站与独立 Key、版本 96 的画布统一文本节点、版本 95 的方舟可信素材绑定唯一索引与版本 94 的短剧独立风格与跨作品素材见本页对应节；版本 87 的灵感上新、版本 86 的方舟素材组与版本 85 的站点姿势库见本页首节；版本 77 的记忆文件列补齐、版本 76 的 Agent 记忆文件与技能自动发现、版本 75 的用户分组与多币种计价、版本 74 的剧情段参考图指定、版本 73 的短剧单集素材类型与版本 72 的推广中心表见本页首节；版本 61–67 的短剧自动制作表与版本 70 的作品补传表见本页首节；版本 59 `channel_model_protocol_length` 将 `channel_models.protocol` 从 `varchar(32)` 扩为 `varchar(64)`，保留既有记录并允许存储 33 字符的 MediaKit 协议 ID。版本 58 的记忆提案与恢复结构见本页首节。版本 56 `sql_perf_indexes` 为 `api_call_logs` 与 `tasks` 增加 `created_at_epoch`（Unix 秒），回填既有 `created_at` 并分别创建 `idx_api_logs_created_epoch`、`idx_tasks_created_epoch`，SQLite 时间范围查询使用裸列以命中索引；新记录通过 `BeforeCreate` 从 `created_at` 派生该值。另增加 `api_call_logs(request_kind, status, created_at)` 与 `credit_ledger_entries(user_id, type)` 复合索引。版本 55 `provider_catalog_source` 为 `model_channels` 增加 `catalog_provider_id`（最长 64 字、非空、默认空字符串、带索引），为 `channel_models` 增加 `catalog_model_key`（最长 120 字、非空、默认空字符串），记录一键接入的目录服务商与推荐模型，仅用于来源展示和“已接入”计数，不参与路由、启停或计费。版本 53 新增独立登录日志表 `login_logs`，详见本页“用户登录日志”。版本 50 新增 `canvas_mutation_receipts`，按 `(user_id, canvas_id, mutation_id)` 唯一记录画布 operations 请求摘要、确定性结果和提交 revision，供响应丢失后的幂等重放使用；receipt 与画布内容、revision 在同一事务提交。版本 49 `banner_sort_order` 为 `banner_announcements` 增加可配置的 `sort_order` 展示顺序；版本 48 `channel_proxy_url` 为 `model_channels` 增加渠道级出站代理地址 `proxy_url`，支持 `socks5://`、`http://`、`https://`；留空时沿用全局代理。代理地址只返回管理员视图，普通用户目录不暴露渠道代理或其中的认证信息。版本 42 `cloud_agent_pi_sessions` 新增 `cloud_agent_pi_sessions` 表，按运行 ID 保存 Pi 原生 JSONL 会话快照、用户 ID、乐观并发 revision 和更新时间；会话正文由 Agent runtime 管理，Go 只将其作为不透明快照读写，不替代有界控制检查点、事件日志或任务记录。版本 41 `resource_thumbnail` 为 `resources` 增加缩略图元数据。版本 40 `builtin_skill_tombstones` 新增内置技能删除记录，管理员删除平台技能后，后续启动同步不会重新创建该技能；版本 39 `skill_library_categories` 新增 `skill_library_categories` 表，并为 `user_skill_states` 增加 `library_category_id`，保存个人技能库分类及每个用户对技能的归类；分类不改变 `skills.tag` 的技能广场共享分类。版本 38 `prefixed_id_sequence_reconcile` 创建（若缺失）并校准 `id_sequences`：`CHANNEL`、`MODEL`、`PTIER`、`ATTEMPT`、`LMODEL`、`REVISION`、`ROUTE` 按对应业务表的最大有效 ID 前移，包含软删除记录，不回退已有序列、不重写业务 ID。分配新 ID 时再次校准并检查冲突；SQLite → PostgreSQL 迁移完成后也校准序列。 `cloud_agent_gemini_cache` 创建 `cloud_agent_gemini_caches`，保存用户范围内的官方 Gemini 缓存元数据；版本 37 `cloud_agent_gemini_cache_identity` 将缓存标识约束修正为 `(user_id, cache_key)`，移除旧的全局 cache_key 唯一索引。版本 35 `auth_notifications` 为认证通知与组合验证补齐 `auth_verifications`、`notification_quotas`、`sms_channels`、`sms_records` 四张表，并为 `users` 增加 `phone`、`email_verified_at`、`phone_verified_at`，为 `email_verification_codes` 增加 `attempts`；同时创建非空手机号唯一索引。版本 34 `task_media_recovery` 为 `tasks` 增加 `media_recovery_json`（text）和 `media_stage`（最长 24 字）。版本 33 `oauth_state_accepted_terms` 为 `o_auth_states` 增加非空布尔列 `accepted_terms`，默认 `false`，不替历史流程补造同意记录。
 
@@ -787,6 +798,8 @@ schema v27 为 `channel_model_price_tiers` 和 `billing_orders` 添加 `cost_con
 `storage_locations.value_json` 中的 Secret Key 和 Session Token 使用后端设置密钥加密。启用 S3 前，关键位置字段和凭据摘要必须与最近一次 Put、Range Get、Delete 连接测试结果一致；历史资源继续按绑定的位置读取和删除，不随当前配置切换。
 
 `resources.upload_key` 保存客户端 `X-Idempotency-Key` 的 SHA-256 摘要。相同用户重复提交同一逻辑上传时复用已有资源；失败重试继续使用原对象路径，避免对象存储已经接收请求但响应丢失时产生第二份物理对象。未提供幂等标识的后台生成资源保持 `NULL`，不参与该唯一约束。
+
+版本 113 `resource_content_sha256` 为 `resources` 增加内部字段 `content_sha256`（最长 64 字符，不返回业务 JSON）。服务端远程导入在首次对象写入前计算 SHA-256，成功和失败记录均保留该摘要；同一上传身份重试或并发返回既有资源时，内容不一致返回 409。历史记录不回填摘要，也不将大小、MIME 或存储 ETag 当作摘要；缺少摘要的历史上传身份不能通过远程导入重试，须使用新的上传身份。
 
 个人画布中的图片、视频和音频采用 `Asset -> Resource` 所有权约束：前端先提交素材，再提交带 `assetId` 的画布节点或时间线直连媒体；后端保存画布前校验资源属于当前用户、状态为 `ready`、素材存在且引用同一资源。素材更新、全量替换和删除也会反向检查已有画布，不能把仍在使用的资源从素材库中移除或替换成其他资源。登录历史账号时，前端会按资源键补建缺失素材并回写 `assetId`。这项修复复用现有表和 Outbox，不新增结构迁移。
 

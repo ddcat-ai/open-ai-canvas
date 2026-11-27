@@ -150,6 +150,7 @@ const adminNavigation: AdminNavigationGroup[] = [
         key: "settings",
         label: "系统设置",
         items: [
+            { path: "/admin/agent-access", keywords: "Agent 接入 管理 MCP Token Skill 授权", label: "Agent 接入", shortLabel: "接入", icon: <Bot className="size-4" /> },
             { path: "/admin/settings/appearance", keywords: "站点 外观 品牌 主题 Logo 皮肤", label: "站点及外观", shortLabel: "外观", icon: <Palette className="size-4" /> },
             { path: "/admin/settings/features", keywords: "功能 开关 开放", label: "功能开放", shortLabel: "功能", icon: <ToggleLeft className="size-4" /> },
             { path: "/admin/settings/access", keywords: "登录 注册 验证码 认证", label: "登录与注册", shortLabel: "注册", icon: <ShieldCheck className="size-4" /> },

@@ -3,6 +3,15 @@ import { describe, expect, it } from "bun:test";
 import { agentApprovalPresentation } from "@/lib/canvas/agent-approval-presentation";
 
 describe("Agent approval presentation", () => {
+    it("保留外部 MCP 审批的操作摘要和参数说明", () => {
+        const view = agentApprovalPresentation({
+            call: { function: { name: "mcp_call_tool", arguments: "{}" } },
+            preview: { kind: "mcp", title: "确认调用外部工具", description: "此操作可能修改外部系统", items: [{ operation: "mcp_call", summary: "笔记连接 / record_note", details: ["仅本次操作获授权"] }] },
+        });
+        expect(view?.source).toBe("server");
+        expect(view?.items[0]?.operation).toBe("mcp_call");
+        expect(view?.items[0]?.summary).toBe("笔记连接 / record_note");
+    });
     const args = JSON.stringify({
         snapshotHash: "private-hash",
         ops: [

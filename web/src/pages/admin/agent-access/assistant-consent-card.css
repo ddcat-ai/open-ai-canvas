@@ -1,0 +1,233 @@
+[data-admin-root] .admin-page-frame-scrollable > .assistant-consent-layout {
+    width: 100%;
+    max-width: 48rem;
+    margin-inline: auto;
+}
+
+.assistant-consent {
+    overflow: hidden;
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-surface);
+    color: var(--admin-text);
+}
+
+.assistant-consent-heading,
+.assistant-consent-body {
+    padding: 28px 32px;
+}
+
+.assistant-consent-heading {
+    border-bottom: 1px solid var(--admin-divider);
+}
+
+.assistant-consent-identity {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+    color: var(--admin-text-muted);
+}
+
+.assistant-consent-avatar {
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius-lg);
+    background: var(--admin-surface-2);
+    color: var(--admin-text);
+}
+
+.assistant-consent-destination {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--admin-text-secondary);
+}
+
+.assistant-consent-eyebrow,
+.assistant-consent-subtitle {
+    margin: 0;
+    color: var(--admin-text-muted);
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+.assistant-consent-heading h2 {
+    margin: 6px 0 8px;
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.assistant-consent-section-title {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: baseline;
+    margin-bottom: 12px;
+}
+
+.assistant-consent-section-title h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.assistant-consent-section-title > span {
+    font-size: 12px;
+    color: var(--admin-text-muted);
+}
+
+.assistant-consent-scopes {
+    padding: 0;
+    margin: 0;
+    list-style: none;
+}
+
+.assistant-consent-scopes li {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding-block: 14px;
+    border-bottom: 1px solid var(--admin-divider);
+}
+
+.assistant-consent-check {
+    flex-shrink: 0;
+    margin-top: 3px;
+    color: var(--admin-text-muted);
+}
+
+.assistant-consent-module {
+    flex: 1;
+    min-width: 0;
+}
+
+.assistant-consent-module strong {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.assistant-consent-scope-codes {
+    display: block;
+    margin-top: 4px;
+    font-family: var(--admin-font-mono);
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--admin-text-muted);
+    overflow-wrap: anywhere;
+}
+
+.assistant-consent-access {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+    max-width: 35%;
+}
+
+.assistant-consent-access span {
+    padding: 3px 8px;
+    border-radius: var(--admin-radius-sm);
+    background: var(--admin-surface-2);
+    color: var(--admin-text-secondary);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+.assistant-consent-access .is-write {
+    color: var(--admin-status-warning);
+}
+
+.assistant-consent-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 20px;
+    color: var(--admin-text-secondary);
+}
+
+.assistant-consent-notice svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.assistant-consent-notice p,
+.assistant-consent-footer p {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.7;
+}
+
+.assistant-consent-details {
+    margin-top: 20px;
+    font-size: 12px;
+    color: var(--admin-text-secondary);
+}
+
+.assistant-consent-details summary {
+    width: fit-content;
+    cursor: pointer;
+}
+
+.assistant-consent-details summary:focus-visible {
+    outline: 2px solid var(--admin-focus);
+    outline-offset: 4px;
+}
+
+.assistant-consent-details dl {
+    display: grid;
+    gap: 14px;
+    padding: 16px;
+    margin: 12px 0 0;
+    border-radius: var(--admin-radius);
+    background: var(--admin-surface-2);
+}
+
+.assistant-consent-details dt {
+    margin-bottom: 4px;
+    color: var(--admin-text-muted);
+}
+
+.assistant-consent-details dd {
+    margin: 0;
+    font-family: var(--admin-font-mono);
+    overflow-wrap: anywhere;
+}
+
+.assistant-consent-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 32px;
+    border-top: 1px solid var(--admin-divider);
+    background: var(--admin-surface-2);
+    color: var(--admin-text-muted);
+}
+
+.assistant-consent-actions {
+    display: flex;
+    gap: 10px;
+}
+
+@media (max-width: 600px) {
+    .assistant-consent-heading,
+    .assistant-consent-body,
+    .assistant-consent-footer {
+        padding: 20px;
+    }
+
+    .assistant-consent-actions {
+        width: 100%;
+    }
+
+    .assistant-consent-actions > button {
+        flex: 1;
+    }
+}
