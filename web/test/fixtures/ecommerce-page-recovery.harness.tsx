@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { Window } from "happy-dom";
+import { readFileSync } from "node:fs";
 import localforage from "localforage";
 import type { EcommerceDraft, EcommercePlan, EcommerceProject, EcommerceRound } from "../../src/services/api/ecommerce";
 import type { GenerationTask } from "../../src/services/api/task-center";
@@ -179,6 +180,17 @@ async function press(text: string) {
 }
 const productInput = () => host.querySelector<HTMLInputElement>('input[placeholder="例如：便携式香薰机"]');
 const planningProgress = () => host.querySelector<HTMLElement>(".commerce-assistant-progress[role=status]");
+const mobileView = () => host.querySelector(".ecs-shell")?.getAttribute("data-mobile-view");
+function mobileLayout() {
+    dom.happyDOM.setViewport({ width: 390, height: 844 });
+    const style = document.createElement("style");
+    style.textContent = readFileSync(new URL("../../src/pages/ecommerce/composer.css", import.meta.url), "utf8");
+    document.head.append(style);
+    return () => {
+        style.remove();
+        dom.happyDOM.setViewport({ width: 1024, height: 768 });
+    };
+}
 async function selectOption(label: string, text: string) {
     const input = host.querySelector<HTMLElement>(`[aria-label="${label}"]`);
     expect(input).not.toBeNull();
@@ -456,6 +468,161 @@ afterAll(() => {
 });
 
 describe("真实电商页面生命周期", () => {
+    test.each(["quick", "plan", "direct"] as const)("手机 %s 提交在回执返回前显示进度，仍可手动返回创作且不会重复付费", async (action) => {
+        const restoreLayout = mobileLayout();
+        try {
+            draft = {
+                ...draft,
+                imageType: action === "direct" ? "single" : "marketing",
+                count: action === "direct" ? 1 : 3,
+                typeOptions: action === "direct" ? {} : { materialPlan: JSON.stringify([{ id: "market-poster", count: 3, ratio: "1:1" }]) },
+                instruction: "为鸭血粉丝汤创作营销图片",
+            };
+            await sessions.writeEcommerceWorkspace(scope, { sessionId: crypto.randomUUID(), draft, plan: null, project: null, creationMode: action === "direct" ? "direct" : "ai", autoGenerate: false });
+            delayTaskCreation = true;
+            const submitImage = spyOn(workbenchApi, "createWorkbenchTask").mockImplementation(
+                () =>
+                    new Promise((resolve) => {
+                        completeCreateTask = resolve;
+                    }),
+            );
+            if (action === "direct") spyOn(configStore, "resolveModelChannel").mockReturnValue({ id: "test" } as ReturnType<typeof configStore.resolveModelChannel>);
+            await render();
+            const gallery = () => host.querySelector<HTMLElement>(".commerce-output-gallery")!;
+            expect(mobileView()).toBe("create");
+            expect(getComputedStyle(gallery()).display).toBe("none");
+            await act(async () => {
+                host.querySelector<HTMLButtonElement>(action === "plan" ? ".ecommerce-plan-button" : ".ecs-submit")!.click();
+            });
+            expect(mobileView()).toBe("create");
+            expect(paidSubmissions).toHaveLength(0);
+            const confirm = document.querySelector<HTMLButtonElement>(".commerce-confirm-footer .ant-btn-primary")!;
+            expect(confirm).not.toBeNull();
+            await act(async () => confirm.click());
+            expect(mobileView()).toBe("works");
+            expect(getComputedStyle(gallery()).display).not.toBe("none");
+            expect(host.querySelector(".ecs-stage")?.textContent).toContain(action === "quick" ? "正在提交商品分析" : action === "direct" ? "正在提交第 1 / 1 张图片任务" : "正在保存商品资料");
+            expect(paidSubmissions.length + submitImage.mock.calls.length).toBe(1);
+            await act(async () => {
+                Array.from(host.querySelectorAll<HTMLButtonElement>(".ecs-mobile-tabs button"))
+                    .find((button) => button.textContent?.trim() === "创作")!
+                    .click();
+            });
+            expect(mobileView()).toBe("create");
+            expect(host.querySelector<HTMLButtonElement>(".ecs-submit")!.disabled).toBe(true);
+            const task = runningTask(`mobile-${action}`);
+            tasks.set(task.id, task);
+            await act(async () => completeCreateTask!(task));
+            expect(mobileView()).toBe("create");
+            expect(paidSubmissions.length + submitImage.mock.calls.length).toBe(1);
+        } finally {
+            restoreLayout();
+        }
+    });
+
+    test("手机免确认提交失败后直接显示错误，保留需求供用户返回创作修改", async () => {
+        const restoreLayout = mobileLayout();
+        try {
+            draft.instruction = "请保留原商品需求";
+            localStorage.setItem(`ecommerce-confirm-skip:${scope}`, "1");
+            spyOn(taskApi, "createGenerationTask").mockRejectedValueOnce(new Error("手机连接已中断"));
+            await sessions.writeEcommerceWorkspace(scope, { sessionId: crypto.randomUUID(), draft, plan: null, project: null, creationMode: "ai", autoGenerate: false });
+            await render();
+            await act(async () => host.querySelector<HTMLButtonElement>(".ecs-submit")!.click());
+            expect(mobileView()).toBe("works");
+            expect(getComputedStyle(host.querySelector<HTMLElement>(".commerce-output-gallery")!).display).not.toBe("none");
+            expect(host.querySelector('[role="alert"].ecs-failure')?.textContent).toContain("手机连接已中断");
+            expect(host.querySelector<HTMLTextAreaElement>('[aria-label="电商创作输入"]')!.value).toBe(draft.instruction);
+            expect(host.querySelector(".ecs-submit")?.getAttribute("aria-busy")).toBe("false");
+        } finally {
+            restoreLayout();
+        }
+    });
+
+    test("手机直接生成准备失败时展示错误而不是停留在准备中", async () => {
+        const restoreLayout = mobileLayout();
+        try {
+            draft = { ...draft, imageType: "single", instruction: "直接制作商品图" };
+            localStorage.setItem(`ecommerce-confirm-skip:${scope}`, "1");
+            await sessions.writeEcommerceWorkspace(scope, { sessionId: crypto.randomUUID(), draft, plan: null, project: null, creationMode: "direct", autoGenerate: false });
+            await render();
+            failedSaves = 1;
+            await act(async () => host.querySelector<HTMLButtonElement>(".ecs-submit")!.click());
+            expect(mobileView()).toBe("works");
+            expect(host.querySelector('[role="alert"].ecs-failure')?.textContent).toContain("保存连接暂时中断");
+            expect(host.querySelector(".ecs-submit")?.getAttribute("aria-busy")).toBe("false");
+            expect(host.querySelector<HTMLTextAreaElement>('[aria-label="电商创作输入"]')!.value).toBe(draft.instruction);
+            expect(paidSubmissions).toHaveLength(0);
+        } finally {
+            restoreLayout();
+        }
+    });
+
+    test("手机商品需求校验未通过时保留创作面板，不切到空白作品区", async () => {
+        const restoreLayout = mobileLayout();
+        try {
+            draft = { ...draft, instruction: "缺少平台的商品需求", platform: "" };
+            localStorage.setItem(`ecommerce-confirm-skip:${scope}`, "1");
+            await sessions.writeEcommerceWorkspace(scope, { sessionId: crypto.randomUUID(), draft, plan: null, project: null, creationMode: "ai", autoGenerate: false });
+            await render();
+            await act(async () => host.querySelector<HTMLButtonElement>(".ecs-submit")!.click());
+            expect(mobileView()).toBe("create");
+            expect(errors).toContain("请先选择平台和语言");
+            expect(host.querySelector<HTMLTextAreaElement>('[aria-label="电商创作输入"]')!.value).toBe(draft.instruction);
+            expect(paidSubmissions).toHaveLength(0);
+        } finally {
+            restoreLayout();
+        }
+    });
+
+    test("手机返回已有分析任务直接显示进度，新建项目回到创作且不重复提交", async () => {
+        const restoreLayout = mobileLayout();
+        try {
+            const task = runningTask("mobile-restored-task");
+            tasks.set(task.id, task);
+            const saved = project({ ...draft, planningTaskId: task.id });
+            projects.set(saved.id, saved);
+            await render(`/ecommerce?project=${saved.id}`);
+            expect(mobileView()).toBe("works");
+            expect(planningProgress()).not.toBeNull();
+            expect(getComputedStyle(host.querySelector<HTMLElement>(".commerce-output-gallery")!).display).not.toBe("none");
+            await press("新建项目");
+            expect(mobileView()).toBe("create");
+            expect(planningProgress()).toBeNull();
+            expect(paidSubmissions).toHaveLength(0);
+        } finally {
+            restoreLayout();
+        }
+    });
+
+    test.each(["挂起", "失败"] as const)("本机缓存写入%s不阻塞方向任务回执保存与提交锁释放", async (result) => {
+        draft.instruction = "商品分析不要等待本机缓存";
+        await sessions.writeEcommerceWorkspace(scope, { sessionId: crypto.randomUUID(), draft, plan: null, project: null, creationMode: "ai", autoGenerate: false });
+        await render();
+        const originalWrite = localforage.setItem;
+        let release!: () => void;
+        const blocked = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        localforage.setItem = (async (...args: Parameters<typeof localforage.setItem>) => {
+            if (result === "失败") throw new Error("本机缓存不可写");
+            await blocked;
+            return originalWrite(...args);
+        }) as typeof localforage.setItem;
+        try {
+            await press("开始创作");
+            expect(paidSubmissions).toHaveLength(1);
+            const cached = sessions.peekEcommerceWorkspace(scope)!;
+            expect(cached.draft.directionsTaskId).toBeTruthy();
+            expect(JSON.parse(projects.get(cached.project!.id)!.draftJson).directionsTaskId).toBe(cached.draft.directionsTaskId);
+            expect(host.querySelector(".ecs-submit")?.getAttribute("aria-busy")).toBe("false");
+            expect(host.querySelector(".commerce-request-message")?.textContent).toContain(draft.instruction);
+        } finally {
+            await act(async () => release());
+            localforage.setItem = originalWrite;
+        }
+    });
+
     test("发送后从对话反复拖图复用原资源，连续导入不清空对话且刷新保留已发送快照", async () => {
         const observer = Object.getOwnPropertyDescriptor(globalThis, "IntersectionObserver");
         Object.defineProperty(globalThis, "IntersectionObserver", { value: undefined, configurable: true });
