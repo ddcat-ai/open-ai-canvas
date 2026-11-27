@@ -1,5 +1,8 @@
 import { Button, Skeleton } from "antd";
-import { Check, CircleAlert, Coins, FolderOpen, HardDrive } from "lucide-react";
+import { Check, CircleAlert, Coins, Crown, FolderOpen, Gift, HardDrive, ShieldCheck } from "lucide-react";
+import { MembershipSchedule } from "@/components/payment/membership";
+import type { MembershipStatus } from "@/services/api/membership";
+import { paymentOrderGrantLabel } from "@/lib/payment-order-grant";
 import { useEffect, useRef, type ReactNode } from "react";
 import { Trans, useTranslation } from "react-i18next";
 
@@ -21,6 +24,7 @@ export type TopupCategory = "all" | TopupProductKind;
 const KIND_META: Record<TopupProductKind, { key: string; icon: typeof Coins }> = {
     credits: { key: "account.wallet.topup.kinds.credits", icon: Coins },
     storage: { key: "account.wallet.topup.kinds.storage", icon: HardDrive },
+    membership: { key: "membership", icon: Crown },
 };
 
 const SALE_TIME_FORMAT: Intl.DateTimeFormatOptions = { hour12: false, month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" };
@@ -37,6 +41,10 @@ function productAvailability(product: TopupProduct) {
 
 /** 选中商品的权益摘要，结算栏与卡片共用。 */
 export function topupProductValue(product: TopupProduct) {
+    if (product.kind === "membership") {
+        if (product.creditsMicrocredits > 0) return paymentOrderGrantLabel({ ...product, productKind: product.kind });
+        return [translate("membership.duration", { days: product.membershipDays }), translate("membership.access", { group: product.membershipGroup })].join(" · ");
+    }
     return product.kind === "storage" ? `+${formatStorageCapacity(product.storageBytes)}` : translate("account.wallet.topup.creditsValue", { amount: formatCredits(product.creditsMicrocredits, 6) });
 }
 
@@ -74,10 +82,58 @@ function ProductCard({ product, selected, onSelect }: { product: TopupProduct; s
     );
 }
 
-function TopupGroup({ kind, products, selectedProductId, onSelectProduct, aside, children }: { kind: TopupProductKind; products: TopupProduct[]; selectedProductId: string; onSelectProduct: (id: string) => void; aside?: ReactNode; children?: ReactNode }) {
+function MembershipCard({ product, selected, onSelect }: { product: TopupProduct; selected: boolean; onSelect: () => void }) {
+    const { t } = useTranslation();
+    return (
+        <button type="button" className="wallet-membership-card" data-plan={product.id} aria-pressed={selected} disabled={!product.canPurchase} onClick={onSelect}>
+            <span className="wallet-membership-heading">
+                <span className="wallet-membership-emblem" aria-hidden="true">
+                    <Crown />
+                </span>
+                <strong>{product.name}</strong>
+                <span className="wallet-membership-choice" aria-hidden="true">
+                    {selected && <Check />}
+                </span>
+            </span>
+            <span className="wallet-membership-rate">
+                <b>{formatPaymentAmount(product.amountFen, product.currency)}</b>
+                <span>/ {t("membership.duration", { days: product.membershipDays })}</span>
+            </span>
+            <span className="wallet-membership-benefits">
+                <span>
+                    <ShieldCheck aria-hidden="true" />
+                    {t("membership.access", { group: product.membershipGroup })}
+                </span>
+                {product.creditsMicrocredits > 0 && (
+                    <span>
+                        <Gift aria-hidden="true" />
+                        {t("membership.cardBonus", { credits: formatCredits(product.creditsMicrocredits, 6) })}
+                    </span>
+                )}
+            </span>
+        </button>
+    );
+}
+
+function TopupGroup({
+    kind,
+    products,
+    selectedProductId,
+    onSelectProduct,
+    belowCards,
+    children,
+}: {
+    kind: TopupProductKind;
+    products: TopupProduct[];
+    selectedProductId: string;
+    onSelectProduct: (id: string) => void;
+    belowCards?: ReactNode;
+    children?: ReactNode;
+}) {
     const { t } = useTranslation();
     const meta = KIND_META[kind];
     const Icon = meta.icon;
+    const Card = kind === "membership" ? MembershipCard : ProductCard;
     const description = t(`${meta.key}.description`);
     return (
         <section className={cn("wallet-topup-group", `is-${kind}`)} data-topup-kind={kind} aria-labelledby={`wallet-topup-group-${kind}`}>
@@ -89,18 +145,18 @@ function TopupGroup({ kind, products, selectedProductId, onSelectProduct, aside,
                     <h3 id={`wallet-topup-group-${kind}`}>{t(`${meta.key}.group`)}</h3>
                     <p title={description}>{description}</p>
                 </div>
-                {aside}
             </header>
             {children}
             {products.length ? (
                 <div className="wallet-topup-grid">
                     {products.map((product) => (
-                        <ProductCard key={product.id} product={product} selected={selectedProductId === product.id} onSelect={() => onSelectProduct(product.id)} />
+                        <Card key={product.id} product={product} selected={selectedProductId === product.id} onSelect={() => onSelectProduct(product.id)} />
                     ))}
                 </div>
             ) : (
                 <div className="wallet-topup-group-empty">{t(`${meta.key}.empty`)}</div>
             )}
+            {belowCards}
         </section>
     );
 }
@@ -166,6 +222,8 @@ export function WalletTopupPanel({
     onPay,
     storageUsage,
     storageGrants,
+    membership,
+    membershipError,
     onCleanAssets,
 }: {
     loading: boolean;
@@ -185,6 +243,8 @@ export function WalletTopupPanel({
     onPay: () => void;
     storageUsage?: AccountFileStorageUsage;
     storageGrants: UserStorageGrant[];
+    membership?: MembershipStatus;
+    membershipError?: string;
     onCleanAssets: () => void;
 }) {
     const { t } = useTranslation();
@@ -210,11 +270,12 @@ export function WalletTopupPanel({
     }
 
     const byKind: Record<TopupProductKind, TopupProduct[]> = {
-        credits: products.filter((item) => item.kind !== "storage"),
+        membership: products.filter((item) => item.kind === "membership").sort((a, b) => (a.membershipDays ?? a.sortOrder) - (b.membershipDays ?? b.sortOrder)),
+        credits: products.filter((item) => item.kind === "credits"),
         storage: products.filter((item) => item.kind === "storage"),
     };
     // 只展示有商品的分类；存储分类即使没有商品也展示容量信息，便于用户先清理。
-    const kinds = (["credits", "storage"] as const).filter((kind) => byKind[kind].length || kind === "storage");
+    const kinds = (["membership", "credits", "storage"] as const).filter((kind) => byKind[kind].length || kind === "storage" || (kind === "membership" && (membership?.periods.length || membershipError)));
     const selectedKind = selectedProduct ? KIND_META[selectedProduct.kind] : null;
     const SelectedIcon = selectedKind?.icon;
     const selectedOption = paymentOptions.find((option) => option.key === selectedOptionKey);
@@ -227,7 +288,14 @@ export function WalletTopupPanel({
         <div className="workspace-wallet-content wallet-topup">
             <div ref={groupsRef} className="wallet-topup-groups">
                 {kinds.map((kind) => (
-                    <TopupGroup key={kind} kind={kind} products={byKind[kind]} selectedProductId={selectedProduct?.id || ""} onSelectProduct={onSelectProduct}>
+                    <TopupGroup
+                        key={kind}
+                        kind={kind}
+                        products={byKind[kind]}
+                        selectedProductId={selectedProduct?.id || ""}
+                        onSelectProduct={onSelectProduct}
+                        belowCards={kind === "membership" && (membershipError ? <p role="alert">{membershipError}</p> : membership && <MembershipSchedule state={membership} selected={selectedProduct} />)}
+                    >
                         {kind === "storage" ? <StorageSummary usage={storageUsage} grants={storageGrants} onCleanAssets={onCleanAssets} /> : null}
                     </TopupGroup>
                 ))}
@@ -284,7 +352,13 @@ export function WalletTopupPanel({
                     ) : (
                         <span className="wallet-topup-checkout-hint">{t("account.wallet.topup.noProvider")}</span>
                     )}
-                    <Button type="primary" size="large" loading={creating} disabled={!selectedProduct || !selectedProduct.canPurchase || !selectedOptionPayable} onClick={onPay}>
+                    <Button
+                        type="primary"
+                        size="large"
+                        loading={creating}
+                        disabled={!selectedProduct || !selectedProduct.canPurchase || !selectedOptionPayable || (selectedProduct.kind === "membership" && (!membership?.salesEnabled || !!membershipError))}
+                        onClick={onPay}
+                    >
                         {t("account.wallet.topup.payNow")}
                     </Button>
                 </footer>

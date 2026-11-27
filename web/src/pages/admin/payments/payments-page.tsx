@@ -45,6 +45,7 @@ import { AdminPageFrame } from "../components/admin-shell";
 import { AdminDataTable, AdminExportButton, AdminRowActions, AdminStatusBadge, AdminTableEmpty, configuredSecretText } from "../components/admin-ui";
 import { AdminUserDetailDrawer } from "../components/admin-user-detail-drawer";
 import "./payments-page.css";
+import { MembershipCardsPanel } from "./membership-cards-panel";
 import { Select } from "@/components/ui/base/select";
 
 type ProviderFormValues = {
@@ -772,10 +773,15 @@ export default function AdminPaymentsPage() {
                                         新增商品
                                     </Button>
                                 }
-                                table={{ rowKey: "id", loading, columns: productColumns, dataSource: products, pagination: false, scroll: { x: 820 } }}
+                                table={{ rowKey: "id", loading, columns: productColumns, dataSource: products.filter((p) => p.kind !== "membership"), pagination: false, scroll: { x: 820 } }}
                                 empty={<AdminTableEmpty title="还没有充值商品" />}
                             />
                         ),
+                    },
+                    {
+                        key: "membership",
+                        label: "会员卡",
+                        children: <MembershipCardsPanel products={products} loading={loading} defaultCurrency={defaultCurrency} reload={loadBase} />,
                     },
                     {
                         key: "orders",
@@ -974,6 +980,9 @@ export default function AdminPaymentsPage() {
                                 ),
                             },
                             { key: "product", label: "商品", children: selectedOrder.productName },
+                            ...(selectedOrder.membershipStartsAt && selectedOrder.membershipEndsAt
+                                ? [{ key: "membership-period", label: "会员权益时段", children: `${formatDateTime(selectedOrder.membershipStartsAt)} – ${formatDateTime(selectedOrder.membershipEndsAt)}` }]
+                                : []),
                             { key: "channel", label: "支付渠道", children: `${providerNames[selectedOrder.providerId] || selectedOrder.providerId}${selectedOrder.paymentMethod ? ` · ${selectedOrder.paymentMethod}` : ""}` },
                             { key: "amount", label: "金额 / 权益", children: `${formatPaymentAmount(selectedOrder.amountFen, selectedOrder.currency)} / ${paymentOrderGrantLabel(selectedOrder)}` },
                             {

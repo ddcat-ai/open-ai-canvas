@@ -16,7 +16,8 @@ func TestSplitOfficialMigrationLedger(t *testing.T) {
 				t.Fatal(err)
 			}
 			var custom []yingceSchemaMigration
-			if err = db.Order("version").Find(&custom).Error; err != nil {
+			// 旧的官方素材分支只有四条迁移，后续独立模块从未占用主线编号。
+			if err = db.Where("version <= 4").Order("version").Find(&custom).Error; err != nil {
 				t.Fatal(err)
 			}
 			if err = db.Exec("DELETE FROM schema_migrations WHERE version >= 78").Error; err != nil {
@@ -51,7 +52,8 @@ func TestSplitOfficialMigrationLedger(t *testing.T) {
 				t.Fatal(err)
 			}
 			status, err := ReadSchemaStatus(db)
-			if err != nil || !status.Ready || status.Current != CurrentSchemaVersion || status.YingceCurrent != 4 || status.YingceExpected != 4 {
+			expected := int64(len(yingceSchemaMigrations))
+			if err != nil || !status.Ready || status.Current != CurrentSchemaVersion || status.YingceCurrent != expected || status.YingceExpected != expected {
 				t.Fatalf("bad status: %#v %v", status, err)
 			}
 			var row schemaMigration
@@ -60,7 +62,7 @@ func TestSplitOfficialMigrationLedger(t *testing.T) {
 			}
 			var count int64
 			db.Model(&yingceSchemaMigration{}).Count(&count)
-			if count != 4 {
+			if count != expected {
 				t.Fatalf("custom records: %d", count)
 			}
 			if err = MigrateSchema(db); err != nil {

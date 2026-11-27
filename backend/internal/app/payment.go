@@ -83,8 +83,9 @@ type TopupProductRequest struct {
 }
 
 type CreatePaymentOrderRequest struct {
-	ProductID  string `json:"productId"`
-	ProviderID string `json:"providerId"`
+	MembershipVersion string `json:"membershipVersion"`
+	ProductID         string `json:"productId"`
+	ProviderID        string `json:"providerId"`
 	// Method 是渠道内的支付方式 ID；渠道只启用一种方式时可留空。
 	Method         string `json:"method"`
 	IdempotencyKey string `json:"idempotencyKey"`
@@ -98,6 +99,9 @@ type PaymentCheckoutView struct {
 }
 
 type PaymentOrderView struct {
+	model.MembershipTerms
+	MembershipStartsAt  *time.Time               `json:"membershipStartsAt,omitempty"`
+	MembershipEndsAt    *time.Time               `json:"membershipEndsAt,omitempty"`
 	ID                  string                   `json:"id"`
 	UserID              string                   `json:"userId,omitempty"`
 	MerchantOrderNo     string                   `json:"merchantOrderNo"`
@@ -181,7 +185,12 @@ func (s *Service) CreatePaymentOrder(ctx context.Context, actor *model.User, req
 		return nil, BadAuthRequest("充值商品不存在或已停用")
 	}
 	// 积分功能关闭时积分商品不可购买；存储空间商品不依赖积分功能。
-	if topupProductKind(product.Kind) == model.TopupProductKindCredits {
+	if product.Kind == model.TopupProductKindMembership {
+		if request.MembershipVersion != product.UpdatedAt.Format(time.RFC3339Nano) {
+			return nil, BadAuthRequest("会员卡配置已变更，请重新打开钱包查看后购买")
+		}
+	}
+	if topupProductKind(product.Kind) == model.TopupProductKindCredits || (product.Kind == model.TopupProductKindMembership && product.CreditsMicrocredits > 0) {
 		if err := s.RequireFeature(FeatureCredits); err != nil {
 			return nil, err
 		}
@@ -230,7 +239,8 @@ func (s *Service) CreatePaymentOrder(ctx context.Context, actor *model.User, req
 	}
 	now := time.Now()
 	order := &model.PaymentOrder{
-		ID: newID(), UserID: actor.ID, IdempotencyKey: idempotencyKey, MerchantOrderNo: newID(),
+		MembershipTerms: product.MembershipTerms,
+		ID:              newID(), UserID: actor.ID, IdempotencyKey: idempotencyKey, MerchantOrderNo: newID(),
 		ProductID: product.ID, ProductName: product.Name, ProductKind: topupProductKind(product.Kind),
 		StorageBytes: product.StorageBytes, StorageDurationDays: product.StorageDurationDays, ProviderID: provider.Descriptor().ID,
 		PluginID: provider.Descriptor().PluginID, PluginVersion: provider.Descriptor().PluginVersion, ProviderConfigID: config.ID, ProviderConfigVersion: config.Version,
@@ -642,7 +652,7 @@ func (s *Service) paymentRuntimeForOrder(order *model.PaymentOrder) (payment.Pro
 
 // topupProductKind 把迁移前或未填写的类型视为积分商品。
 func topupProductKind(kind model.TopupProductKind) model.TopupProductKind {
-	if kind == model.TopupProductKindStorage {
+	if kind == model.TopupProductKindStorage || kind == model.TopupProductKindMembership {
 		return kind
 	}
 	return model.TopupProductKindCredits
@@ -662,6 +672,7 @@ func paymentOrderView(order model.PaymentOrder) PaymentOrderView {
 		}
 	}
 	return PaymentOrderView{
+		MembershipTerms: order.MembershipTerms, MembershipStartsAt: order.MembershipStartsAt, MembershipEndsAt: order.MembershipEndsAt,
 		ID: order.ID, UserID: order.UserID, MerchantOrderNo: order.MerchantOrderNo, ProductID: order.ProductID, ProductName: order.ProductName,
 		ProductKind: topupProductKind(order.ProductKind), StorageBytes: order.StorageBytes, StorageDurationDays: order.StorageDurationDays,
 		ProviderID: order.ProviderID, PaymentMethod: order.PaymentMethod, AmountFen: order.AmountFen, Currency: order.Currency,

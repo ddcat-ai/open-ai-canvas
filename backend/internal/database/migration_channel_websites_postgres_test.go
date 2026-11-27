@@ -50,6 +50,7 @@ func TestPostgresChannelWebsiteMigrationUpgradesVersion96(t *testing.T) {
 
 	// Recreate the v96 channel/pricing slice without website_id or the three
 	// new tables; unrelated historical migrations are recorded, not rerun.
+	createPreMembershipTables(t, db)
 	if err := db.AutoMigrate(&schemaMigration{}, &model.ModelChannel{}, &model.ChannelModel{}, &model.ChannelModelPriceTier{}); err != nil {
 		t.Fatal(err)
 	}

@@ -125,6 +125,19 @@ func (r *Repository) CreatePaymentOrderWithProductReservation(order *model.Payme
 		if !product.Enabled {
 			return ErrTopupUnavailable
 		}
+		if order.ProductKind == model.TopupProductKindMembership {
+			var sales model.SystemSetting
+			err := tx.Clauses(clause.Locking{Strength: "SHARE"}).Where("key = ?", model.MembershipSalesKey).Take(&sales).Error
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrTopupUnavailable
+			}
+			if err != nil {
+				return err
+			}
+			if sales.ValueJSON != "true" || product.MembershipTerms != order.MembershipTerms || product.AmountFen != order.AmountFen || product.Currency != order.Currency || product.CreditsMicrocredits != order.CreditsMicrocredits {
+				return ErrTopupUnavailable
+			}
+		}
 		if strategy == model.TopupSaleStrategyTimed && ((product.SaleStartAt != nil && now.Before(*product.SaleStartAt)) || (product.SaleEndAt != nil && !now.Before(*product.SaleEndAt))) {
 			return ErrTopupUnavailable
 		}
@@ -311,7 +324,8 @@ func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, ev
 			return ErrPaymentEvidenceMismatch
 		}
 		storageOrder := order.ProductKind == model.TopupProductKindStorage
-		if order.AmountFen <= 0 || (storageOrder && order.StorageBytes <= 0) || (!storageOrder && order.CreditsMicrocredits <= 0) {
+		membershipOrder := order.ProductKind == model.TopupProductKindMembership
+		if order.AmountFen <= 0 || (storageOrder && order.StorageBytes <= 0) || (!storageOrder && !membershipOrder && order.CreditsMicrocredits <= 0) {
 			return ErrPaymentOrderStateConflict
 		}
 		if order.Status == model.PaymentOrderCredited {
@@ -333,8 +347,17 @@ func (r *Repository) CompletePaymentOrder(providerID, merchantOrderNo string, ev
 			if err := grantPaymentStorage(tx, &order, referenceKey, now); err != nil {
 				return err
 			}
-		} else if err := creditPaymentTopup(tx, &order, referenceKey, now); err != nil {
-			return err
+		} else {
+			if membershipOrder {
+				if err := grantMembership(tx, &order, now); err != nil {
+					return err
+				}
+			}
+			if order.CreditsMicrocredits > 0 {
+				if err := creditPaymentTopup(tx, &order, referenceKey, now); err != nil {
+					return err
+				}
+			}
 		}
 		paidAt := evidence.PaidAt
 		if paidAt.IsZero() {
@@ -392,6 +415,10 @@ func creditPaymentTopup(tx *gorm.DB, order *model.PaymentOrder, referenceKey str
 		ID: newRepositoryID(), UserID: order.UserID, Type: model.CreditLedgerPaymentTopup,
 		AmountMicrocredits: order.CreditsMicrocredits, PaymentOrderID: order.ID,
 		ReferenceKey: &referenceKey, Note: order.ProductName + " · 在线支付充值",
+	}
+	if order.ProductKind == model.TopupProductKindMembership {
+		entry.Type = model.CreditLedgerMembershipBonus
+		entry.Note = order.ProductName + " · 购买会员赠送"
 	}
 	created := tx.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "reference_key"}}, DoNothing: true}).Create(&entry)
 	if created.Error != nil {

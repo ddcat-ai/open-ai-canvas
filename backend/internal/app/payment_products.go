@@ -24,7 +24,20 @@ func (s *Service) TopupProducts(actor *model.User) ([]model.TopupProduct, error)
 	}
 	// 积分功能关闭时只隐藏积分商品，存储空间商品照常售卖。
 	visible := make([]model.TopupProduct, 0, len(products))
+	var membershipEnabled *bool
 	for _, product := range products {
+		if product.Kind == model.TopupProductKindMembership {
+			if membershipEnabled == nil {
+				enabled, err := s.membershipSalesEnabled()
+				if err != nil {
+					return nil, err
+				}
+				membershipEnabled = &enabled
+			}
+			if !*membershipEnabled || (!creditsEnabled && product.CreditsMicrocredits > 0) {
+				continue
+			}
+		}
 		if topupProductKind(product.Kind) == model.TopupProductKindCredits && !creditsEnabled {
 			continue
 		}

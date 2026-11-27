@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"yingce/backend/internal/model"
 )
 
@@ -71,11 +72,21 @@ func (r *Repository) SaveUserGroupWithChannels(group *model.UserGroup, channelID
 // DeleteUserGroup 在同一事务内确认分组没有用户后删除分组和绑定；默认分组由 service 层禁止删除。
 func (r *Repository) DeleteUserGroup(id string, code string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").First(&model.UserGroup{}, "id = ?", id).Error; err != nil {
+			return err
+		}
 		var count int64
 		if err := tx.Model(&model.User{}).Where("user_group = ?", code).Count(&count).Error; err != nil {
 			return err
 		}
 		if count > 0 {
+			return ErrUserGroupInUse
+		}
+		used, err := membershipReferencesGroup(tx, code)
+		if err != nil {
+			return err
+		}
+		if used {
 			return ErrUserGroupInUse
 		}
 		if err := tx.Where("group_id = ?", id).Delete(&model.UserGroupChannel{}).Error; err != nil {

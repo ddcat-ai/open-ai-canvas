@@ -122,7 +122,7 @@ export function AdminUserEditModal({ user, actorId, groups, onClose, onSaved }: 
                         ]}
                     />
                 </Form.Item>
-                <Form.Item className="is-wide" name="userGroup" label="用户分组" extra="分组决定可见的系统渠道与模型、统一折扣和货币兑换比例；用户下次刷新工作台后生效。">
+                <Form.Item className="is-wide" name="userGroup" label="基础分组" extra="会员期间使用会员卡绑定的分组。全部会员时段结束后，恢复此处设置的分组。">
                     <Select options={userGroupOptions(groups)} />
                 </Form.Item>
                 <Form.Item className="is-wide" name="isPromoter" label="推广人" valuePropName="checked" extra="推广中心设为「指定推广人」时，只有推广人能看到推广中心并获得返佣；全民推广时此标记不影响资格。">

@@ -40,6 +40,7 @@ export type UserGroupInput = Pick<UserGroup, "code" | "name" | "description" | "
 
 /** 会话里的分组展示信息，不含渠道绑定。 */
 export type PublicUserGroup = {
+    membershipEndsAt?: string;
     code: string;
     name: string;
     badgeLabel: string;

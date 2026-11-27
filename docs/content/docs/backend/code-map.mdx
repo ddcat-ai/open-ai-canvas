@@ -341,6 +341,7 @@ HTTP 请求 -> handler -> service（稳定导入面 / 别名）-> app（组合�
 | 用户和管理员 | `handler/auth.go` | `internal/auth`、`internal/app/admin.go`（经 `service` 别名） |
 | 管理后台批量操作 | `handler/auth.go` | `internal/app/admin.go`、`repository/admin_audit.go`、`repository/analytics.go` |
 | 管理后台存储资源 | `handler/admin_storage.go` | `internal/app/admin_storage.go`、`repository/admin_storage.go` |
+| 会员卡 | `handler/membership.go`、后台支付页 `membership-cards-panel.tsx`、钱包 `components/payment/membership.tsx` | `app/membership.go` 管理销售与当前分组，`repository/membership.go` 在支付事务内排期，`database/migration_membership.go` 使用独立迁移序列。接入点为支付商品、到账事务、用户分组解析和积分钱包。 |
 | 资源与请求策略 | `handler/auth.go`、`handler/security.go` | `internal/platform`、`internal/app/upload_quota.go`、`storage_quota.go`、`coordination.go` |
 | 用户分组与多币种计价 | `handler/admin_user_group_routes.go`、`handler/payment.go`（`/payments/settings`） | `internal/app/user_groups.go`（分组快照、`userGroupAccess` 渠道可见性与价格因子、管理端增删改）、`finance.go`（`groupTierPrices` 换算并写入账单快照）、`model_catalog.go` / `logical_models_catalog.go`（按分组过滤并展示实际单价）、`payment_settings.go`（默认充值货币）、`repository/repository_user_groups.go` |
 | 存储空间套餐与只读 | `handler/storage_guard.go`、`handler/storage_grants.go` | `internal/app/storage_capacity.go`（有效容量、宽限期与只读、扩容赠送/撤销）、`payment_products.go`（商品类型）、`repository/storage_grants.go`、`repository/payment.go`（`grantPaymentStorage`） |

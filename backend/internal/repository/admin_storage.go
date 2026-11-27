@@ -211,7 +211,7 @@ func (r *Repository) UserCreditTotals(ids []string) (map[string]UserCreditTotal,
 		Total  int64
 	}
 	var recharged []row
-	if err := r.db.Model(&model.PaymentOrder{}).Select("user_id, COALESCE(SUM(credits_microcredits), 0) AS total").Where("user_id IN ? AND status = ?", ids, model.PaymentOrderCredited).Group("user_id").Scan(&recharged).Error; err != nil {
+	if err := r.db.Model(&model.PaymentOrder{}).Select("user_id, COALESCE(SUM(credits_microcredits), 0) AS total").Where("user_id IN ? AND status = ? AND product_kind <> ?", ids, model.PaymentOrderCredited, model.TopupProductKindMembership).Group("user_id").Scan(&recharged).Error; err != nil {
 		return nil, err
 	}
 	var consumed []row

@@ -1,5 +1,4 @@
-/* 积分中心 · 充值：按“积分 / 存储空间”分类展示，结算栏固定在底部。
-   外壳沿用 .workspace-wallet-*；类型色只用于字形与图标底，不做整卡染色。 */
+/* 积分中心的商品列表独立滚动，结算栏固定在底部。 */
 .wallet-topup {
     --wallet-topup-credits-ink: var(--status-warning);
     --wallet-topup-storage-ink: var(--status-loading);
@@ -21,6 +20,10 @@
 
 .wallet-topup .is-storage {
     --wallet-topup-kind-ink: var(--wallet-topup-storage-ink);
+}
+
+.wallet-topup .is-membership {
+    --wallet-topup-kind-ink: var(--product-accent-violet, var(--user-accent));
 }
 
 .wallet-topup-kind-icon {
@@ -54,6 +57,7 @@
 /* 分组不再套边框盒子：一行标题 + 网格，把高度留给商品列表。 */
 .wallet-topup-groups {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     flex: 1;
     min-height: 0;
     align-content: start;
@@ -110,6 +114,176 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
     gap: 8px;
+}
+
+.wallet-topup-group.is-membership .wallet-topup-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+    gap: var(--space-3);
+}
+
+.wallet-membership-card {
+    --pass-ink: var(--wallet-topup-kind-ink);
+    --pass-tint: 7%;
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    border: 1px solid color-mix(in srgb, var(--pass-ink) 28%, var(--user-surface));
+    border-radius: var(--radius-2xl);
+    background: linear-gradient(115deg, var(--user-surface), color-mix(in srgb, var(--pass-ink) var(--pass-tint), var(--user-surface)));
+    color: var(--user-ink);
+    text-align: start;
+    cursor: pointer;
+}
+
+.wallet-membership-card:only-child {
+    max-width: 28rem;
+}
+.wallet-membership-card[data-plan="membership-week"] {
+    --pass-ink: var(--product-accent-cyan, var(--status-loading));
+}
+.wallet-membership-card[data-plan="membership-quarter"] {
+    --pass-ink: var(--product-accent-green, var(--status-success));
+}
+.wallet-membership-card[data-plan="membership-year"] {
+    --pass-ink: var(--product-accent-orange, var(--status-warning));
+}
+
+.wallet-membership-card::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: 0 0 auto auto;
+    width: 48%;
+    height: 80%;
+    background: repeating-radial-gradient(ellipse at 110% -60%, transparent 0 10px, color-mix(in srgb, var(--pass-ink) 25%, transparent) 11px, transparent 12px 15px);
+    mask-image: linear-gradient(225deg, black, transparent 78%);
+    pointer-events: none;
+}
+
+.wallet-membership-card:hover:enabled {
+    --pass-tint: 13%;
+    border-color: var(--pass-ink);
+}
+.wallet-membership-card[aria-pressed="true"] {
+    --pass-tint: 17%;
+    border-color: var(--pass-ink);
+    box-shadow: inset 0 0 0 1px var(--pass-ink);
+}
+.wallet-membership-card:focus-visible {
+    outline: 2px solid var(--control-focus-ring);
+    outline-offset: -4px;
+}
+.wallet-membership-card:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.wallet-membership-heading,
+.wallet-membership-rate,
+.wallet-membership-benefits,
+.wallet-membership-benefits > span,
+.wallet-membership-schedule {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+.wallet-membership-heading strong {
+    font-size: var(--fs-heading);
+    overflow-wrap: anywhere;
+}
+.wallet-membership-emblem,
+.wallet-membership-choice {
+    display: grid;
+    place-items: center;
+    flex: none;
+    color: var(--pass-ink);
+}
+.wallet-membership-emblem {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--pass-ink) 12%, var(--user-surface));
+}
+.wallet-membership-emblem svg {
+    width: 16px;
+    height: 16px;
+}
+.wallet-membership-choice {
+    margin-inline-start: auto;
+    width: 17px;
+    height: 17px;
+    border: 1px solid color-mix(in srgb, var(--pass-ink) 42%, var(--user-surface));
+    border-radius: 50%;
+    background: var(--user-surface);
+}
+[aria-pressed="true"] > .wallet-membership-heading .wallet-membership-choice {
+    background: var(--pass-ink);
+    border-color: var(--pass-ink);
+    color: var(--user-surface);
+}
+.wallet-membership-choice svg {
+    width: 12px;
+    height: 12px;
+    stroke-width: 3;
+}
+.wallet-membership-rate {
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 var(--space-2);
+    margin-block: var(--space-1);
+}
+.wallet-membership-rate b {
+    font-size: var(--fs-title);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.15;
+    letter-spacing: -0.035em;
+    overflow-wrap: anywhere;
+}
+.wallet-membership-rate > span,
+.wallet-membership-benefits,
+.wallet-membership-schedule {
+    font-size: var(--fs-caption);
+}
+.wallet-membership-rate > span,
+.wallet-membership-schedule {
+    color: var(--user-ink-muted);
+}
+.wallet-membership-benefits {
+    flex: 1;
+    align-content: flex-start;
+    padding-top: var(--space-2);
+    border-top: 1px solid color-mix(in srgb, var(--pass-ink) 18%, transparent);
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-3);
+}
+.wallet-membership-benefits > span {
+    min-width: 0;
+    gap: var(--space-1);
+    overflow-wrap: anywhere;
+}
+.wallet-membership-benefits svg,
+.wallet-membership-schedule > svg {
+    flex: none;
+    width: 14px;
+    height: 14px;
+}
+.wallet-membership-benefits svg {
+    color: var(--pass-ink);
+}
+.wallet-membership-schedule {
+    align-items: flex-start;
+    margin-top: var(--space-2);
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+}
+.wallet-membership-schedule > svg {
+    margin-top: var(--space-half);
 }
 
 /* 卡片三行：类型字形 + 名称 / 权益数值 / 限购标签 + 价格。 */
@@ -462,6 +636,16 @@
 }
 
 @media (max-width: 720px) {
+    .wallet-topup-group.is-membership .wallet-topup-grid {
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 136px), 1fr));
+        gap: var(--space-2);
+    }
+
+    .wallet-membership-card {
+        gap: var(--space-2);
+        padding: var(--space-3);
+    }
+
     .workspace-wallet-stats {
         width: 100%;
     }

@@ -648,6 +648,17 @@ Token 报价的 `estimated` 为 `true`，`quantity` 是预留 Token 数。`inten
 
 按秒或视频 Token 计费、挂参考视频的视频报价另有 `referenceVideo`（按次计费不返回）：`count`、`billed`（模型开启参考视频计费时为 `true`）、`generatedSeconds`、`referenceSeconds`、`billedSeconds`（按秒计入数量的参考视频秒数，Token 为 0）、`estimated`（时长未知、按 15 秒预估）。系统渠道目录的模型新增 `referenceVideoBilling`，价格档新增 `referenceVideoUnitPriceMicrocredits` / `referenceVideoOutputTokenPriceMicrocredits`（开关关闭时为 0）。规则见[视频 Token 计费](/docs/backend/video-token-billing#参考视频计费开关)。所有视频协议均支持 Token 定价；10% 预留是平台策略，不是费用上限。成功后优先有效上游用量，无有效用量时按提交的公式快照结算，余量不计入公式费用。账单新增 `videoFormulaTokens` 及 `usageSource`（`provider` / `video_formula`），公式结算的 `usageAvailable` 为 `false`，`outputTokens` 表示公式数量。算法、配置与异常用量处理见[视频 Token 计费](/docs/backend/video-token-billing)。
 
+## 会员卡
+
+| 方法与路径（前缀 `/api`） | 合同 |
+| --- | --- |
+| `GET /payments/membership` | 返回当前账号的 `salesEnabled`、`baseGroup` 和按起点排序的当前及后续 `periods[]`，每项含商品名、分组、起止时间。 |
+| `PUT /admin/payments/membership/sales` | 管理员提交 `{ enabled: boolean }` 切换销售。停止新建订单，继续履约已创建订单。 |
+| `PUT /admin/payments/membership/cards/{term}` | 管理员配置 `week/month/quarter/year` 四个商品；提交 `amountFen`、`currency`、`membershipGroup`、`creditsMicrocredits` 和 `enabled`。通过原管理端商品列表读取。 |
+| `POST /payments/orders` | 选中会员卡时额外提交所见商品的 `updatedAt` 原字符串作为 `membershipVersion`；商品变更后须重新查看。实收、天数、分组、赠分取服务端快照。积分功能关闭时只允许零赠分会员卡。 |
+
+已到账会员订单返回 `membershipStartsAt` 与 `membershipEndsAt`。会话的 `userGroup` 为生效组，会员期间另带 `membershipEndsAt`（当前时段终点）。换卡与续费产生独立时段；已有账单沿用自己的价格快照。
+
 ## 用户分组与多币种计价
 
 用户模型目录、报价、任务创建、工作台任务、短剧模型选择、云端 Agent 模型列表和系统渠道中转都按当前用户分组过滤系统渠道：分组未绑定的渠道不出现在 `GET /model-catalog` 与 `GET /models`，直接提交其 `channelId` 时报价、建任务和中转返回 `reason=model_catalog_mismatch`。管理员账号可见全部渠道。目录与报价返回的价格档单价（`unitPriceMicrocredits`、Token 单价）已按分组换算为实际扣费的微积分，含全局积分倍率、分组倍率和模型倍率；分组未配置该货币兑换比例的模型不进入目录，报价返回 `model_price_not_configured`。
