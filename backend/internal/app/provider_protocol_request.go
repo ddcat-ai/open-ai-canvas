@@ -216,10 +216,15 @@ func protocolReferenceRole(role, kind, inferred string) string {
 }
 
 func protocolMediaReference(value providerMedia, kind string, order int) protocol.MediaReference {
+	metadata := map[string]any{"bytes": value.Bytes, "width": value.Width, "height": value.Height, "storageKey": strings.TrimSpace(value.StorageKey)}
+	// An image without a measured duration is a still, not a zero-length clip.
+	if kind != "image" || value.DurationMs > 0 {
+		metadata["durationMs"] = value.DurationMs
+	}
 	return protocol.MediaReference{
 		ID: strings.TrimSpace(value.ID), URL: strings.TrimSpace(value.URL), DataURL: strings.TrimSpace(value.DataURL),
 		Kind: kind, MIMEType: firstNonEmpty(strings.TrimSpace(value.MimeType), strings.TrimSpace(value.Type)), Name: strings.TrimSpace(value.Name), Order: order,
-		Metadata: map[string]any{"bytes": value.Bytes, "width": value.Width, "height": value.Height, "durationMs": value.DurationMs, "storageKey": strings.TrimSpace(value.StorageKey)},
+		Metadata: metadata,
 	}
 }
 
