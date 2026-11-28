@@ -147,7 +147,6 @@
 - **任务系统**：异步队列、进度与日志、取消和重试，登录后跨设备同步。
 - **存储**：媒体可存放在后端数据目录、阿里云 OSS 或腾讯云 COS。
 - **明暗主题**：工作台支持明暗主题切换。
-- **社区技能**：[judian-skills](https://github.com/itsWyatt-K/judian-skills) 提供 34 个场景域包索引。安装方式：技能页 → 安装技能 → GitHub 标签 → 仓库地址填 `https://github.com/itsWyatt-K/judian-skills`，子目录填 `skills/drama/story-structure-engine` 这类域包路径。
 
 <p align="center">
   <img src="assets/screenshots/storyboard-dark.jpg" alt="暗色主题下的短剧分镜视图" width="100%">
@@ -461,6 +460,7 @@ cd docs && bun run types:check
 <td align="center" valign="top" width="33%">
   <img src="assets/user-Wyatt_K.png" alt="Wyatt_K" width="72" height="72"><br>
   <strong>Wyatt_K</strong><br>
+  <sub><a href="mailto:winke3191@gmail.com">winke3191@gmail.com</a></sub><br>
   <sub><em>千里之行，始于足下。</em></sub>
 </td>
 </tr>

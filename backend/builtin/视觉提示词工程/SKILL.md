@@ -1,6 +1,6 @@
 ---
 name: "视觉提示词工程"
-description: "把图和视频的提示词写成可控工艺：四层结构、五槽模板、反向解构与场景公式。当生图抽卡不可控、画面油腻、想复刻某条片子的工艺时调用。"
+description: "把图和视频的提示词写成可控工艺：四层结构、五槽模板、反向解构、场景公式、15秒夸张反转与单镜头视觉特效；也承接旧包「提示词工程模式」的系统提示词、循环工程、引用与人格设计，以及旧包「Freestyle 风格库」的模板匹配与六块组装。当生图抽卡不可控、画面油腻、想复刻某条片子的工艺、写15秒反转或视觉特效提示词、提示词工程模式怎么用、套模板出图风格飘了时调用。"
 metadata:
   version: "1.0.0"
   author: "剧典技能库（itsWyatt-K）"
@@ -20,11 +20,17 @@ metadata:
 
 # 视觉提示词工程：五槽模板/去油腻/反推/镜头卡/三细节/决策转换/审核词
 
-> 本包由 10 个开源方法论技能汇编（原卡全文见 `cards/` 目录，逐卡保留来源与许可）。
+> 本包汇编既有开源方法论与提示词工程卡片（原卡全文见 `cards/` 目录，逐卡保留来源与许可）。
 
 ## 何时调用
 
-当写生图或视频提示词、反推已有素材的提示词、把视觉决策翻译成模型短语时调用（本包由 10 个方法论技能汇编而成）。核心能力：视觉提示词工程：五槽模板/去油腻/反推/镜头卡/三细节/决策转换/审核词。工位边界：本包负责生成前的提示词工程与方法论；生产流程（分镜表/生成/拼接）走影策官方市场技能，两者接力不抢戏。
+当写生图或视频提示词、反推已有素材的提示词、把视觉决策翻译成模型短语，或要写 15 秒极致夸张反转、单镜头视觉特效时调用。核心能力：五槽模板、去油腻、反推、镜头卡、三细节、决策转换和审核词。工位边界：本包负责生成前的提示词工程与方法论；生产流程（分镜表/生成/拼接）走影策官方市场技能，两者接力不抢戏。
+
+具体分流：
+
+- 日常小事被放大到宇宙级，再用真相一秒戳穿，读 `cards/video-reversal-prompt.md`。
+- 15 秒单镜头、视觉锚点、动态矢量和高熵细节，读 `cards/video-visual-effect-prompt.md`。
+- 用户提到旧名 `15秒极致夸张反转提示词` 或 `15秒视觉特效` 时，先读对应迁移卡。
 
 ## 本包交付什么
 
@@ -62,10 +68,16 @@ metadata:
 
 ## 包内卡片名录
 
+- `cards/prompt-engineering-patterns-migration.md` — 旧名「提示词工程模式」与高频设计问题直达
+- `cards/freestyle-style-library-migration.md` — 旧名「Freestyle 风格库」与模板匹配、六块组装、翻车排查直达
+- `cards/video-reversal-prompt-migration.md` — 旧名「15秒极致夸张反转提示词」的兼容入口
+- `cards/video-visual-effect-prompt-migration.md` — 旧名「15秒视觉特效」的兼容入口
 - `cards/flux-asset-image.md` — FLUX.2 四层结构（Subject→Action→Style→Context，词序即权重）+ 五条专属规则（无负向词 / HEX 绑物体
-- `cards/vis-image-5slot-deslop.md` — 五槽模板（场景/主体/重要细节/用途/约束）+ 去油腻（禁用增压词/用拍摄管线替代形容词/植入有位置的瑕疵）+ 黄金规则 + 风格 DNA 
+- `cards/vis-image-5slot-deslop.md` — 五槽模板（场景/主体/重要细节/用途/约束）+ 去油腻（禁用增压词/用拍摄管线替代形容词/植入有位置的瑕疵）+ 黄金规则 + 风格 DNA
 - `cards/vis-image-reverse-prompt.md` — 四参数块深度解构（主体心理与场面调度/环境三平面/灯光明暗/技术摄影）+ 严格词序合成公式 + 只描述所见不发明
 - `cards/vis-video-reverse-prompt.md` — 逐秒定时拆解（读全片不读薄）→ 拆出镜头/时长/运镜/钩子/声音 → 换产品换台词保留工艺 → 结构可仿表达不可抄
+- `cards/video-reversal-prompt.md` — 15 秒三段式夸张反转（平凡压抑/宇宙级升级/真相戳穿）+ 可拍输出格式
+- `cards/video-visual-effect-prompt.md` — 15 秒单镜头四维解构（视觉锚点/动态矢量/高熵细节/意境留白）
 - `cards/vis-video-scene-formula.md` — 场景五要素公式（欲望+障碍+空间几何+受控注视+剪辑节奏）+ 齐备才可开写
 - `cards/vis-video-shot-card.md` — 三层分镜法（戏剧节拍→镜头功能→剪辑节奏）+ 14 字段镜头卡 + 节奏阶梯 + 60-90 秒节拍图
 - `cards/vis-video-three-details.md` — 每镜三件套（环境压力+身体微动作+声音/视觉母题）+ 禁用词清单 + 情绪 2-4 个可观测线索
@@ -89,9 +101,3 @@ metadata:
 ## 许可与署名（逐卡）
 
 ---
-
-**完整版**：本条目为域包总纲。34 个域包的完整卡片（开源署名层 86 卡 + 书籍重铸层 673 卡）位于
-[itsWyatt-K/judian-skills](https://github.com/itsWyatt-K/judian-skills)——技能页 → 安装技能 → GitHub →
-填入仓库地址与包路径（如 `skills/creative/visual-prompt-engineering`）即可安装，Agent 可按总纲名录逐卡深读。
-来源与许可见各卡 frontmatter：开源署名层逐卡标注 source/license（MIT/Apache-2.0/CC-BY-4.0/官方文档署名）；
-书籍重铸层标注 source_book + attribution（方法论自撰重写，不复制原文表达）。

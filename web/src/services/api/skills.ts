@@ -102,6 +102,7 @@ export type SkillRecommendationIndustry = {
     name: string;
     description: string;
     icon: string;
+    starterSkillIds: string[];
     skills: SkillRecommendationItem[];
     installedCount: number;
 };

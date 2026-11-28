@@ -68,6 +68,7 @@ metadata:
 - `cards/seedance-camera-lexicon.md` — 三档运镜词库（基础 7 词/高级 7 词/景别 6 词）直接选用
 - `cards/seedance-extend-edit.md` — 视频延长（生成长度=新增时长）、定向编辑（保留大部分改局部）、视频融合三模式写法
 - `cards/seedance-timeslice.md` — 分时段描述法——按 0-3s/3-6s/6-10s/10-15s 逐段写画面+运镜+动作
+- `cards/drama-four-tier-prompt.md` — 四层强控提示词：素材职责、整段目标、逐镜物理描述、全局硬约束
 
 ## 证据等级说明
 
@@ -85,9 +86,3 @@ metadata:
 ## 许可与署名（逐卡）
 
 ---
-
-**完整版**：本条目为域包总纲。34 个域包的完整卡片（开源署名层 86 卡 + 书籍重铸层 673 卡）位于
-[itsWyatt-K/judian-skills](https://github.com/itsWyatt-K/judian-skills)——技能页 → 安装技能 → GitHub →
-填入仓库地址与包路径（如 `skills/creative/seedance-prompt-engineering`）即可安装，Agent 可按总纲名录逐卡深读。
-来源与许可见各卡 frontmatter：开源署名层逐卡标注 source/license（MIT/Apache-2.0/CC-BY-4.0/官方文档署名）；
-书籍重铸层标注 source_book + attribution（方法论自撰重写，不复制原文表达）。

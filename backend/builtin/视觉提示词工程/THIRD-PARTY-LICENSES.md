@@ -8,8 +8,9 @@
 | 项目 | 许可证 | 版权行 | 链接 |
 |---|---|---|---|
 | visual-skills | CC BY 4.0 | Copyright (c) 2026 Serge Shima | https://github.com/smixs/visual-skills |
+| awesome-gpt-image-2 | MIT | Copyright (c) 2026 freestylefly | https://github.com/freestylefly/awesome-gpt-image-2 |
 
-## 许可证全文
+## 许可证与署名
 
 ### visual-skills — CC BY 4.0
 
@@ -24,6 +25,32 @@ Creative Commons Attribution 4.0 International (CC BY 4.0)
 
 本包已履行：署名行见本文件末尾与包内各卡 frontmatter 的 attribution 字段；
 且已标注「基于原作出修改」（见下文「修改声明」）。
+
+### awesome-gpt-image-2 — MIT
+
+```
+MIT License
+
+Copyright (c) 2026 freestylefly
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
 
 ## 修改声明
 

@@ -1,6 +1,6 @@
 ---
 name: "一镜到底短剧流水线"
-description: "把一镜到底从想法推到成片：三阶段成本、时长变化与失败排查。当拍一镜到底超预算、节奏单调，或拍废了不知道怎么救时调用。"
+description: "OnlySHOT 一镜到底短剧的落地工艺：首尾帧、多关键帧、分镜时长与成本控制，以及拍废后的排查。当已经确定要拍一镜到底或首尾帧连续镜头，需要算时长、压成本、排关键帧时调用；普通长镜头运镜、整集剧情编排不在这里。"
 metadata:
   version: "1.0.0"
   author: "剧典技能库（itsWyatt-K）"
@@ -88,9 +88,3 @@ metadata:
 ## 许可与署名（逐卡）
 
 ---
-
-**完整版**：本条目为域包总纲。34 个域包的完整卡片（开源署名层 86 卡 + 书籍重铸层 673 卡）位于
-[itsWyatt-K/judian-skills](https://github.com/itsWyatt-K/judian-skills)——技能页 → 安装技能 → GitHub →
-填入仓库地址与包路径（如 `skills/drama/onlyshot-shortform-pipeline`）即可安装，Agent 可按总纲名录逐卡深读。
-来源与许可见各卡 frontmatter：开源署名层逐卡标注 source/license（MIT/Apache-2.0/CC-BY-4.0/官方文档署名）；
-书籍重铸层标注 source_book + attribution（方法论自撰重写，不复制原文表达）。

@@ -68,6 +68,7 @@ metadata:
 - `cards/sd25-mode-select.md` — 主模式单选（七选一）+ 专家能力附加 + 交付物锁定（full-direction/prompt-only/script-only/diag
 - `cards/sd25-timing-audit.md` — 时序审计六律（时段连续不重叠且等于总时长/每段给足动作时间/台词容量核算/因果时序/运镜物理兼容/参考只借该借的）
 - `cards/sd25-video-edit-formula.md` — 定向编辑公式（标注位置+精确目标+增删改换+有效时间）+ 不变清单显式列明 + 无标注版省略规则
+- `cards/drama-frame-bridge.md` — 两段衔接三选一（动接动/空镜转场/循环）、时间静止、重复帧清理与首尾帧对齐
 
 ## 证据等级说明
 
@@ -85,9 +86,3 @@ metadata:
 ## 许可与署名（逐卡）
 
 ---
-
-**完整版**：本条目为域包总纲。34 个域包的完整卡片（开源署名层 86 卡 + 书籍重铸层 673 卡）位于
-[itsWyatt-K/judian-skills](https://github.com/itsWyatt-K/judian-skills)——技能页 → 安装技能 → GitHub →
-填入仓库地址与包路径（如 `skills/creative/seedance-25-director-craft`）即可安装，Agent 可按总纲名录逐卡深读。
-来源与许可见各卡 frontmatter：开源署名层逐卡标注 source/license（MIT/Apache-2.0/CC-BY-4.0/官方文档署名）；
-书籍重铸层标注 source_book + attribution（方法论自撰重写，不复制原文表达）。

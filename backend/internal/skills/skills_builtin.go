@@ -94,6 +94,10 @@ func (s *Service) EnsureBuiltinSkills() error {
 			return fmt.Errorf("同步内置技能 %s 文件包失败: %w", item.skill.ID, err)
 		}
 	}
+	// 新包同步完成后再退休旧包：用户状态先并入稳定包，避免旧入口消失但收藏和安装丢失。
+	if err := s.retireLegacyBuiltinSkills(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -166,6 +170,10 @@ func loadBuiltinSkillPackagesFromFS(filesystem fs.FS, tombstones interface {
 			}
 			seen[stableID] = struct{}{}
 			skillID = stableID
+		}
+		// 旧包目录即使残留在工作区也不要再进目录；唯一兼容入口是映射表中的稳定包。
+		if isLegacySkillID(skillID) {
+			continue
 		}
 		if tombstones != nil {
 			deleted, err := tombstones.BuiltinSkillTombstoned(skillID)
