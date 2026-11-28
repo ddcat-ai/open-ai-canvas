@@ -20,6 +20,7 @@ func Models() []any {
 		&model.ChannelCatalogSnapshot{},
 		&model.ChannelProtocolSelection{},
 		&model.CloudAgentExecution{},
+		&model.CloudAgentHistoryArchive{},
 		&model.UploadReservation{},
 		&model.CloudAgentPiSession{},
 		&model.AgentStorageUsage{},

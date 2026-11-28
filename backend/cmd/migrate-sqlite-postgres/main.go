@@ -510,6 +510,7 @@ func migrations() []tableMigration {
 		migrateTable[model.PoseLibrarySource]("pose_library_sources"),
 		migrateTable[model.PoseLibraryItem]("pose_library_items"),
 		migrateTable[model.CloudAgentExecution]("cloud_agent_executions"),
+		migrateTable[model.CloudAgentHistoryArchive]("cloud_agent_history_archives"),
 		migrateTable[model.CloudAgentEventRecord]("cloud_agent_event_records"),
 		migrateTable[model.CloudAgentMessageRecord]("cloud_agent_message_records"),
 		migrateTable[model.CloudAgentCanvasMutation]("cloud_agent_canvas_mutations"),
