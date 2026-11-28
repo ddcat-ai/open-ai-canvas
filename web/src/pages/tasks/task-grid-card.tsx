@@ -7,7 +7,7 @@ import { MediaPreview } from "@/components/media-preview";
 import { generationTaskShowsProgress, generationTaskStageLabel } from "@/lib/generation-task-display";
 import type { GenerationTask } from "@/services/api/task-center";
 import type { AiConfig } from "@/stores/use-config-store";
-import { formatModelName, isTaskActive, isTaskFailed, isTaskRetryBlocked, taskAttentionReason, TaskDate, taskKindIcon, TaskStatusPill, taskTone } from "./task-shared";
+import { formatModelName, isTaskActive, isTaskFailed, isTaskRetryBlocked, TaskDate, taskDistinctFailureDetail, taskKindIcon, TaskStatusPill, taskTone } from "./task-shared";
 import { TaskVideoThumbnail } from "./task-video-thumbnail";
 import { progressFillStyle } from "@/lib/progress-fill";
 
@@ -21,6 +21,7 @@ export function TaskGridCard({ task, effectiveConfig, actingId, onOpen, onRetry 
     const thumbnailUrl = isVideo ? task.previewPosterUrl : task.previewUrl;
     const stageLabel = generationTaskStageLabel(task);
     const showsProgress = generationTaskShowsProgress(task);
+    const failureDetail = failed ? taskDistinctFailureDetail(task) : "";
     const Icon = taskKindIcon(task);
     return (
         <article className="product-collection-card task-center-card" data-tone={taskTone(task)}>
@@ -62,9 +63,9 @@ export function TaskGridCard({ task, effectiveConfig, actingId, onOpen, onRetry 
             </div>
             <div className="task-center-card-body">
                 <strong className="task-center-card-title">{task.prompt || t("library.tasks.row.untitled")}</strong>
-                {failed ? (
-                    <p className="task-center-card-error" title={task.error || undefined}>
-                        {taskAttentionReason(task)}
+                {failureDetail ? (
+                    <p className="task-center-card-error" title={failureDetail}>
+                        {failureDetail}
                     </p>
                 ) : active && !showsProgress ? (
                     <p className="task-center-card-note">{stageLabel}</p>

@@ -28,6 +28,14 @@ export function taskAttentionReason(task: GenerationTask) {
     return task.stage || translate("library.tasks.shared.failedOpenDetail");
 }
 
+export function taskDistinctFailureDetail(task: GenerationTask) {
+    const reason = taskAttentionReason(task).trim();
+    if (reason === task.status || reason === generationTaskStatusLabel(task)) return "";
+    if (task.status === "cancelled" && !task.providerCancelStatus && reason === translate("library.tasks.cancel.cancelled")) return "";
+    if (task.status === "failed" && !task.error && !task.mediaStage && reason === translate("library.tasks.shared.failedOpenDetail")) return "";
+    return reason;
+}
+
 export function providerCancelStatusLabel(task: GenerationTask) {
     if (task.providerCancelStatus === "requested") return translate("library.tasks.cancel.requested");
     if (task.providerCancelStatus === "confirmed") return translate("library.tasks.cancel.confirmed");
