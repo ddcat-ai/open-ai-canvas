@@ -263,8 +263,8 @@ function OptionPill({ selected, disabled = false, theme, onClick, children }: { 
             type="button"
             disabled={disabled}
             aria-pressed={selected}
-            className="h-8 cursor-pointer whitespace-nowrap rounded-md px-1 text-[var(--fs-label)] font-medium leading-none transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:opacity-35"
-            style={{ background: selected ? theme.toolbar.activeBg : "transparent", color: theme.node.text, outlineColor: theme.node.muted }}
+            className="media-option-card h-8 cursor-pointer whitespace-nowrap rounded-md px-1 text-[var(--fs-label)] font-medium leading-none transition-colors hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1 disabled:cursor-not-allowed disabled:opacity-35"
+            style={{ background: `var(${selected ? "--media-option-selected" : "--media-option-bg"}, ${selected ? theme.toolbar.activeBg : "transparent"})`, color: theme.node.text, outlineColor: theme.node.muted }}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={onClick}
         >

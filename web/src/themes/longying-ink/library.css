@@ -1,0 +1,785 @@
+/* 工作台、素材与任务列表 */
+:root[data-skin="longying-ink"] .app-user-workspace .asset-library-card {
+    padding: 6px;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .asset-library-card .library-card-media {
+    border-radius: 8px;
+}
+:root[data-skin="longying-ink"] .asset-collection-body {
+    padding-bottom: 6px;
+}
+:root[data-skin="longying-ink"] :is(.asset-collection-date, .asset-collection-summary) {
+    color: var(--ly-ink-muted);
+    font-size: 11px;
+    letter-spacing: 0;
+}
+:root[data-skin="longying-ink"] .asset-collection-source {
+    color: var(--ly-ink-muted);
+}
+:root[data-skin="longying-ink"] .assets-cover-more {
+    width: 32px;
+    height: 32px;
+    border-color: rgb(250 246 238 / 0.16);
+    border-radius: 8px;
+    background: var(--scrim-strong);
+    color: #faf6ee;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+:root[data-skin="longying-ink"] .assets-cover-more:hover {
+    background: rgb(18 17 14 / 0.78);
+    color: #faf6ee;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .assets-library-page .assets-filter-item {
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] .assets-filter-count {
+    min-width: 0;
+    height: auto;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--ly-ink-muted);
+    font-size: 11px;
+}
+:root[data-skin="longying-ink"] .assets-filter-item.is-active .assets-filter-count {
+    background: transparent;
+    color: var(--ly-ink-muted);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .assets-library-page .assets-filter-item.is-active {
+    background: var(--ly-sheet);
+    box-shadow:
+        0 0 0 1px var(--ly-hair),
+        0 1px 2px rgb(62 46 24 / 0.07);
+    color: var(--ly-ink);
+    font-weight: 600;
+}
+:root[data-skin="longying-ink"].dark .app-user-workspace .assets-library-page .assets-filter-item.is-active {
+    box-shadow:
+        0 0 0 1px var(--ly-hair),
+        inset 0 1px 0 rgb(236 229 214 / 0.045);
+}
+:root[data-skin="longying-ink"] .canvas-project-placeholder[data-kind="empty"] {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 10px;
+    background-color: var(--ly-sheet);
+    background-image: radial-gradient(circle, rgb(62 46 24 / 0.07) 1px, transparent 1.3px);
+    background-size: 14px 14px;
+}
+:root[data-skin="longying-ink"].dark .canvas-project-placeholder[data-kind="empty"] {
+    background-image: radial-gradient(circle, rgb(236 229 214 / 0.06) 1px, transparent 1.3px);
+}
+:root[data-skin="longying-ink"] .canvas-project-placeholder[data-kind="empty"] .canvas-project-placeholder-tile {
+    width: 22px;
+    height: 22px;
+    border-radius: 0;
+    background-color: transparent;
+    background-image: radial-gradient(circle, var(--ly-ink-muted) 1.4px, transparent 1.8px);
+    background-position: -1px -1px;
+    background-size: 8px 8px;
+    box-shadow: none;
+    opacity: 0.55;
+}
+:root[data-skin="longying-ink"] .canvas-project-placeholder[data-kind="empty"]::after {
+    content: "空白画布";
+    color: var(--ly-ink-muted);
+    font-size: 13px;
+    letter-spacing: 0.08em;
+}
+:root[data-skin="longying-ink"] .canvas-collection-badge {
+    height: 22px;
+    background: var(--scrim-strong);
+    color: #faf6ee;
+    font-size: 11px;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+:root[data-skin="longying-ink"] .canvas-collection-updated {
+    margin-inline-start: auto;
+    color: var(--ly-ink-muted);
+    font-size: 11px;
+}
+:root[data-skin="longying-ink"] .drama-library-cover.is-empty {
+    background: var(--ly-sheet);
+    box-shadow:
+        inset 0 0 0 8px var(--ly-stage),
+        inset 0 0 0 9px var(--ly-hair);
+}
+:root[data-skin="longying-ink"] .drama-library-glyph {
+    color: var(--ly-ink);
+    font-size: 44px;
+    font-weight: 500;
+    opacity: 0.28;
+}
+:root[data-skin="longying-ink"] .drama-library-progress-bar {
+    height: 3px;
+    background: var(--ly-wash-press);
+}
+:root[data-skin="longying-ink"] :is(.drama-library-card, .drama-library-card.is-completed, .drama-library-card.is-paused) .drama-library-progress-bar > span {
+    background: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] .drama-library-progress-text {
+    color: var(--ly-ink-muted);
+    font-size: 11px;
+}
+:root[data-skin="longying-ink"] .inspiration-mode-count,
+:root[data-skin="longying-ink"] .inspiration-hall-count {
+    color: var(--ly-ink-muted);
+    font-size: 11px;
+}
+:root[data-skin="longying-ink"] .inspiration-hall-toolbar {
+    gap: 8px 12px;
+}
+:root[data-skin="longying-ink"] .inspiration-hall-count {
+    order: 1;
+}
+:root[data-skin="longying-ink"] .inspiration-hall-search {
+    order: 2;
+}
+:root[data-skin="longying-ink"] .inspiration-hall-filter-toggle {
+    order: 3;
+}
+@media (max-width: 639px) {
+    :root[data-skin="longying-ink"] .inspiration-card-actions {
+        top: var(--space-2);
+        right: var(--space-2);
+        left: var(--space-2);
+        align-items: flex-end;
+        justify-content: flex-end;
+        gap: 0;
+        aspect-ratio: 4 / 3;
+        opacity: 1;
+        pointer-events: none;
+    }
+    :root[data-skin="longying-ink"] .inspiration-card-action {
+        width: 44px;
+        height: 44px;
+        border-radius: 0;
+        background: transparent;
+        pointer-events: auto;
+    }
+    :root[data-skin="longying-ink"] :is(.inspiration-card-action:hover, .inspiration-card-action[aria-expanded="true"], .inspiration-card-action[aria-pressed="true"]) {
+        background: transparent;
+    }
+    :root[data-skin="longying-ink"] .inspiration-card-action > span {
+        display: grid;
+        width: 36px;
+        height: 36px;
+        place-items: center;
+        border-radius: 999px;
+        background: var(--ly-raised);
+        box-shadow: 0 0 0 1px var(--ly-hair);
+        color: var(--ly-ink);
+    }
+    :root[data-skin="longying-ink"] .inspiration-card-action[aria-pressed="true"] > span {
+        background: var(--ly-ink);
+        color: var(--ly-raised);
+    }
+    :root[data-skin="longying-ink"] .inspiration-card-source {
+        max-width: calc(100% - 90px);
+        padding-inline: 6px;
+    }
+}
+:root[data-skin="longying-ink"].dark :is(.inspiration-card, .asset-library-card, .canvas-collection-card, .drama-library-card) {
+    background-image: none;
+}
+:root[data-skin="longying-ink"].dark :is(.inspiration-card-cover, .asset-library-card .assets-cover)::after {
+    content: "";
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: inset 0 0 0 1px var(--ly-hair);
+    pointer-events: none;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .product-collection-card.is-selected {
+    outline: none;
+}
+:root[data-skin="longying-ink"] .app-user-workspace :is(.asset-library-card, .canvas-collection-card).is-selected::after {
+    content: "";
+    position: absolute;
+    z-index: 4;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: inset 0 0 0 1px #1f1c18;
+    pointer-events: none;
+}
+:root[data-skin="longying-ink"].dark .app-user-workspace :is(.asset-library-card, .canvas-collection-card).is-selected::after {
+    box-shadow: inset 0 0 0 1.5px #ece6da;
+}
+:root[data-skin="longying-ink"].dark .drama-sg.is-selected {
+    border-color: #ece6da;
+    box-shadow: 0 0 0 1.5px #ece6da;
+}
+:root[data-skin="longying-ink"] :is(.wb-shell, .wb-library-modal, .wb-viewer-modal) {
+    --wb-page: var(--ly-stage);
+    --wb-panel: var(--ly-sheet);
+    --wb-muted: var(--ly-wash);
+    --wb-hover: var(--ly-wash-press);
+    --wb-line: var(--ly-hair);
+    --wb-line-strong: var(--ly-hair-strong);
+    --wb-ink: var(--ly-ink);
+    --wb-ink-2: var(--ly-ink-muted);
+    --wb-ink-3: var(--ly-ink-muted);
+    --wb-selected-bg: var(--ly-wash-press);
+    --wb-selected-fg: var(--ly-ink);
+    --wb-selected-line: var(--ly-ink);
+    --wb-thumb: var(--ly-raised);
+    --wb-stage: var(--ly-darkroom);
+    --wb-glass: var(--scrim-strong);
+    --wb-glass-strong: rgb(18 17 14 / 0.82);
+}
+
+:root[data-skin="longying-ink"] .wb-composer {
+    border-radius: var(--ly-r-card);
+    background: var(--ly-sheet);
+    box-shadow: var(--ly-shadow-sheet);
+}
+
+:root[data-skin="longying-ink"] .wb-kind-switch {
+    padding: 3px;
+    border-radius: var(--ly-r-control);
+    background: var(--ly-wash);
+    box-shadow: inset 0 0 0 1px var(--ly-hair);
+}
+:root[data-skin="longying-ink"] .wb-kind-switch button {
+    border-radius: var(--ly-r-chip);
+    color: var(--ly-ink-muted);
+}
+:root[data-skin="longying-ink"] .wb-kind-switch button.is-active {
+    background: var(--ly-raised);
+    color: var(--ly-ink);
+    font-weight: 600;
+    box-shadow: var(--ly-shadow-sheet);
+}
+:root[data-skin="longying-ink"] .wb-composer-scroll {
+    container-type: scroll-state;
+    padding-bottom: 0;
+    scroll-padding-block-end: 28px;
+}
+:root[data-skin="longying-ink"] .wb-composer-scroll > .wb-section:last-child {
+    padding-bottom: 28px;
+}
+:root[data-skin="longying-ink"] .wb-composer-scroll::after {
+    content: "";
+    display: block;
+    position: sticky;
+    inset-block-end: 0;
+    z-index: 2;
+    align-self: stretch;
+    flex: none;
+    block-size: 28px;
+    margin-block-start: -28px;
+    background: linear-gradient(to bottom, transparent, var(--ly-sheet) 88%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--ly-dur-hover) var(--ly-ease);
+}
+@container scroll-state(scrollable: block-end) {
+    :root[data-skin="longying-ink"] .wb-composer-scroll::after {
+        opacity: 1;
+    }
+}
+@supports not (container-type: scroll-state) {
+    :root[data-skin="longying-ink"] .wb-composer-scroll {
+        padding-bottom: 20px;
+        -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+        mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+    }
+    :root[data-skin="longying-ink"] .wb-composer-scroll::after {
+        display: none;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    :root[data-skin="longying-ink"] .wb-composer-scroll::after {
+        transition: none;
+    }
+}
+:root[data-skin="longying-ink"] .wb-chip {
+    border-color: var(--ly-hair);
+    border-radius: var(--ly-r-chip);
+    color: var(--ly-ink-muted);
+}
+:root[data-skin="longying-ink"] .wb-chip:hover {
+    border-color: var(--ly-hair-strong);
+    background: var(--ly-wash);
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] .wb-chip[aria-pressed="true"] {
+    border-color: var(--ly-ink);
+    background: var(--ly-wash-press);
+    color: var(--ly-ink);
+    font-weight: 600;
+}
+:root[data-skin="longying-ink"] .wb-scene-current {
+    border-radius: var(--ly-r-control);
+    box-shadow: inset 0 0 0 1px var(--ly-hair);
+}
+:root[data-skin="longying-ink"] .wb-scene-current-switch {
+    border-radius: var(--ly-r-chip);
+    background: var(--ly-raised);
+    box-shadow: 0 0 0 1px var(--ly-hair);
+    color: var(--ly-ink-muted);
+}
+:root[data-skin="longying-ink"] .wb-prompt {
+    border-radius: var(--ly-r-control);
+    box-shadow: inset 0 0 0 1px var(--ly-hair);
+}
+:root[data-skin="longying-ink"] .wb-prompt:focus-within {
+    background: var(--ly-raised);
+    box-shadow: inset 0 0 0 1px var(--ly-ink);
+}
+:root[data-skin="longying-ink"] .wb-footer {
+    border-top-color: var(--ly-divider);
+    background: var(--ly-sheet);
+}
+:root[data-skin="longying-ink"] :is(.wb-tag, .wb-badge) {
+    border-radius: var(--ly-r-badge);
+}
+:root[data-skin="longying-ink"] .wb-badge.is-required {
+    background: color-mix(in srgb, var(--ly-seal) 12%, transparent);
+    color: var(--ly-seal);
+}
+:root[data-skin="longying-ink"] :is(.wb-ref-role, .wb-viewer-counter) {
+    border-radius: var(--ly-r-chip);
+}
+:root[data-skin="longying-ink"] :is(.wb-ref-remove, .wb-ref-role, .wb-tile-action, .wb-tile-play, .wb-viewer-nav) {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+:root[data-skin="longying-ink"] .wb-tile-play {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--ly-r-control);
+}
+:root[data-skin="longying-ink"] .wb-tile-shimmer {
+    background: var(--ly-wash);
+    animation: none;
+}
+:root[data-skin="longying-ink"] :is(.wb-gallery-tools, .wb-mobile-tabs) .app-segmented {
+    height: 32px;
+    padding: 3px;
+    border-radius: var(--ly-r-control);
+    background: var(--ly-wash);
+    box-shadow: inset 0 0 0 1px var(--ly-hair);
+}
+:root[data-skin="longying-ink"] :is(.wb-gallery-tools, .wb-mobile-tabs) .app-segmented-thumb {
+    inset-block: 3px;
+    border-radius: var(--ly-r-chip);
+    background: var(--ly-raised);
+    box-shadow: var(--ly-shadow-sheet);
+}
+:root[data-skin="longying-ink"] :is(.wb-gallery-tools, .wb-mobile-tabs) .app-segmented-item {
+    padding-inline: 10px;
+    border-radius: var(--ly-r-chip);
+    color: var(--ly-ink-muted);
+    font-size: var(--fs-caption);
+    font-weight: 500;
+}
+:root[data-skin="longying-ink"] :is(.wb-gallery-tools, .wb-mobile-tabs) .app-segmented-item:hover:not(:disabled):not([aria-checked="true"]) {
+    background: transparent;
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] :is(.wb-gallery-tools, .wb-mobile-tabs) .app-segmented-item[aria-checked="true"] {
+    background: transparent;
+    color: var(--ly-ink);
+    font-weight: 600;
+}
+:root[data-skin="longying-ink"] .wb-gallery-title h2 {
+    font-size: 18px;
+    letter-spacing: 0.02em;
+}
+:root[data-skin="longying-ink"] .wb-gallery-scroll {
+    padding-bottom: 88px;
+}
+:root[data-skin="longying-ink"] .wb-batch {
+    border-radius: var(--ly-r-card);
+    background: var(--ly-sheet);
+    box-shadow: var(--ly-shadow-sheet);
+}
+:root[data-skin="longying-ink"] .wb-tile {
+    border-radius: var(--ly-r-media);
+}
+:root[data-skin="longying-ink"] .wb-empty {
+    gap: 20px;
+    padding: max(40px, 11vh) 16px 88px;
+}
+:root[data-skin="longying-ink"] .wb-empty .workspace-state {
+    padding-block: 16px 8px;
+}
+:root[data-skin="longying-ink"] .wb-empty .workspace-signal-icon {
+    width: 56px;
+    height: 56px;
+}
+:root[data-skin="longying-ink"] .wb-empty .workspace-state h2 {
+    margin-top: 16px;
+    color: var(--ly-ink);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+:root[data-skin="longying-ink"] .wb-empty .workspace-state p {
+    max-width: 40ch;
+    color: var(--ly-ink-muted);
+    line-height: 1.7;
+}
+:root[data-skin="longying-ink"] .wb-empty-scenes {
+    gap: 12px;
+}
+:root[data-skin="longying-ink"] .wb-empty-scene {
+    border-radius: var(--ly-r-card);
+    background: var(--ly-sheet);
+    box-shadow: var(--ly-shadow-sheet);
+    padding: 12px 14px;
+    transition:
+        background-color var(--ly-dur-hover) var(--ly-ease),
+        box-shadow var(--ly-dur-hover) var(--ly-ease);
+}
+:root[data-skin="longying-ink"] .wb-empty-scene:hover {
+    background: var(--ly-raised);
+    box-shadow:
+        0 0 0 1px var(--ly-hair-strong),
+        0 1px 2px rgb(62 46 24 / 0.05);
+}
+:root[data-skin="longying-ink"].dark .wb-empty-scene:hover {
+    box-shadow:
+        0 0 0 1px var(--ly-hair-strong),
+        var(--ly-gloss);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .task-center-page > div {
+    padding-bottom: 88px;
+}
+:root[data-skin="longying-ink"] .task-center-page .app-projects-header-meta {
+    color: var(--ly-ink-muted);
+    font-size: 12px;
+}
+:root[data-skin="longying-ink"] .task-center-statusbar .app-segmented {
+    padding: 3px;
+    border-radius: var(--ly-r-control);
+    background: var(--ly-wash);
+    box-shadow: inset 0 0 0 1px var(--ly-hair);
+}
+:root[data-skin="longying-ink"] .task-center-statusbar .app-segmented-thumb {
+    inset-block: 3px;
+    border-radius: var(--ly-r-chip);
+    background: var(--ly-raised);
+    box-shadow: var(--ly-shadow-sheet);
+}
+:root[data-skin="longying-ink"] .task-center-statusbar .app-segmented-item {
+    border-radius: var(--ly-r-chip);
+    color: var(--ly-ink-muted);
+}
+:root[data-skin="longying-ink"] .task-center-statusbar .app-segmented-item[aria-checked="true"] {
+    color: var(--ly-ink);
+    font-weight: 600;
+}
+:root[data-skin="longying-ink"] .task-center-status-filter .app-segmented-count[data-tone="failed"] {
+    color: var(--ly-seal);
+}
+:root[data-skin="longying-ink"] .task-center-status-filter .app-segmented-count[data-tone="active"] {
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] .task-center-list {
+    border-radius: var(--ly-r-card);
+    background: var(--ly-sheet);
+    box-shadow: var(--ly-shadow-sheet);
+}
+:root[data-skin="longying-ink"] .task-center-row {
+    border-top-color: var(--ly-divider);
+}
+:root[data-skin="longying-ink"] .task-center-row:hover,
+:root[data-skin="longying-ink"] .task-center-row:focus-within {
+    background: var(--ly-wash);
+}
+:root[data-skin="longying-ink"] .task-center-status[data-tone="running"] {
+    --task-tone: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] .task-center-status[data-tone="success"] {
+    --task-tone: var(--status-success-text);
+}
+:root[data-skin="longying-ink"] .task-center-status[data-tone="failed"] {
+    --task-tone: var(--ly-seal);
+}
+:root[data-skin="longying-ink"] :is(.task-center-status[data-tone="queued"], .task-center-status[data-tone="cancelled"]) {
+    --task-tone: var(--ly-ink-muted);
+}
+:root[data-skin="longying-ink"] :is(.task-center-row-error, .task-center-card-error) {
+    color: var(--ly-seal);
+}
+:root[data-skin="longying-ink"] :is(.task-center-progress b, .task-center-card-progress b, .task-detail-progress b) {
+    background: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] :is(.task-center-status.is-overlay, .task-center-card-progress, .task-center-card-retry) {
+    border-radius: var(--ly-r-chip);
+    background: var(--scrim-strong);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+:root[data-skin="longying-ink"] .task-center-page .task-center-card {
+    border-radius: var(--ly-r-card);
+    background: var(--ly-sheet);
+    box-shadow: var(--ly-shadow-sheet);
+}
+:root[data-skin="longying-ink"] .task-center-card-media {
+    border-radius: var(--ly-r-media);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .skills-library-page > div {
+    padding-bottom: 180px;
+}
+:root[data-skin="longying-ink"] .skills-rail {
+    padding-bottom: 32px;
+}
+:root[data-skin="longying-ink"] .skills-rail-item {
+    border-radius: var(--ly-r-control);
+    color: var(--ly-ink-muted);
+}
+:root[data-skin="longying-ink"] .skills-rail-item:hover {
+    background: var(--ly-wash);
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] .skills-rail-item[aria-pressed="true"] {
+    background: var(--ly-sheet);
+    box-shadow:
+        0 0 0 1px var(--ly-hair),
+        0 1px 2px rgb(62 46 24 / 0.07);
+    color: var(--ly-ink);
+    font-weight: 600;
+}
+:root[data-skin="longying-ink"].dark .skills-rail-item[aria-pressed="true"] {
+    box-shadow:
+        0 0 0 1px var(--ly-hair),
+        var(--ly-gloss);
+}
+:root[data-skin="longying-ink"] .skills-rail-count {
+    color: var(--ly-ink-muted);
+    font-size: 11px;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .skill-tile {
+    border-radius: var(--ly-r-card);
+    background: var(--ly-sheet);
+    box-shadow: var(--ly-shadow-sheet);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .skill-tile:hover {
+    background: var(--ly-raised);
+    box-shadow:
+        0 0 0 1px var(--ly-hair-strong),
+        0 1px 2px rgb(62 46 24 / 0.05);
+}
+:root[data-skin="longying-ink"].dark .app-user-workspace .skill-tile:hover {
+    box-shadow:
+        0 0 0 1px var(--ly-hair-strong),
+        var(--ly-gloss);
+}
+:root[data-skin="longying-ink"] .skill-tile-chip {
+    border-radius: var(--ly-r-badge);
+    background: var(--ly-wash);
+    color: var(--ly-ink-muted);
+}
+:root[data-skin="longying-ink"] .skill-tile-add {
+    border-color: var(--ly-hair-strong);
+    border-radius: var(--ly-r-chip);
+}
+:root[data-skin="longying-ink"] .skill-tile-stat.is-like[aria-pressed="true"] {
+    color: var(--ly-seal);
+}
+:root[data-skin="longying-ink"] .plugins-page {
+    background: var(--ly-stage);
+}
+:root[data-skin="longying-ink"] .plugins-page-content {
+    padding-bottom: 92px;
+}
+:root[data-skin="longying-ink"] .plugins-sidebar-item {
+    border-radius: var(--ly-r-control);
+    color: var(--ly-ink-muted);
+}
+:root[data-skin="longying-ink"] .plugins-sidebar-item:hover {
+    background: var(--ly-wash);
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] .plugins-sidebar-item.is-active {
+    background: var(--ly-sheet);
+    box-shadow:
+        0 0 0 1px var(--ly-hair),
+        0 1px 2px rgb(62 46 24 / 0.07);
+    color: var(--ly-ink);
+    font-weight: 600;
+}
+:root[data-skin="longying-ink"].dark .plugins-sidebar-item.is-active {
+    box-shadow:
+        0 0 0 1px var(--ly-hair),
+        var(--ly-gloss);
+}
+:root[data-skin="longying-ink"] .plugin-section-icon,
+:root[data-skin="longying-ink"] .plugin-icon-tile {
+    border-radius: var(--ly-r-control);
+    background: var(--ly-wash);
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] .plugin-section-count {
+    border-radius: var(--ly-r-badge);
+    background: var(--ly-wash);
+    color: var(--ly-ink-muted);
+    font-size: 11px;
+}
+:root[data-skin="longying-ink"] .plugin-card {
+    border-radius: var(--ly-r-card);
+    background: var(--ly-sheet);
+    box-shadow: var(--ly-shadow-sheet);
+}
+:root[data-skin="longying-ink"] .plugin-card:hover,
+:root[data-skin="longying-ink"] .plugin-card:focus-within {
+    background: var(--ly-raised);
+    box-shadow:
+        0 0 0 1px var(--ly-hair-strong),
+        0 1px 2px rgb(62 46 24 / 0.05);
+}
+:root[data-skin="longying-ink"].dark .plugin-card:hover,
+:root[data-skin="longying-ink"].dark .plugin-card:focus-within {
+    box-shadow:
+        0 0 0 1px var(--ly-hair-strong),
+        var(--ly-gloss);
+}
+:root[data-skin="longying-ink"] :is(.plugin-category-label, .plugin-source-label, .plugin-card-tags span) {
+    border-radius: var(--ly-r-badge);
+    background: var(--ly-wash);
+    color: var(--ly-ink-muted);
+}
+:root[data-skin="longying-ink"] .plugin-trust-label {
+    color: var(--status-success-text);
+}
+:root[data-skin="longying-ink"] .app-user-workspace.settings-page {
+    background: var(--ly-stage);
+}
+:root[data-skin="longying-ink"] .app-user-workspace.settings-page .settings-library-frame {
+    --user-surface: var(--ly-stage);
+    --user-border: var(--ly-hair);
+    --user-shadow-card: var(--ly-shadow-stage);
+    border-radius: var(--ly-r-card);
+    overflow: hidden;
+}
+:root[data-skin="longying-ink"] .app-user-workspace.settings-page .settings-nav-panel {
+    --user-surface: color-mix(in srgb, var(--ly-desk) 55%, var(--ly-stage));
+    --user-border: var(--ly-divider);
+    --user-shadow-card: none;
+    --user-accent-soft: var(--ly-sheet);
+    --user-accent: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] .app-user-workspace.settings-page .settings-nav-item {
+    border-radius: var(--ly-r-control);
+}
+:root[data-skin="longying-ink"] .app-user-workspace.settings-page .settings-nav-item.is-active {
+    box-shadow:
+        0 0 0 1px var(--ly-hair),
+        0 1px 2px rgb(62 46 24 / 0.07);
+    font-weight: 600;
+}
+:root[data-skin="longying-ink"].dark .app-user-workspace.settings-page .settings-nav-item.is-active {
+    box-shadow:
+        0 0 0 1px var(--ly-hair),
+        var(--ly-gloss);
+}
+:root[data-skin="longying-ink"] .app-user-workspace.settings-page .settings-content {
+    background: var(--ly-stage);
+}
+:root[data-skin="longying-ink"] .app-user-workspace.settings-page .settings-content > .app-workspace-scroll {
+    padding-bottom: 96px;
+}
+:root[data-skin="longying-ink"] .app-user-workspace.settings-page .settings-pane-root {
+    --user-surface: var(--ly-sheet);
+    --user-border: var(--ly-hair);
+    --user-shadow-card: var(--ly-shadow-sheet);
+}
+:root[data-skin="longying-ink"] .app-user-workspace.settings-page :is(.profile-overview, .space-credit-home, .profile-security-card, .settings-channel, .settings-preference-block, .diagnostics-page section) {
+    border-color: var(--ly-hair);
+    border-radius: var(--ly-r-card);
+    background: var(--ly-sheet);
+    box-shadow: var(--ly-shadow-sheet);
+}
+:root[data-skin="longying-ink"] .app-user-workspace.settings-page .space-credit-home {
+    margin-block: 0;
+}
+:root[data-skin="longying-ink"] .app-user-workspace.settings-page .space-credit-home header {
+    border-bottom-color: var(--ly-divider);
+}
+:root[data-skin="longying-ink"] .app-user-workspace.settings-page :is(.profile-current-email, .profile-avatar-preview, .profile-card-icon, .space-directory-icon) {
+    border-radius: var(--ly-r-control);
+    background: var(--ly-wash);
+}
+:root[data-skin="longying-ink"] .app-user-workspace.settings-page .settings-pane-root :where(.ant-input, .ant-input-affix-wrapper, .ant-select-selector, .ant-picker, .ant-input-number) {
+    --user-surface: var(--ly-raised);
+    --user-border: var(--ly-hair-strong);
+}
+:root[data-skin="longying-ink"] .app-user-workspace.settings-page .profile-email-status.is-verified {
+    color: var(--status-success-text);
+}
+:root[data-skin="longying-ink"] .app-user-workspace.settings-page .profile-reauth-error {
+    color: var(--ly-seal);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .referral-page > div {
+    width: min(var(--product-content-max, 1280px), calc(100% - 64px));
+    margin-inline: auto;
+    padding: 24px 0 92px;
+}
+:root[data-skin="longying-ink"] :is(.referral-page-link-card, .referral-page-stat, .referral-page-records) {
+    border: 0;
+    border-radius: var(--ly-r-card);
+    background: var(--ly-sheet);
+    box-shadow: var(--ly-shadow-sheet);
+}
+:root[data-skin="longying-ink"] .referral-page-link-card h2 {
+    color: var(--ly-ink);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+:root[data-skin="longying-ink"] :is(.referral-page-link-card p, .referral-page-stat span, .referral-page-record-row small, .referral-page-empty) {
+    color: var(--ly-ink-muted);
+}
+:root[data-skin="longying-ink"] .referral-page-code {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    border-radius: var(--ly-r-chip);
+    background: var(--ly-wash);
+    box-shadow: inset 0 0 0 1px var(--ly-hair);
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] .referral-page-link-card .ant-btn-link {
+    color: var(--ly-ink);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+:root[data-skin="longying-ink"] .referral-page-stat strong {
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] .referral-page-record-row {
+    border-bottom-color: var(--ly-divider);
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] .referral-page-record-row b {
+    color: var(--status-success-text);
+}
+:root[data-skin="longying-ink"] .referral-page-records .app-segmented {
+    height: 32px;
+    padding: 3px;
+    border-radius: var(--ly-r-control);
+    background: var(--ly-wash);
+    box-shadow: inset 0 0 0 1px var(--ly-hair);
+}
+:root[data-skin="longying-ink"] .referral-page-records .app-segmented-thumb {
+    inset-block: 3px;
+    border-radius: var(--ly-r-chip);
+    background: var(--ly-raised);
+    box-shadow: var(--ly-shadow-sheet);
+}
+:root[data-skin="longying-ink"] .referral-page-records .app-segmented-item {
+    border-radius: var(--ly-r-chip);
+    color: var(--ly-ink-muted);
+}
+:root[data-skin="longying-ink"] .referral-page-records .app-segmented-item[aria-checked="true"] {
+    background: transparent;
+    color: var(--ly-ink);
+    font-weight: 600;
+}

@@ -29,6 +29,8 @@ export type ThemePack = {
     skin: SkinDefinition;
     /** 助手圆球（画布入口、首页 Agent 页签、后台外观预览）；不提供时用上游流光球。 */
     agentOrb?: ComponentType<ThemeAgentOrbProps>;
+    /** 站点使用内置动画包时，主题可用圆球与助手名作为轻量入口。 */
+    launcher?: { defaultForm: "capsule" };
     /** 空状态 / 加载 / 错误图标的画法；不提供时用上游方框图标。 */
     signalArt?: ComponentType<ThemeSignalArtProps>;
     /** 顶栏积分图标；不提供时用上游礼盒。 */

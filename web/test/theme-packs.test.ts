@@ -16,16 +16,17 @@ describe("龙影水墨主题包", () => {
         const pack = themePackFor(LONGYING_INK_SKIN_ID);
         expect(pack?.name).toBe("龙影水墨");
         expect(pack?.skin.id).toBe(LONGYING_INK_SKIN_ID);
+        expect(pack?.launcher?.defaultForm).toBe("capsule");
         expect(themePackFor("classic")).toBeUndefined();
     });
 
     test("启用水墨皮肤后画布与新建画布预设换成宣纸/夜墨", () => {
         applyThemePackCanvas(LONGYING_INK_SKIN_ID);
-        expect(canvasThemes.light.canvas.background).toBe("#efe9dd");
+        expect(canvasThemes.light.canvas.background).toBe("#ece6da");
         expect(canvasThemes.dark.node.fill).toBe("#1b1915");
         expect(preset("light").label).toBe("宣纸");
         expect(preset("dark").label).toBe("夜墨");
-        expect(resolveCanvasAppearance(canvasAppearanceForPreset("light"), "light").background.toUpperCase()).toBe("#EFE9DD");
+        expect(resolveCanvasAppearance(canvasAppearanceForPreset("light"), "light").background.toUpperCase()).toBe("#ECE6DA");
         expect(preset("pink").label).toBe("粉色");
     });
 

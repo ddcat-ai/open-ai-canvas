@@ -1,0 +1,250 @@
+/* 短剧分镜与审片 */
+:root[data-skin="longying-ink"] .drama-topbar {
+    min-height: 48px;
+    padding-block: 6px;
+    border-bottom-color: var(--ly-divider);
+}
+:root[data-skin="longying-ink"] .drama-topbar-progress {
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: var(--ly-wash);
+    color: var(--ly-ink-muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+:root[data-skin="longying-ink"] .drama-topbar-progress .drama-meter {
+    width: 48px;
+}
+:root[data-skin="longying-ink"] .drama-topbar-actions .ant-btn:not(.ant-btn-primary) {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+}
+:root[data-skin="longying-ink"] .drama-topbar-actions .ant-btn:not(.ant-btn-primary):not(:disabled):hover {
+    background: var(--ly-wash);
+}
+:root[data-skin="longying-ink"] .drama-chip.is-interactive {
+    border: 0;
+    cursor: pointer;
+}
+:root[data-skin="longying-ink"] .drama-chip.is-interactive:focus-visible {
+    box-shadow: var(--ly-focus);
+    outline: none;
+}
+:root[data-skin="longying-ink"] .drama-ep-header {
+    gap: 8px;
+    padding: 10px 20px 6px;
+    border-bottom: 0;
+}
+:root[data-skin="longying-ink"] .drama-ep-heading h2 {
+    font-size: 18px;
+}
+:root[data-skin="longying-ink"] .drama-board-toolbar {
+    min-height: 32px;
+    padding: 2px 20px 8px;
+    border-bottom-color: var(--ly-divider);
+    color: var(--ly-ink-muted);
+    font-size: 12px;
+}
+:root[data-skin="longying-ink"] .drama-board-meter i {
+    width: 48px;
+}
+:root[data-skin="longying-ink"] .drama-board-hint {
+    display: inline-grid;
+    place-items: center;
+    color: var(--ly-ink-muted);
+    cursor: help;
+}
+:root[data-skin="longying-ink"] .drama-sg-model {
+    color: var(--ly-ink-muted);
+    font-size: 12px;
+}
+:root[data-skin="longying-ink"] .drama-sg-actions .ant-btn:not(.ant-btn-primary) {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+}
+:root[data-skin="longying-ink"] .drama-sg-actions .ant-btn:not(.ant-btn-primary):not(:disabled):hover {
+    background: var(--ly-wash);
+}
+:root[data-skin="longying-ink"] .drama-finalv {
+    grid-template-columns: minmax(0, 1fr) 300px;
+}
+:root[data-skin="longying-ink"] .drama-finalv-stage {
+    gap: 12px;
+    padding: 24px;
+    border-radius: 16px;
+    background: var(--ly-darkroom);
+    box-shadow: 0 0 0 1px var(--ly-hair);
+    color: #ece5d6;
+}
+:root[data-skin="longying-ink"] .drama-finalv-player {
+    max-height: 62vh;
+    border-radius: 16px;
+    box-shadow: 0 0 0 1px rgb(236 229 214 / 0.08);
+}
+:root[data-skin="longying-ink"] .drama-filmstrip {
+    gap: 4px;
+    overflow-x: hidden;
+    padding: 12px 4px 4px;
+}
+:root[data-skin="longying-ink"] :is(.drama-filmstrip-item, .drama-finalv.is-landscape .drama-filmstrip-item) {
+    flex: var(--drama-seg-weight, 1) 1 0;
+    width: auto;
+    min-width: 0;
+    border-radius: 6px;
+    background: rgb(236 229 214 / 0.06);
+    color: rgb(236 229 214 / 0.72);
+    opacity: 0.78;
+}
+:root[data-skin="longying-ink"] :is(.drama-filmstrip-item, .drama-finalv.is-landscape .drama-filmstrip-item) {
+    display: flex;
+    flex-direction: column;
+    outline: 0;
+}
+:root[data-skin="longying-ink"] .drama-filmstrip-item > :first-child {
+    display: block;
+    width: 100%;
+    height: 64px;
+    flex: none;
+    object-fit: cover;
+}
+:root[data-skin="longying-ink"] :is(.drama-filmstrip-item, .drama-finalv.is-landscape .drama-filmstrip-item)[aria-current="true"] {
+    box-shadow: 0 0 0 2px #ece6da;
+    opacity: 1;
+}
+:root[data-skin="longying-ink"] .drama-filmstrip-item > span:last-child {
+    display: flex;
+    height: 22px;
+    flex: none;
+    align-items: center;
+    gap: 3px;
+    overflow: hidden;
+    padding: 0 6px;
+    background: rgb(0 0 0 / 0.55);
+    color: #ece5d6;
+    font-size: 10px;
+    line-height: 22px;
+    white-space: nowrap;
+}
+:root[data-skin="longying-ink"] .drama-filmstrip-item {
+    container-type: inline-size;
+}
+:root[data-skin="longying-ink"] .drama-finalv-side {
+    gap: 10px;
+}
+:root[data-skin="longying-ink"] .drama-finalv-side h2 {
+    margin: 0;
+    font-size: 18px;
+}
+:root[data-skin="longying-ink"] .drama-finalv-side > p {
+    margin: 0;
+    color: var(--ly-ink-muted);
+    font-size: 12px;
+    line-height: 18px;
+}
+:root[data-skin="longying-ink"] .drama-finalv-side > p:first-of-type {
+    font-variant-numeric: tabular-nums;
+}
+:root[data-skin="longying-ink"] .drama-finalv-side > .ant-btn-primary {
+    width: 100%;
+}
+@media (min-width: 1024px) {
+    :root[data-skin="longying-ink"] .drama-studio {
+        grid-template-rows: 44px minmax(0, 1fr) auto;
+    }
+    :root[data-skin="longying-ink"] .drama-topbar {
+        height: 44px;
+        min-height: 44px;
+        padding-block: 0;
+    }
+    :root[data-skin="longying-ink"] .drama-topbar :is(.ant-btn, .drama-nav-item) {
+        height: 32px;
+    }
+    :root[data-skin="longying-ink"] .drama-ep-header {
+        min-height: 40px;
+        padding: 4px 20px 0;
+    }
+    :root[data-skin="longying-ink"] .drama-tabs .drama-tab {
+        height: 28px;
+    }
+    :root[data-skin="longying-ink"] .drama-board-toolbar {
+        min-height: 24px;
+        padding: 0 20px 4px;
+    }
+    :root[data-skin="longying-ink"] :is(.drama-sg-grid, .drama-sg-grid.is-landscape) {
+        padding-top: 8px;
+    }
+}
+@media (max-width: 639px) {
+    :root[data-skin="longying-ink"] .drama-studio {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        grid-template-columns: minmax(0, 1fr);
+    }
+    :root[data-skin="longying-ink"] .drama-studio > * {
+        min-width: 0;
+        max-width: 100%;
+    }
+    :root[data-skin="longying-ink"] .drama-queue {
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    :root[data-skin="longying-ink"] .drama-queue-bar {
+        height: 44px;
+    }
+    :root[data-skin="longying-ink"] .drama-queue-toggle {
+        height: 44px;
+    }
+    :root[data-skin="longying-ink"] .drama-board-toolbar > * {
+        min-width: 0;
+    }
+    :root[data-skin="longying-ink"] .drama-ep-header {
+        flex-wrap: wrap;
+        row-gap: 6px;
+        padding-inline: 12px;
+    }
+    :root[data-skin="longying-ink"] .drama-ep-heading {
+        flex: 1 1 100%;
+        min-width: 0;
+    }
+    :root[data-skin="longying-ink"] .drama-ep-heading h2 {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+    :root[data-skin="longying-ink"] .drama-topbar {
+        flex-wrap: wrap;
+        min-width: 0;
+    }
+    :root[data-skin="longying-ink"] .drama-topbar-title {
+        min-width: 0;
+        flex: 1 1 60%;
+    }
+    :root[data-skin="longying-ink"] .drama-topbar-actions {
+        flex-wrap: wrap;
+        min-width: 0;
+        margin-inline-start: auto;
+    }
+    :root[data-skin="longying-ink"] :is(.drama-root, .drama-main, .drama-body) {
+        min-width: 0;
+        max-width: 100%;
+    }
+    :root[data-skin="longying-ink"] :is(.drama-sg-grid, .drama-sg-grid.is-landscape) {
+        grid-template-columns: minmax(0, 1fr);
+        padding-inline: 12px;
+    }
+    :root[data-skin="longying-ink"] .drama-sg {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+    }
+    :root[data-skin="longying-ink"] .drama-board-toolbar {
+        flex-wrap: wrap;
+        row-gap: 4px;
+        padding-inline: 12px;
+    }
+    :root[data-skin="longying-ink"] :is(.drama-board-stat, .drama-board-meter) {
+        flex: none;
+        white-space: nowrap;
+    }
+}

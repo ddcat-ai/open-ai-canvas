@@ -1,0 +1,132 @@
+/* 创作首页 */
+:root[data-skin="longying-ink"] .inspiration-card-cover {
+    background: var(--user-surface-muted);
+}
+:root[data-skin="longying-ink"] .inspiration-card-cover img {
+    object-fit: contain;
+}
+@media (max-width: 639px) {
+    :root[data-skin="longying-ink"] .creation-canvas-strip {
+        flex-wrap: wrap;
+        overflow-x: visible;
+    }
+    :root[data-skin="longying-ink"] .creation-canvas-strip-item {
+        min-width: 0;
+        flex: 1 1 100%;
+    }
+}
+:root[data-skin="longying-ink"] .app-user-workspace .creation-home .creation-start-heading {
+    margin-bottom: 24px;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .creation-home .creation-start-heading h1 {
+    font-size: clamp(28px, calc(1.6vw + 10px), 34px);
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: 0.03em;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .creation-home .creation-start-heading p {
+    margin-top: 10px;
+    color: var(--ly-ink-muted);
+    font-size: 14px;
+    line-height: 1.6;
+}
+:root[data-skin="longying-ink"].dark .creation-home::before {
+    opacity: 0.12;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .creation-home .creation-mode-card {
+    --creation-mode-card-radius: 16px;
+    box-shadow: var(--ly-shadow-float);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .creation-home .creation-mode-card {
+    outline: 1px solid transparent;
+    outline-offset: -1px;
+    transition: outline-color 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .creation-home .creation-mode-card:focus-within {
+    outline-color: var(--ly-hair-strong);
+}
+@media (prefers-reduced-motion: reduce) {
+    :root[data-skin="longying-ink"] .app-user-workspace .creation-home .creation-mode-card {
+        transition: none;
+    }
+}
+:root[data-skin="longying-ink"] .app-user-workspace .creation-home .creation-mode-folder-button[aria-pressed="true"] {
+    font-weight: 600;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .creation-home .creation-mode-card .creation-chat-composer {
+    box-shadow: none;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .creation-home .creation-chat-control:not([aria-pressed="true"]) {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--ly-hair);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .creation-home .creation-chat-control:not([aria-pressed="true"]):is(:hover, [aria-expanded="true"]) {
+    background: var(--ly-wash);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .creation-home .creation-submit-cost {
+    color: var(--ly-ink-muted);
+    font-variant-numeric: tabular-nums;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .creation-home .creation-empty-suggest {
+    --creation-suggest-gap: 1px;
+    --creation-suggest-card-bg: var(--ly-sheet);
+    --user-radius-card: 0px;
+    overflow: hidden;
+    border-radius: 12px;
+    background: var(--ly-hair-strong);
+    box-shadow: 0 0 0 1px var(--ly-hair);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .creation-home .creation-empty-suggest .suggest-card {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .creation-home .creation-empty-suggest .suggest-card-hover {
+    border-radius: 0;
+    background: var(--ly-wash);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .creation-canvas-tile {
+    border-radius: 12px;
+    background: var(--ly-sheet);
+    box-shadow: var(--ly-shadow-sheet);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .creation-canvas-tile:is(:hover, :focus-visible) {
+    background: var(--ly-raised);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .creation-canvas-tile .creation-canvas-thumbnail {
+    width: 96px;
+    height: 54px;
+    flex-basis: 96px;
+    border-radius: 6px;
+    box-shadow: inset 0 0 0 1px var(--ly-hair);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .creation-canvas-tile.is-create {
+    background: transparent;
+    box-shadow: none;
+    outline: 1px dashed var(--ly-hair-strong);
+    outline-offset: -1px;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .creation-canvas-tile.is-create:is(:hover, :focus-visible) {
+    background: var(--ly-wash);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .creation-canvas-tile .creation-canvas-thumbnail.is-create {
+    background: var(--ly-wash);
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .creation-canvas-tile .creation-canvas-copy strong {
+    color: var(--ly-ink);
+    font-weight: 500;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .creation-canvas-tile .creation-canvas-copy small {
+    color: var(--ly-ink-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 639px) {
+    :root[data-skin="longying-ink"] .app-user-workspace .creation-home .creation-start-heading h1 {
+        font-size: 26px;
+    }
+    :root[data-skin="longying-ink"] .app-user-workspace .creation-home .creation-start-heading p {
+        margin-top: 6px;
+        font-size: 13px;
+    }
+}

@@ -1,0 +1,26 @@
+/* 参数控件由同一套纸面、选中边框和焦点环标明状态。 */
+:root[data-skin="longying-ink"] .media-option-card,
+:root[data-skin="longying-ink"] .media-option-radios .ant-radio-wrapper {
+    --media-option-bg: var(--ly-wash);
+    --media-option-selected: var(--ly-wash-press);
+    border-radius: var(--ly-r-media);
+    background-color: var(--media-option-bg);
+    font-variant-numeric: tabular-nums;
+}
+:root[data-skin="longying-ink"] .media-option-radios .ant-radio-wrapper {
+    padding: 4px 8px;
+}
+:root[data-skin="longying-ink"] .media-option-card:hover:not(:disabled) {
+    --media-option-bg: var(--ly-wash-press);
+}
+:root[data-skin="longying-ink"] .media-option-card[aria-pressed="true"],
+:root[data-skin="longying-ink"] .media-option-radios .ant-radio-wrapper-checked {
+    background-color: var(--media-option-selected);
+    box-shadow: inset 0 0 0 1px var(--ly-hair-strong);
+    font-weight: 600;
+}
+:root[data-skin="longying-ink"] .media-option-card:focus-visible,
+:root[data-skin="longying-ink"] .media-option-radios .ant-radio-wrapper:has(:focus-visible) {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+}
