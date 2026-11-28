@@ -10,7 +10,7 @@ import { generationErrorMessage } from "@/lib/generation-error";
 import { formatTaskKind, generationTaskShowsProgress, generationTaskStageLabel } from "@/lib/generation-task-display";
 import type { GenerationTask } from "@/services/api/task-center";
 import type { AiConfig } from "@/stores/use-config-store";
-import { formatModelName, getTaskCanvasContext, isTaskActive, isTaskFailed, isTaskRetryBlocked, taskAttentionReason, TaskBilling, TaskDate, taskKindIcon, TaskStatusPill, taskTone } from "./task-shared";
+import { formatModelName, getTaskCanvasContext, isTaskActive, isTaskFailed, isTaskRetryBlocked, TaskBilling, TaskDate, taskDistinctFailureDetail, taskKindIcon, TaskStatusPill, taskTone } from "./task-shared";
 import { TaskVideoThumbnail } from "./task-video-thumbnail";
 import { progressFillStyle } from "@/lib/progress-fill";
 
@@ -44,6 +44,7 @@ export function TaskListRow({
     const retryBlocked = isTaskRetryBlocked(task);
     const stageLabel = generationTaskStageLabel(task);
     const showsProgress = generationTaskShowsProgress(task);
+    const failureDetail = failed ? taskDistinctFailureDetail(task) : "";
     const openFromRow = (event: MouseEvent<HTMLElement>) => {
         if (event.target instanceof Element && event.target.closest("button, a, input")) return;
         onOpen();
@@ -75,9 +76,9 @@ export function TaskListRow({
                 ) : active ? (
                     <p className="task-center-row-note">{stageLabel}</p>
                 ) : null}
-                {failed ? (
-                    <p className="task-center-row-error" title={task.error ? generationErrorMessage(task.error) : undefined}>
-                        {taskAttentionReason(task)}
+                {failureDetail ? (
+                    <p className="task-center-row-error" title={task.error ? generationErrorMessage(task.error) : failureDetail}>
+                        {failureDetail}
                     </p>
                 ) : null}
             </div>

@@ -32,6 +32,7 @@ type TaskSummary struct {
 	ProviderCancelAttempts    int                        `json:"providerCancelAttempts,omitempty"`
 	ProviderCancelRequestedAt *time.Time                 `json:"providerCancelRequestedAt,omitempty"`
 	ProviderCancelledAt       *time.Time                 `json:"providerCancelledAt,omitempty"`
+	Error                     string                     `json:"error,omitempty"`
 	ErrorCode                 string                     `json:"errorCode,omitempty"`
 	PreviewURL                string                     `json:"previewUrl,omitempty"`
 	PreviewKind               string                     `json:"previewKind,omitempty"`
@@ -121,6 +122,10 @@ func taskBillingTaskIDs(tasks []model.Task) []string {
 }
 
 func taskSummaryForOutput(task model.Task) TaskSummary {
+	errorText := ""
+	if task.Status == model.TaskStatusFailed && strings.TrimSpace(task.Error) != "" {
+		errorText = userFacingTaskError(task.Error)
+	}
 	errorCode := ""
 	if isContentModerationFailure(task.Error) {
 		errorCode = contentModerationErrorCode
@@ -145,6 +150,7 @@ func taskSummaryForOutput(task model.Task) TaskSummary {
 		ProviderCancelAttempts:    task.ProviderCancelAttempts,
 		ProviderCancelRequestedAt: task.ProviderCancelRequestedAt,
 		ProviderCancelledAt:       task.ProviderCancelledAt,
+		Error:                     errorText,
 		ErrorCode:                 errorCode,
 		PreviewURL:                previewURL,
 		PreviewKind:               previewKind,

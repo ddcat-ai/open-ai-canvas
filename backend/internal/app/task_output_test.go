@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
+	"yingce/backend/internal/database"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/repository"
 )
 
 func TestTaskForOutputRedactsRoutingAndSecrets(t *testing.T) {
@@ -145,6 +148,145 @@ func TestTaskSummaryPreservesCanvasNodeWithoutExposingInput(t *testing.T) {
 		if _, exists := output[key]; exists {
 			t.Fatalf("summary leaked %s", key)
 		}
+	}
+}
+
+func TestTaskSummaryExposesSafeFailedError(t *testing.T) {
+	timeoutSummary := taskSummaryForOutput(model.Task{
+		ID:     "task-timeout",
+		Type:   "video_text_to_video",
+		Status: model.TaskStatusFailed,
+		Error:  "upstream timeout 504",
+	})
+	if timeoutSummary.Error != taskErrorUnavailableMessage {
+		t.Fatalf("expected safe timeout classification %q, got %q", taskErrorUnavailableMessage, timeoutSummary.Error)
+	}
+
+	secretSummary := taskSummaryForOutput(model.Task{
+		ID:     "task-secret",
+		Type:   "canvas_image",
+		Status: model.TaskStatusFailed,
+		Error:  `模型服务暂时不可用（HTTP 503）；上游：{"error":{"code":"model_not_found","message":"request id abc at https://private.example/task_abc123"}}`,
+	})
+	if strings.Contains(secretSummary.Error, "private.example") || strings.Contains(secretSummary.Error, "request id") || strings.Contains(secretSummary.Error, "task_abc123") || !strings.Contains(secretSummary.Error, "更换模型") {
+		t.Fatalf("unsafe summary error: %q", secretSummary.Error)
+	}
+
+	for _, tc := range []struct {
+		name string
+		task model.Task
+	}{
+		{name: "blank failed error", task: model.Task{ID: "task-empty", Type: "canvas_image", Status: model.TaskStatusFailed, Error: "   "}},
+		{name: "succeeded task", task: model.Task{ID: "task-ok", Type: "canvas_image", Status: model.TaskStatusSucceeded, Error: "upstream timeout 504"}},
+	} {
+		summary := taskSummaryForOutput(tc.task)
+		if summary.Error != "" {
+			t.Fatalf("%s should not expose error, got %q", tc.name, summary.Error)
+		}
+		encoded, err := json.Marshal(summary)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(encoded, &payload); err != nil {
+			t.Fatal(err)
+		}
+		if _, exists := payload["error"]; exists {
+			t.Fatalf("%s marshaled unexpected error key: %s", tc.name, string(encoded))
+		}
+	}
+}
+
+func TestTaskSummaryListProjectsSafeFailedErrors(t *testing.T) {
+	db := newSQLiteTestDB(t)
+	if err := database.MigrateSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	svc := New(repository.New(db), t.TempDir())
+	now := time.Now().UTC()
+	records := []model.Task{
+		{
+			ID:        "task-generic-fail",
+			UserID:    "user-1",
+			Type:      "canvas_image",
+			Status:    model.TaskStatusFailed,
+			Stage:     "failed",
+			Error:     "失败",
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		{
+			ID:        "task-timeout-504",
+			UserID:    "user-1",
+			Type:      "video_text_to_video",
+			Status:    model.TaskStatusFailed,
+			Stage:     "failed",
+			Error:     "upstream timeout 504",
+			CreatedAt: now.Add(time.Second),
+			UpdatedAt: now.Add(time.Second),
+		},
+		{
+			ID:        "task-secret-fail",
+			UserID:    "user-1",
+			Type:      "canvas_image",
+			Status:    model.TaskStatusFailed,
+			Stage:     "failed",
+			Error:     `模型服务暂时不可用（HTTP 503）；上游：{"error":{"code":"model_not_found","message":"request id abc at https://private.example/task_abc123"}}`,
+			CreatedAt: now.Add(2 * time.Second),
+			UpdatedAt: now.Add(2 * time.Second),
+		},
+		{
+			ID:        "task-succeeded",
+			UserID:    "user-1",
+			Type:      "canvas_image",
+			Status:    model.TaskStatusSucceeded,
+			Stage:     "completed",
+			Error:     "upstream timeout 504",
+			CreatedAt: now.Add(3 * time.Second),
+			UpdatedAt: now.Add(3 * time.Second),
+		},
+	}
+	if err := db.Create(&records).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	summaries, err := svc.TasksWithOptions("user-1", TaskListOptions{Limit: 20})
+	if err != nil {
+		t.Fatalf("TasksWithOptions failed: %v", err)
+	}
+	if len(summaries) != len(records) {
+		t.Fatalf("expected %d summaries, got %d", len(records), len(summaries))
+	}
+
+	byID := make(map[string]TaskSummary, len(summaries))
+	for _, item := range summaries {
+		byID[item.ID] = item
+	}
+
+	if got := byID["task-generic-fail"].Error; got != "失败" {
+		t.Fatalf("generic failure error = %q, want %q", got, "失败")
+	}
+	if got := byID["task-timeout-504"].Error; got != taskErrorUnavailableMessage {
+		t.Fatalf("timeout 504 error = %q, want %q", got, taskErrorUnavailableMessage)
+	}
+	secretErr := byID["task-secret-fail"].Error
+	if strings.Contains(secretErr, "private.example") || strings.Contains(secretErr, "request id") || strings.Contains(secretErr, "task_abc123") || !strings.Contains(secretErr, "更换模型") {
+		t.Fatalf("unsafe secret failure summary error: %q", secretErr)
+	}
+	okSummary := byID["task-succeeded"]
+	if okSummary.Error != "" {
+		t.Fatalf("succeeded task exposed error: %q", okSummary.Error)
+	}
+	encoded, err := json.Marshal(okSummary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(encoded, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := payload["error"]; exists {
+		t.Fatalf("succeeded summary marshaled unexpected error key: %s", string(encoded))
 	}
 }
 
