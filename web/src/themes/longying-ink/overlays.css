@@ -1,0 +1,586 @@
+/* 用户工作区弹窗与抽屉 */
+:root[data-skin="longying-ink"] body.app-user-overlays {
+    --overlay-l3-bg: var(--ly-ov-l3-bg);
+    --overlay-scrim: var(--ly-ov-scrim);
+}
+
+:root[data-skin="longying-ink"] body.app-user-overlays :is(.ant-modal-root, .ant-drawer, .ant-popover, .ant-dropdown, .ant-select-dropdown, .ant-picker-dropdown, .ant-cascader-dropdown, .ant-mentions-dropdown, .ant-message, .ant-notification) {
+    --workspace-overlay-bg: var(--ly-sheet);
+    --workspace-overlay-bg-strong: var(--ly-raised);
+    --workspace-overlay-border: var(--ly-ov-l1-border);
+    --workspace-overlay-divider: var(--ly-divider);
+    --workspace-overlay-highlight: var(--ly-hair-strong);
+    --workspace-overlay-hover: var(--ly-wash);
+    --workspace-overlay-selected: var(--ly-wash-press);
+    --workspace-overlay-shadow: var(--ly-ov-l1-shadow);
+    --elevation-overlay: 0 0 0 1px var(--ly-ov-l1-border), var(--ly-ov-l1-shadow);
+    --popover: var(--ly-raised);
+    --popover-foreground: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .ant-dropdown {
+    --elevation-overlay: 0 0 0 1px var(--ly-ov-l0-border), var(--ly-ov-l0-shadow);
+}
+:root[data-skin="longying-ink"].dark body.app-user-overlays :is(.ant-modal-root, .ant-drawer) :is(.ant-popover, .ant-dropdown, .ant-select-dropdown, .ant-picker-dropdown),
+:root[data-skin="longying-ink"].dark body.app-user-overlays:has(.ant-modal-mask:not(.ant-modal-mask-hidden), .ant-drawer-open) :is(.ant-popover, .ant-dropdown, .ant-select-dropdown, .ant-picker-dropdown, .ant-mentions-dropdown) {
+    --workspace-overlay-bg-strong: var(--ly-raised-nested);
+    --popover: var(--ly-raised-nested);
+    --workspace-overlay-border: var(--ly-hair-strong);
+    --elevation-overlay: 0 0 0 1px var(--ly-hair-strong), var(--ly-ov-l1-shadow);
+}
+:root[data-skin="longying-ink"].dark body.app-user-overlays:has(.ant-modal-mask:not(.ant-modal-mask-hidden), .ant-drawer-open) .workspace-quiet-popup {
+    --user-surface-raised: var(--ly-raised-nested);
+}
+:root[data-skin="longying-ink"].dark body.app-user-overlays:has(.ant-modal-mask:not(.ant-modal-mask-hidden), .ant-drawer-open) .workspace-quiet-popup.ant-select-dropdown {
+    outline: 1px solid var(--ly-hair-strong);
+    outline-offset: -1px;
+    filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.4)) drop-shadow(0 10px 28px rgb(0 0 0 / 0.34));
+}
+:root[data-skin="longying-ink"].dark body.app-user-overlays:has(.ant-modal-mask:not(.ant-modal-mask-hidden), .ant-drawer-open) .canvas-resource-mention-menu {
+    --ly-ov-l1-bg: var(--ly-raised-nested);
+    --ly-ov-l1-border: var(--ly-hair-strong);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .ant-drawer {
+    --overlay-scrim: var(--ly-ov-l2-scrim);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .ant-modal-mask {
+    background-color: var(--ly-ov-scrim);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .ant-drawer-mask {
+    background-color: var(--ly-ov-l2-scrim);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .ant-modal-root {
+    --elevation-overlay: 0 0 0 1px var(--ly-ov-l3-border), var(--ly-ov-l3-shadow);
+    --button-danger-bg: var(--ly-danger);
+    --button-danger-hover-bg: color-mix(in srgb, var(--ly-danger) 88%, #000);
+    --button-danger-active-bg: color-mix(in srgb, var(--ly-danger) 80%, #000);
+    --button-danger-fg: var(--ly-on-danger);
+    --button-danger-shadow: none;
+    --button-danger-text: var(--ly-danger);
+    --button-danger-soft-bg: color-mix(in srgb, var(--ly-danger) 8%, transparent);
+    --button-danger-soft-border: color-mix(in srgb, var(--ly-danger) 32%, transparent);
+}
+:root[data-skin="longying-ink"].dark body.app-user-overlays .ant-modal-root {
+    --button-danger-hover-bg: color-mix(in srgb, var(--ly-danger) 88%, #fff);
+    --button-danger-active-bg: color-mix(in srgb, var(--ly-danger) 80%, #fff);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-modal {
+    --modal-radius: var(--ly-ov-l3-radius);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-modal.workspace-modal-compact {
+    --modal-width-compact: 416px;
+    --modal-radius: var(--ly-ov-l3-confirm-radius);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .app-modal:not(.is-flush) .ant-modal-container,
+:root[data-skin="longying-ink"] body.app-user-overlays .ant-modal-confirm .ant-modal-container {
+    padding: 0;
+    border-radius: var(--ly-ov-l3-radius);
+    box-shadow:
+        0 0 0 1px var(--ly-ov-l3-border),
+        var(--ly-ov-l3-shadow);
+}
+
+:root[data-skin="longying-ink"] body.app-user-overlays .app-modal:not(.is-flush) .ant-modal-header {
+    display: flex;
+    min-height: 56px;
+    align-items: center;
+    margin: 0;
+    padding: 16px 56px 12px 24px;
+    border-bottom: 0;
+    background: transparent;
+}
+
+:root[data-skin="longying-ink"] body.app-user-overlays .app-modal:not(.is-flush) .ant-modal-title {
+    font-size: 16px;
+    line-height: 24px;
+}
+
+:root[data-skin="longying-ink"] body.app-user-overlays .app-modal:not(.is-flush) .ant-modal-body {
+    padding: 4px 24px 20px;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .app-modal:not(.is-flush) .ant-modal-container:not(:has(.ant-modal-header)) .ant-modal-body {
+    padding-top: 24px;
+}
+
+:root[data-skin="longying-ink"] body.app-user-overlays .app-modal:not(.is-flush) .ant-modal-footer {
+    display: flex;
+    min-height: 64px;
+    align-items: center;
+    margin: 0;
+    padding: 12px 24px 20px;
+    border-top: 0;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+:root[data-skin="longying-ink"] body.app-user-overlays .app-modal:not(.is-flush) .ant-modal-footer > .ant-btn + .ant-btn {
+    margin-inline-start: 0;
+}
+
+:root[data-skin="longying-ink"] body.app-user-overlays .app-modal:not(.is-flush) .ant-modal-close {
+    top: 16px;
+    right: 16px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+}
+
+:root[data-skin="longying-ink"] body.app-user-overlays .ant-modal-confirm .ant-modal-body {
+    padding: 24px;
+}
+
+:root[data-skin="longying-ink"] body.app-user-overlays .ant-modal-confirm .ant-modal-confirm-title {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 24px;
+}
+
+:root[data-skin="longying-ink"] body.app-user-overlays .ant-modal-confirm .ant-modal-confirm-content {
+    color: var(--ly-ink-muted);
+    font-size: 13px;
+    line-height: 20px;
+}
+
+:root[data-skin="longying-ink"] body.app-user-overlays .ant-modal-confirm .ant-modal-confirm-btns {
+    display: flex;
+    margin-top: 24px;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+:root[data-skin="longying-ink"] body.app-user-overlays .ant-modal-confirm .ant-modal-confirm-btns > .ant-btn + .ant-btn {
+    margin-inline-start: 0;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .ant-modal-confirm .ant-modal-confirm-btns:has(.ant-btn-dangerous),
+:root[data-skin="longying-ink"] body.app-user-overlays .app-modal.is-danger .ant-modal-footer {
+    justify-content: space-between;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .app-drawer .ant-drawer-section {
+    background: var(--ly-ov-l2-bg);
+}
+
+:root[data-skin="longying-ink"] body.app-user-overlays .app-drawer.ant-drawer-right .ant-drawer-section {
+    box-shadow:
+        -1px 0 0 var(--ly-ov-l2-border),
+        var(--ly-ov-l2-shadow);
+}
+
+:root[data-skin="longying-ink"] body.app-user-overlays .app-drawer.ant-drawer-left .ant-drawer-section {
+    box-shadow:
+        1px 0 0 var(--ly-ov-l2-border),
+        1px 0 3px rgb(31 28 24 / 0.08),
+        8px 0 32px rgb(31 28 24 / 0.14);
+}
+
+:root[data-skin="longying-ink"] body.app-user-overlays .app-drawer:not(.is-flush) .ant-drawer-header {
+    min-height: 56px;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--ly-divider);
+}
+
+:root[data-skin="longying-ink"] body.app-user-overlays .app-drawer:not(.is-flush) .ant-drawer-body {
+    padding: 16px;
+}
+
+:root[data-skin="longying-ink"] body.app-user-overlays .app-drawer:not(.is-flush) .ant-drawer-footer {
+    padding: 12px 16px;
+    border-top: 1px solid var(--ly-divider);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .ant-tooltip {
+    --popover: var(--ly-ov-l0-tooltip-bg);
+    --popover-foreground: var(--ly-ov-l0-tooltip-fg);
+    --workspace-overlay-bg-strong: var(--ly-ov-l0-tooltip-bg);
+    --workspace-overlay-border: var(--ly-ov-l0-tooltip-border);
+    --workspace-overlay-shadow: var(--ly-ov-l0-shadow);
+}
+
+:root[data-skin="longying-ink"] body.app-user-overlays .ant-tooltip .ant-tooltip-container {
+    min-height: 24px;
+    padding: 4px 8px;
+    border-radius: var(--ly-ov-l0-tooltip-radius);
+    box-shadow:
+        0 0 0 1px var(--ly-ov-l0-tooltip-border),
+        var(--ly-ov-l0-shadow);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 16px;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays {
+    --overlay-picker-shadow: 0 0 0 1px var(--ly-ov-l1-border), var(--ly-ov-l1-shadow);
+    --overlay-picker-ink: var(--ly-ink);
+    --overlay-picker-muted: var(--ly-ink-muted);
+    --overlay-picker-option-height: 48px;
+    --overlay-picker-option-compact-height: 36px;
+    --overlay-trigger-bg: var(--ly-wash);
+    --overlay-trigger-hover-bg: var(--ly-wash-press);
+    --overlay-trigger-ink: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays :is(.ant-popover, .ant-select-dropdown, .ant-picker-dropdown, .ant-cascader-dropdown) {
+    --overlay-popup-radius: var(--ly-ov-l1-radius);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays :is(.ant-dropdown, .ant-mentions-dropdown) {
+    --overlay-popup-radius: var(--ly-ov-l0-radius);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays :is(.workspace-quiet-popup, .workspace-account-popover) {
+    --user-radius-card: var(--ly-ov-l1-radius);
+    --user-surface-raised: var(--ly-raised);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .ant-dropdown.workspace-quiet-popup {
+    --user-radius-card: var(--ly-ov-l0-radius);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays :is(.workspace-quiet-popup.ant-select-dropdown, .workspace-quiet-popup .ant-dropdown-menu, .workspace-quiet-popup .ant-popover-container, .workspace-account-popover .ant-popover-container) {
+    outline: 1px solid var(--ly-ov-l1-border);
+    outline-offset: -1px;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays :is(.workspace-quiet-popup.ant-select-dropdown, .workspace-quiet-popup .ant-dropdown-menu, .workspace-quiet-popup .ant-popover-container) {
+    filter: drop-shadow(0 1px 2px rgb(62 46 24 / 0.08)) drop-shadow(0 8px 20px rgb(62 46 24 / 0.1));
+}
+:root[data-skin="longying-ink"].dark body.app-user-overlays :is(.workspace-quiet-popup.ant-select-dropdown, .workspace-quiet-popup .ant-dropdown-menu, .workspace-quiet-popup .ant-popover-container) {
+    filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.4)) drop-shadow(0 10px 24px rgb(0 0 0 / 0.34));
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .language-menu-dropdown .ant-dropdown-menu {
+    min-width: 224px;
+    padding: 4px;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .language-menu-dropdown .ant-dropdown-menu-item {
+    padding: 6px 8px;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .creation-parameter-menu {
+    max-height: min(460px, calc(100dvh - 24px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .canvas-model-picker-brand {
+    min-height: 36px;
+    gap: 8px;
+    padding: 4px 8px;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .canvas-model-picker-brand-icon {
+    width: 24px;
+    height: 24px;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .canvas-model-picker-brand-copy {
+    gap: 2px;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays :is(.creation-model-picker-menu, .canvas-model-picker-menu) .canvas-model-picker-option {
+    min-height: 36px;
+    padding: 4px 8px;
+}
+@media (max-width: 639px) {
+    :root[data-skin="longying-ink"] body.app-user-overlays .creation-model-picker-popover {
+        max-width: calc(100vw - 24px);
+    }
+    :root[data-skin="longying-ink"] body.app-user-overlays .creation-model-picker-popover .creation-model-picker-surface {
+        max-width: calc(100vw - 24px);
+    }
+    :root[data-skin="longying-ink"] body.app-user-overlays :is(.canvas-model-picker-brand-copy small, .canvas-model-picker-brand-meta) {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .creation-control-popover {
+    --creation-control-popover-shadow: none;
+    --creation-control-popover-radius: var(--ly-ov-l1-radius);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .canvas-toolbar-settings-modal {
+    --cn-spatial-elevated: var(--ly-raised);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .canvas-toolbar-settings-modal .ant-modal-container {
+    border-radius: var(--ly-ov-l3-radius);
+    outline: 1px solid var(--ly-ov-l3-border);
+    outline-offset: -1px;
+}
+:root[data-skin="longying-ink"] .canvas-resource-mention-menu {
+    border-color: var(--ly-ov-l1-border);
+    border-radius: var(--ly-ov-l1-radius);
+    background: var(--ly-ov-l1-bg);
+    box-shadow: var(--ly-ov-l1-shadow);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .creation-control-popover {
+    --creation-control-popover-surface-bg: var(--ly-raised);
+    --creation-control-popover-surface-shadow: 0 0 0 1px var(--ly-ov-l1-border), var(--ly-ov-l1-shadow);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .creation-parameter-menu {
+    --creation-parameter-pressed-ring: inset 0 0 0 1px var(--ly-ink);
+    --user-control-pressed: var(--ly-wash);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .creation-control-popover .creation-control-popover-surface {
+    --creation-control-popover-shadow: 0 0 0 1px var(--ly-ov-l1-border), var(--ly-ov-l1-shadow);
+    filter: none;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .creation-control-popover .creation-control-popover-surface .ant-popover-inner {
+    --creation-control-popover-shadow: none;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .canvas-model-picker-brand {
+    padding-block: 3px;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .canvas-model-picker-brand-copy {
+    gap: 0;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .canvas-model-picker-brand-copy strong {
+    line-height: 18px;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays :is(.canvas-model-picker-brand-copy small, .canvas-model-picker-brand-meta) {
+    line-height: 14px;
+}
+@media (max-width: 639px) {
+    :root[data-skin="longying-ink"] body.app-user-overlays .creation-model-picker-popover {
+        box-sizing: border-box;
+        width: 100vw;
+        max-width: 100vw;
+        padding-inline: 12px;
+    }
+    :root[data-skin="longying-ink"] body.app-user-overlays .canvas-model-picker-option-heading {
+        flex-wrap: nowrap;
+    }
+    :root[data-skin="longying-ink"] body.app-user-overlays .canvas-model-picker-option-title {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+}
+:root[data-skin="longying-ink"] body.app-user-overlays :is(.creation-choice-grid, .creation-duration-choices) button.is-selected {
+    --creation-choice-selected-ring: inset 0 0 0 1px var(--ly-ink);
+    font-weight: 600;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .app-modal.is-flush .ant-modal-container,
+:root[data-skin="longying-ink"] body.app-user-overlays .auth-dialog .ant-modal-container {
+    border-radius: var(--ly-ov-l3-radius);
+    box-shadow:
+        0 0 0 1px var(--ly-ov-l3-border),
+        var(--ly-ov-l3-shadow);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .app-modal .ant-modal-close::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays :is(.feedback-close, .task-detail-close) {
+    position: relative;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays :is(.feedback-close, .task-detail-close)::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .library-modal {
+    --modal-radius: var(--ly-ov-l3-radius);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .app-modal:not(.is-flush) .ant-modal-container {
+    display: flex;
+    max-height: calc(100dvh - 32px);
+    flex-direction: column;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .app-modal:not(.is-flush) .ant-modal-body {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .app-modal:not(.is-flush) :is(.ant-modal-header, .ant-modal-footer) {
+    flex: none;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .app-modal:not(.is-flush) .ant-modal-wrap:not(.ant-modal-centered) > .ant-modal {
+    top: min(100px, 8dvh);
+    padding-bottom: 16px;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .app-modal:not(.is-flush) .ant-modal-wrap:not(.ant-modal-centered) > .ant-modal .ant-modal-container {
+    max-height: calc(100dvh - min(100px, 8dvh) - 24px);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .app-drawer .ant-drawer-content-wrapper {
+    box-shadow: none;
+}
+@media (max-width: 639px) {
+    :root[data-skin="longying-ink"] body.app-user-overlays .app-drawer:not(.is-flush) .ant-drawer-header {
+        min-height: calc(56px + env(safe-area-inset-top, 0px));
+        padding-top: env(safe-area-inset-top, 0px);
+    }
+    :root[data-skin="longying-ink"] body.app-user-overlays .app-drawer:not(.is-flush) .ant-drawer-footer {
+        padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+    }
+    :root[data-skin="longying-ink"] body.app-user-overlays .app-drawer:not(.is-flush) .ant-drawer-body:last-child {
+        padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+    }
+    :root[data-skin="longying-ink"] body.app-user-overlays :is(.ant-dropdown-menu-item, .ant-dropdown-menu-submenu-title, .ant-select-item-option, .ant-cascader-menu-item) {
+        min-height: 44px;
+        align-items: center;
+    }
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .app-drawer .ant-drawer-close {
+    position: relative;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .app-drawer .ant-drawer-close::after {
+    content: "";
+    position: absolute;
+    inset: -5px;
+}
+:root[data-skin="longying-ink"] :is(body.app-user-overlays, .app-user-workspace) {
+    --media-option-radius: var(--ly-r-media);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .creation-control-popover {
+    --creation-choice-bg: var(--user-surface-muted);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .creation-duration-menu {
+    --user-control-pressed: var(--ly-wash);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal {
+    --user-accent: var(--ly-ink);
+    --user-accent-soft: var(--ly-wash);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .ant-modal-container {
+    border-radius: var(--ly-ov-l3-radius);
+    background: var(--ly-ov-l3-bg);
+    box-shadow:
+        0 0 0 1px var(--ly-ov-l3-border),
+        var(--ly-ov-l3-shadow);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .ant-modal-container::before,
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-shell::before,
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-shell::after {
+    display: none;
+    content: none;
+    background: none;
+    filter: none;
+    opacity: 0;
+    animation: none;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-shell {
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-header {
+    border-bottom: 1px solid var(--ly-divider);
+    padding-bottom: 16px;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-kicker {
+    color: var(--ly-ink-muted);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-header h2 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-header p {
+    color: var(--ly-ink-muted);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-balance {
+    border-radius: var(--ly-r-card);
+    background: var(--ly-sheet);
+    box-shadow: var(--ly-shadow-sheet);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-balance.is-storage:hover {
+    background: var(--ly-wash);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-balance .wallet-topup-storage-track {
+    background: var(--ly-wash);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-tabs {
+    margin-top: 12px;
+    border-radius: var(--ly-r-control);
+    background: var(--ly-wash);
+    box-shadow: inset 0 0 0 1px var(--ly-hair);
+    padding: 3px;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-tabs button {
+    border-radius: var(--ly-r-chip);
+    color: var(--ly-ink-muted);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-tabs button:hover:not([aria-selected="true"]) {
+    background: var(--ly-wash);
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-tabs button[aria-selected="true"] {
+    background: var(--ly-raised);
+    color: var(--ly-ink);
+    font-weight: 600;
+    box-shadow: var(--ly-shadow-sheet);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-tabs button[aria-selected="true"] svg {
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal :is(.workspace-wallet-section, .workspace-wallet-content.is-history) {
+    border: 0;
+    border-radius: var(--ly-r-card);
+    background: var(--ly-sheet);
+    box-shadow: var(--ly-shadow-sheet);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .wallet-topup {
+    --wallet-topup-credits-ink: var(--status-warning-text);
+    --wallet-topup-card-surface: var(--ly-sheet);
+    --wallet-topup-card-hover: var(--ly-wash);
+    --wallet-topup-selected-stroke: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .wallet-topup-card {
+    border-radius: var(--ly-r-card);
+    box-shadow: var(--ly-shadow-sheet);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .wallet-topup-card.is-selected {
+    background: var(--ly-raised);
+    outline: 1px solid var(--ly-ink);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal :is(.wallet-topup-chip, .wallet-topup-grants li) {
+    border-radius: var(--ly-r-badge);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .wallet-topup-checkout {
+    border-radius: var(--ly-r-card);
+    background: var(--ly-sheet);
+    box-shadow: var(--ly-shadow-sheet);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal :is(.workspace-wallet-product:hover, .workspace-wallet-product:focus-visible) {
+    border-color: var(--ly-hair-strong);
+    background: var(--ly-raised);
+    box-shadow: var(--ly-shadow-sheet);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-product.is-selected {
+    border-color: var(--ly-ink);
+    background: var(--ly-wash);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-providers button {
+    border-color: var(--ly-hair);
+    border-radius: var(--ly-r-control);
+    background: var(--ly-raised);
+    color: var(--ly-ink-muted);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-providers button:hover:not(:disabled) {
+    border-color: var(--ly-hair-strong);
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-providers button.is-selected {
+    border-color: var(--ly-ink);
+    background: var(--ly-wash);
+    color: var(--ly-ink);
+    font-weight: 600;
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-ledger-row {
+    border-bottom-color: var(--ly-divider);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-ledger-icon {
+    border-radius: var(--ly-r-control);
+    background: var(--ly-wash);
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-ledger-icon.is-consume {
+    background: var(--ly-wash);
+    color: var(--ly-ink-muted);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-ledger-row b.is-income {
+    color: var(--status-success-text);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-ledger-row b.is-consume {
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal :is(.workspace-wallet-inline-state, .workspace-wallet-empty) {
+    border-color: var(--ly-hair-strong);
+    border-radius: var(--ly-r-card);
+    background: var(--ly-wash);
+    color: var(--ly-ink-muted);
+}
+:root[data-skin="longying-ink"] body.app-user-overlays .workspace-wallet-modal .workspace-wallet-pagination button {
+    border-color: var(--ly-hair);
+    border-radius: var(--ly-r-control);
+    background: var(--ly-raised);
+    color: var(--ly-ink);
+}

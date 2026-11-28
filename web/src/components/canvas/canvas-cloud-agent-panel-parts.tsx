@@ -6,7 +6,7 @@ import { useSkillLibraryAccess } from "@/lib/skill-access";
 
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
-import { useEffectiveCanvasAppearance } from "@/stores/use-appearance-preferences-store";
+import { useEffectiveCanvasAppearance, usePersonalAppearancePreferences } from "@/stores/use-appearance-preferences-store";
 import { agentAvatarClipForState, agentAvatarStateForRunStatus, agentCopy, isAgentAvatarBundleManifest, type AgentAvatarBundleManifest } from "@/lib/canvas/agent-appearance";
 import { type CSSProperties, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { usePopoverAnchorAlign } from "@/hooks/use-popover-anchor-align";
@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { Live2DAvatar } from "./live2d-avatar";
 import { agentAvatarBundleFileURL, live2DModelURL } from "@/services/api/appearance";
 import { AgentAvatarVideo } from "@/components/canvas/agent-avatar-video";
+import { useThemePack } from "@/themes/use-theme-pack";
 import { AgentOrb, agentOrbStateForAvatar } from "@/components/ui/agent-orb";
 import { ArrowDown, Brain, Check, ChevronDown, Clapperboard, Download, Ellipsis, LoaderCircle, Maximize2, MessageSquarePlus, Minus, PanelRight, PictureInPicture2, Scaling, Settings2, ShieldCheck, X, Blocks } from "lucide-react";
 import { agentModifierShortcut } from "@/lib/canvas/agent-outbox";
@@ -69,13 +70,16 @@ export const AgentLauncher = memo(function AgentLauncher({
     const appearance = useEffectiveCanvasAppearance();
     const appearanceResolved = useAppearanceStore((state) => state.resolved);
     const appearanceRevision = useAppearanceStore((state) => state.appearance.revision);
+    const pack = useThemePack();
+    const { avatar: avatarPreference } = usePersonalAppearancePreferences();
+    const themeCapsule = avatarPreference === "site" && pack?.launcher?.defaultForm === "capsule" && appearance.avatarType === "bundle" && !appearance.avatarBundleResourceId && appearance.avatarAssetScope !== "personal";
     const live = appearance.avatarType === "live2d" && Boolean(appearance.live2dResourceId && appearance.live2dEntry);
     const avatarState = agentAvatarStateForRunStatus(status);
     const assetScope = appearance.avatarAssetScope ?? "public";
     const bundleManifestURL = appearance.avatarBundleResourceId ? agentAvatarBundleFileURL(appearance.avatarBundleResourceId, "avatar.json", assetScope, appearanceRevision) : "/doll/avatar.json";
     const [bundleManifestState, setBundleManifestState] = useState<{ url: string; manifest: AgentAvatarBundleManifest | null } | null>(null);
     useEffect(() => {
-        if (appearance.avatarType !== "bundle") {
+        if (themeCapsule || appearance.avatarType !== "bundle") {
             setBundleManifestState(null);
             return;
         }
@@ -92,14 +96,18 @@ export const AgentLauncher = memo(function AgentLauncher({
             }
         })();
         return () => controller.abort();
-    }, [appearance.avatarType, bundleManifestURL]);
+    }, [appearance.avatarType, bundleManifestURL, themeCapsule]);
     const currentBundleManifestState = bundleManifestState?.url === bundleManifestURL ? bundleManifestState : null;
     const bundleManifest = currentBundleManifestState?.manifest ?? null;
-    const bundleManifestLoading = appearance.avatarType === "bundle" && currentBundleManifestState === null;
+    const bundleManifestLoading = !themeCapsule && appearance.avatarType === "bundle" && currentBundleManifestState === null;
     const clip = bundleManifest ? agentAvatarClipForState(appearance, avatarState, bundleManifest) : "";
     const clipFile = bundleManifest?.clips[clip] || "";
     const mediaURL =
-        appearance.avatarType === "bundle" && clipFile ? (appearance.avatarBundleResourceId ? agentAvatarBundleFileURL(appearance.avatarBundleResourceId, clipFile, assetScope, appearanceRevision) : `/doll/${encodeURIComponent(clipFile)}`) : "";
+        !themeCapsule && appearance.avatarType === "bundle" && clipFile
+            ? appearance.avatarBundleResourceId
+                ? agentAvatarBundleFileURL(appearance.avatarBundleResourceId, clipFile, assetScope, appearanceRevision)
+                : `/doll/${encodeURIComponent(clipFile)}`
+            : "";
     const [mediaError, setMediaError] = useState(false);
     const [readyBundleURL, setReadyBundleURL] = useState("");
     useEffect(() => setMediaError(false), [mediaURL]);
@@ -131,11 +139,14 @@ export const AgentLauncher = memo(function AgentLauncher({
     const pathname = workspacePagePath(useLocation().pathname);
     const inCanvasEditor = Boolean(matchPath("/canvas/:id", pathname));
     // 正文距右边缘 20px，额外留出滚动条和拖动热区。
+    const capsule = themeCapsule && !inCanvasEditor && !collapsed && viewport.width >= 640;
+    const compactOrb = themeCapsule && !capsule;
+    const capsuleText = `问${appearance.agentName}`;
     const minRight = matchPath("/admin/channels", pathname) ? 44 : 0;
     // 收起后只留小圆球入口：不加载 Live2D / 动画，也不挡画布。位置以右下角为锚点，收起展开不跳位。
     const keepsAvatarSize = largeAvatar && !collapsed;
-    const height = collapsed ? AGENT_LAUNCHER_COLLAPSED_SIZE : keepsAvatarSize ? resolveAgentLauncherAvatarHeight(appearance.avatarHeight, aspectRatio, viewport, inCanvasEditor) : 76;
-    const width = collapsed ? AGENT_LAUNCHER_COLLAPSED_SIZE : keepsAvatarSize ? Math.round(height * aspectRatio) : 76;
+    const height = capsule ? 40 : compactOrb ? 48 : collapsed ? AGENT_LAUNCHER_COLLAPSED_SIZE : keepsAvatarSize ? resolveAgentLauncherAvatarHeight(appearance.avatarHeight, aspectRatio, viewport, inCanvasEditor) : 76;
+    const width = capsule ? Math.min(180, 52 + Array.from(capsuleText).length * 14) : compactOrb ? 48 : collapsed ? AGENT_LAUNCHER_COLLAPSED_SIZE : keepsAvatarSize ? Math.round(height * aspectRatio) : 76;
     const { position, dragging, handlers } = useAgentLauncherPosition(onOpen, width, height, inCanvasEditor, minRight);
     const { onClick, onKeyDown, onDoubleClick, ...pointerHandlers } = handlers;
     // 大形象的外框大多是透明像素：外框不接收指针，只有身体热区可点、可拖，透明处的点击落到下面的页面。
@@ -153,6 +164,8 @@ export const AgentLauncher = memo(function AgentLauncher({
                     "canvas-agent-launcher fixed z-[var(--z-panel-floating)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/35",
                     dragging && "is-dragging",
                     collapsed && "is-collapsed",
+                    capsule && "is-capsule",
+                    compactOrb && "is-orb",
                     avatarLoading && "is-loading",
                     reducedMotion && "is-reduced-motion",
                     bodyHitOnly && "is-body-hit",
@@ -174,7 +187,12 @@ export const AgentLauncher = memo(function AgentLauncher({
             >
                 {hitInset ? <span className="canvas-agent-launcher-hit" aria-hidden="true" style={{ inset: `${hitInset.top * 100}% ${hitInset.side * 100}% ${hitInset.bottom * 100}%` }} {...pointerHandlers} /> : null}
                 {showBuiltinPoster ? <img src="/doll/mascot-idle.webp" className="canvas-agent-launcher-poster" alt="" aria-hidden="true" draggable={false} width={320} height={288} /> : null}
-                {collapsed ? (
+                {capsule ? (
+                    <>
+                        <AgentOrb state={agentOrbStateForAvatar(avatarState)} size={22} />
+                        <span className="canvas-agent-launcher-capsule-text">{capsuleText}</span>
+                    </>
+                ) : collapsed || compactOrb ? (
                     <AgentOrb state={agentOrbStateForAvatar(avatarState)} size={30} color="#7164f6" />
                 ) : !appearanceResolved ? null : live ? (
                     <Live2DAvatar
@@ -208,7 +226,7 @@ export const AgentLauncher = memo(function AgentLauncher({
                         <span aria-hidden="true">正在唤醒…</span>
                         <span className="sr-only">正在加载助手形象</span>
                     </span>
-                ) : appearance.launcherLabel && !collapsed ? (
+                ) : !themeCapsule && appearance.launcherLabel && !collapsed ? (
                     <span className="canvas-agent-launcher-label">{appearance.launcherLabel}</span>
                 ) : null}
                 {live && live2DError ? (

@@ -203,7 +203,7 @@ export function ImageParameterFields({
                                         aria-pressed={countVal === val}
                                         onClick={() => onChange("count", String(val))}
                                         className={cn(
-                                            "flex h-8 items-center justify-center rounded-full text-xs font-medium transition-colors duration-150 select-none",
+                                            "media-option-card flex h-8 items-center justify-center rounded-full text-xs font-medium transition-colors duration-150 select-none",
                                             countVal === val ? "bg-primary/20 text-primary border border-primary/40 font-semibold" : "bg-muted/40 hover:bg-muted/70 text-muted-foreground hover:text-foreground border border-border/40",
                                         )}
                                     >

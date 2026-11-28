@@ -446,6 +446,7 @@ func (s *Service) readAppearance() (*model.SystemSetting, AppearanceSetting, err
 	if strings.TrimSpace(setting.ValueJSON) == "" || json.Unmarshal([]byte(setting.ValueJSON), &value) != nil {
 		return nil, AppearanceSetting{}, errors.New("外观配置格式无效")
 	}
+	upgradeStoredLongyingInk(value.SkinThemes, setting.ValueJSON)
 	storedSchemaVersion := value.SchemaVersion
 	value.SchemaVersion = appearanceSchemaVersion
 	value.BrandName = strings.TrimSpace(value.BrandName)

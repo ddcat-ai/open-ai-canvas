@@ -236,74 +236,6 @@
         0 0 0 1px rgba(236, 229, 214, 0.06);
 }
 
-/* ---------- 管理后台：上游让后台忽略皮肤，这里按同一套纸墨色重设后台色板 ---------- */
-:root[data-skin="longying-ink"] :is([data-admin-root], body.admin-overlays, .admin-drawer, .admin-secondary-drawer, .admin-modal-root, .admin-channel-modal-root, .admin-mobile-navigation-menu) {
-    --admin-canvas: #f3eee4;
-    --admin-sidebar: #eee8dc;
-    --admin-surface: #fbf8f2;
-    --admin-surface-2: #f2ece1;
-    --admin-surface-3: #e8e0d1;
-    --admin-text: #1f1c18;
-    --admin-text-secondary: #4e4840;
-    --admin-text-muted: #6b645a;
-    --admin-text-placeholder: #a39b8d;
-    --admin-border: rgba(62, 46, 24, 0.12);
-    --admin-border-strong: rgba(62, 46, 24, 0.19);
-    --admin-divider: rgba(62, 46, 24, 0.09);
-    --admin-row-border: rgba(62, 46, 24, 0.07);
-    --admin-row-hover: #f1ebe0;
-    --admin-nav-hover: rgba(62, 46, 24, 0.06);
-    --admin-nav-active: #e6ddcc;
-    --admin-accent: #1f1c18;
-    --admin-accent-fg: #f7f3ea;
-    --admin-focus: rgba(31, 28, 24, 0.3);
-    --admin-status-success: #3b7651;
-    --admin-status-warning: #a8682a;
-    --admin-status-error: #b0392b;
-    --admin-status-info: #2d5b6d;
-    --admin-switch-on: #2f5d58;
-    --admin-chart-primary: #1f1c18;
-    --admin-chart-secondary: #2f5d58;
-    --admin-chart-warning: #a8682a;
-}
-:root[data-skin="longying-ink"].dark :is([data-admin-root], .admin-drawer, .admin-secondary-drawer, .admin-modal-root, .admin-channel-modal-root, .admin-mobile-navigation-menu),
-:root[data-skin="longying-ink"].dark body.admin-overlays {
-    --admin-canvas: #12110e;
-    --admin-sidebar: #12110e;
-    --admin-surface: #1b1915;
-    --admin-surface-2: #24211c;
-    --admin-surface-3: #2d2922;
-    --admin-text: #ece5d6;
-    --admin-text-secondary: #c6beaf;
-    --admin-text-muted: #948c7e;
-    --admin-text-placeholder: #6f685c;
-    --admin-border: rgba(236, 229, 214, 0.1);
-    --admin-border-strong: rgba(236, 229, 214, 0.16);
-    --admin-divider: rgba(236, 229, 214, 0.08);
-    --admin-row-border: rgba(236, 229, 214, 0.06);
-    --admin-row-hover: #1f1c18;
-    --admin-nav-hover: rgba(236, 229, 214, 0.05);
-    --admin-nav-active: #29251f;
-    --admin-accent: #ece5d6;
-    --admin-accent-fg: #16140f;
-    --admin-focus: rgba(236, 229, 214, 0.28);
-    --admin-status-success: #7fbf8e;
-    --admin-status-warning: #e0a85a;
-    --admin-status-error: #e2735c;
-    --admin-status-info: #82b2c4;
-    --admin-switch-on: #6fa59c;
-    --admin-chart-primary: #ece5d6;
-    --admin-chart-secondary: #6fa59c;
-    --admin-chart-warning: #e0a85a;
-}
-:root[data-skin="longying-ink"] [data-admin-root] {
-    background-image: var(--ink-grain);
-}
-:root[data-skin="longying-ink"] [data-admin-root] :is(h1, h2) {
-    font-family: var(--ink-heading-font);
-    letter-spacing: 0.02em;
-}
-
 /* ---------- 宣纸：只铺在大面积底色上，卡片和输入区保持干净 ---------- */
 :root[data-skin="longying-ink"] .app-workspace-sidebar,
 :root[data-skin="longying-ink"] .app-workspace-stage,
@@ -322,8 +254,8 @@
     letter-spacing: 0.02em;
 }
 
-/* 区块标题前一方小朱印 */
-:root[data-skin="longying-ink"] .app-user-workspace :is(#inspiration-hall-title, .app-page-header-title)::before {
+/* 区块标题前一方小朱印（素材库页头自有 .assets-header-title-row，一并纳入） */
+:root[data-skin="longying-ink"] .app-user-workspace :is(#inspiration-hall-title, .app-page-header-title, .assets-header-title-row > h1)::before {
     content: "";
     display: inline-block;
     width: 0.42em;

@@ -7,13 +7,24 @@ import { InkCreditMark, InkNotFoundHills, InkSignalArt } from "./marks";
 import { LONGYING_INK_SKIN, LONGYING_INK_SKIN_ID } from "./skin";
 
 import "./theme.css";
+import "./tokens.css";
+import "./type.css";
+import "./shell.css";
+import "./create.css";
+import "./library.css";
+import "./canvas.css";
+import "./drama.css";
+import "./agent.css";
+import "./overlays.css";
+import "./media.css";
 
-/** 龙影水墨：宣纸焦墨 · 朱砂点睛 · 黛青辅色。样式全部在 theme.css，挂在 html[data-skin="longying-ink"] 下。 */
+/** 龙影水墨：宣纸焦墨 · 朱砂点睛 · 黛青辅色。主题样式挂在 html[data-skin="longying-ink"] 下。 */
 export const longyingInkTheme: ThemePack = {
     id: LONGYING_INK_SKIN_ID,
     name: "龙影水墨",
     skin: LONGYING_INK_SKIN,
     agentOrb: InkOrb,
+    launcher: { defaultForm: "capsule" },
     signalArt: InkSignalArt,
     creditMark: InkCreditMark,
     notFound: { backdrop: InkNotFoundHills },

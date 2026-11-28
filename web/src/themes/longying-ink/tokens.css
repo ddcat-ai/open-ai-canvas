@@ -1,0 +1,167 @@
+/* 纸墨表面与浮层令牌 */
+:root[data-skin="longying-ink"] {
+    --line-sole: #91897c;
+    --placeholder: #686158;
+    --status-success-text: #376d4b;
+    --status-warning-text: #8a5623;
+    --scrim-soft: rgb(18 17 14 / 0.34);
+    --scrim-strong: rgb(18 17 14 / 0.62);
+    --unified-input-placeholder: var(--placeholder);
+}
+
+:root[data-skin="longying-ink"].dark {
+    --line-sole: #6d6860;
+    --placeholder: #a59d8e;
+    --status-success-text: #7fbf8e;
+    --status-warning-text: #e0a85a;
+}
+:root[data-skin="longying-ink"] .auth-panel {
+    --unified-input-placeholder: var(--placeholder);
+}
+:root[data-skin="longying-ink"] {
+    --ly-desk: #ece6da;
+    --ly-stage: #f5f1e8;
+    --ly-sheet: var(--surface, #fbf8f2);
+    --ly-raised: #fffdf8;
+    --ly-raised-nested: #fffdf8;
+    --ly-darkroom: #0e0d0b;
+    --ly-hair: rgb(62 46 24 / 0.1);
+    --ly-hair-strong: rgb(62 46 24 / 0.18);
+    --ly-divider: rgb(62 46 24 / 0.08);
+    --ly-wash: rgb(46 36 22 / 0.05);
+    --ly-wash-press: rgb(46 36 22 / 0.09);
+    --ly-ink: var(--foreground, #1f1c18);
+    --ly-ink-muted: var(--muted-foreground, #686158);
+    --ly-seal: #b0402d;
+    --ly-danger: var(--destructive, #8f2a2a);
+    --ly-on-danger: var(--destructive-foreground, #fbf8f2);
+    --ly-focus: 0 0 0 2px var(--ly-stage), 0 0 0 4px rgb(31 28 24 / 0.4);
+    --ly-gloss: 0 0 #0000;
+    --ly-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --ly-r-media: 8px;
+
+    --ly-shadow-sheet: 0 0 0 1px var(--ly-hair), 0 1px 2px rgb(62 46 24 / 0.05);
+    --ly-shadow-stage: 0 0 0 1px var(--ly-hair), 0 1px 3px rgb(62 46 24 / 0.05);
+    --ly-shadow-float: 0 0 0 1px var(--ly-hair), 0 2px 4px rgb(62 46 24 / 0.04), 0 12px 32px -12px rgb(62 46 24 / 0.18);
+    --ly-shadow-lift: 0 0 0 1px var(--ly-hair-strong), 0 4px 8px rgb(62 46 24 / 0.05), 0 20px 48px -16px rgb(62 46 24 / 0.24);
+    --ly-ov-l0-tooltip-bg: #1f1c18;
+    --ly-ov-l0-tooltip-fg: #faf6ee;
+    --ly-ov-l0-tooltip-muted: #b5ac9d;
+    --ly-ov-l0-tooltip-border: transparent;
+    --ly-ov-l0-bg: var(--ly-raised);
+    --ly-ov-l0-border: var(--ly-hair);
+    --ly-ov-l0-radius: 8px;
+    --ly-ov-l0-tooltip-radius: 6px;
+    --ly-ov-l0-shadow: 0 1px 2px rgb(62 46 24 / 0.08), 0 4px 12px rgb(62 46 24 / 0.08);
+    --ly-ov-l1-bg: var(--ly-raised);
+    --ly-ov-l1-bg-nested: var(--ly-raised-nested);
+    --ly-ov-l1-border: var(--ly-hair);
+    --ly-ov-l1-radius: 12px;
+    --ly-ov-l1-option-radius: 8px;
+    --ly-ov-l1-shadow: 0 1px 3px rgb(62 46 24 / 0.1), 0 8px 24px rgb(62 46 24 / 0.12);
+    --ly-ov-l2-bg: var(--ly-sheet);
+    --ly-ov-l2-border: var(--ly-hair);
+    --ly-ov-l2-radius: 12px;
+    --ly-ov-l2-shadow: -1px 0 3px rgb(62 46 24 / 0.08), -8px 0 32px rgb(62 46 24 / 0.14);
+    --ly-ov-l2-scrim: rgb(31 28 24 / 0.18);
+    --ly-ov-l2-shadow-start: 1px 0 3px rgb(62 46 24 / 0.08), 8px 0 32px rgb(62 46 24 / 0.14);
+    --ly-ov-l3-bg: var(--ly-raised);
+    --ly-ov-l3-border: var(--ly-hair);
+    --ly-ov-l3-radius: 16px;
+    --ly-ov-l3-confirm-radius: 12px;
+    --ly-ov-l3-shadow: 0 2px 6px rgb(62 46 24 / 0.1), 0 20px 56px rgb(62 46 24 / 0.18);
+    --ly-ov-scrim: rgb(31 28 24 / 0.32);
+}
+
+:root[data-skin="longying-ink"].dark {
+    --ly-desk: #0e0d0b;
+    --ly-stage: #12110e;
+    --ly-sheet: var(--surface, #1b1915);
+    --ly-raised: #23201b;
+    --ly-raised-nested: #2b2722;
+    --ly-hair: rgb(236 229 214 / 0.08);
+    --ly-hair-strong: rgb(236 229 214 / 0.14);
+    --ly-divider: rgb(236 229 214 / 0.09);
+    --ly-wash: rgb(236 229 214 / 0.05);
+    --ly-wash-press: rgb(236 229 214 / 0.09);
+    --ly-ink: var(--foreground, #ece5d6);
+    --ly-ink-muted: var(--muted-foreground, #a59d8e);
+    --ly-seal: #e2765b;
+    --ly-danger: var(--destructive, #ff928d);
+    --ly-on-danger: var(--destructive-foreground, #1f1c18);
+    --ly-focus: 0 0 0 2px var(--ly-stage), 0 0 0 4px rgb(236 229 214 / 0.45);
+    --ly-gloss: inset 0 1px 0 rgb(236 229 214 / 0.045);
+
+    --ly-shadow-sheet: 0 0 0 1px var(--ly-hair), inset 0 1px 0 rgb(236 229 214 / 0.045);
+    --ly-shadow-stage: 0 0 0 1px var(--ly-hair);
+    --ly-shadow-float: 0 0 0 1px var(--ly-hair), inset 0 1px 0 rgb(236 229 214 / 0.045), 0 16px 40px -16px rgb(0 0 0 / 0.7);
+    --ly-shadow-lift: 0 0 0 1px var(--ly-hair-strong), inset 0 1px 0 rgb(236 229 214 / 0.045), 0 24px 56px -18px rgb(0 0 0 / 0.8);
+    --ly-ov-l0-tooltip-bg: #2b2722;
+    --ly-ov-l0-tooltip-fg: #ece5d6;
+    --ly-ov-l0-tooltip-border: rgb(236 229 214 / 0.14);
+    --ly-ov-l0-shadow: 0 1px 2px rgb(0 0 0 / 0.32), 0 4px 12px rgb(0 0 0 / 0.24);
+    --ly-ov-l1-shadow: 0 1px 3px rgb(0 0 0 / 0.4), 0 10px 28px rgb(0 0 0 / 0.34);
+    --ly-ov-l1-border: var(--ly-hair-strong);
+    --ly-ov-l2-shadow: -1px 0 3px rgb(0 0 0 / 0.4), -8px 0 36px rgb(0 0 0 / 0.42);
+    --ly-ov-l2-shadow-start: 1px 0 3px rgb(0 0 0 / 0.4), 8px 0 36px rgb(0 0 0 / 0.42);
+    --ly-ov-l2-scrim: rgb(0 0 0 / 0.32);
+    --ly-ov-l3-shadow: 0 2px 6px rgb(0 0 0 / 0.45), 0 24px 64px rgb(0 0 0 / 0.54);
+    --ly-ov-scrim: rgb(0 0 0 / 0.56);
+}
+:root[data-skin="longying-ink"] {
+    --ly-r-badge: 4px;
+    --ly-r-chip: 6px;
+    --ly-r-control: 8px;
+    --ly-r-float: 12px;
+    --ly-r-card: 12px;
+    --ly-r-modal: 16px;
+    --ly-hit-sm: 32px;
+    --ly-hit-md: 36px;
+    --ly-hit-touch: 44px;
+    --ly-island-h: 40px;
+    --ly-island-pad: 4px;
+    --ly-island-inset-x: 12px;
+    --ly-island-top: 12px;
+    --ly-island-bottom: 16px;
+    --ly-island-bg: color-mix(in srgb, var(--ly-sheet) 92%, transparent);
+    --ly-island-blur: blur(12px) saturate(1.05);
+    --ly-island-divider-h: 16px;
+    --ly-select-stroke: rgba(31, 28, 24, 0.55);
+    --ly-select-fill: rgba(31, 28, 24, 0.04);
+    --ly-select-halo: rgba(31, 28, 24, 0.08);
+    --ly-seal-mark: 8px;
+    --ly-seal-mark-sm: 6px;
+    --ly-paint-dot: 6px;
+    --ly-seal-rule: 2px;
+    --ly-dur-hover: 120ms;
+    --ly-dur-l1-in: 140ms;
+    --ly-dur-l1-out: 100ms;
+    --ly-dur-l2-in: 220ms;
+    --ly-dur-l2-out: 180ms;
+    --ly-dur-l3-in: 200ms;
+    --ly-dur-l3-out: 160ms;
+    --ly-dur-step: 240ms;
+    --ly-ease-out: cubic-bezier(0.4, 0, 1, 1);
+}
+
+:root[data-skin="longying-ink"].dark {
+    --ly-select-stroke: rgba(236, 229, 214, 0.55);
+    --ly-select-fill: rgba(236, 229, 214, 0.06);
+    --ly-select-halo: rgba(236, 229, 214, 0.1);
+}
+
+@media (pointer: coarse) {
+    :root[data-skin="longying-ink"] {
+        --ly-hit-sm: 44px;
+        --ly-island-h: 52px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root[data-skin="longying-ink"] {
+        --ly-dur-l1-in: 80ms;
+        --ly-dur-l2-in: 80ms;
+        --ly-dur-l3-in: 80ms;
+        --ly-dur-step: 0ms;
+    }
+}

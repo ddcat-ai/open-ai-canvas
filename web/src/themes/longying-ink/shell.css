@@ -1,0 +1,123 @@
+/* 导航与命令面板 */
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-nav-link.is-active .app-workspace-nav-icon svg {
+    stroke-width: 2.3;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-nav-link.is-active {
+    font-weight: 600;
+}
+@media (forced-colors: active) {
+    :root[data-skin="longying-ink"] .app-workspace-nav-link.is-active {
+        outline: 2px solid Highlight;
+        outline-offset: -2px;
+    }
+}
+:root[data-skin="longying-ink"] .workspace-command-palette {
+    background: var(--ly-ov-scrim);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+@media (max-width: 639px) {
+    :root[data-skin="longying-ink"] .workspace-command-palette {
+        padding: 0;
+    }
+}
+:root[data-skin="longying-ink"] .app-user-workspace :is(.app-workspace-sidebar, .app-workspace-sidebar-nav) {
+    background-color: var(--ly-desk);
+}
+@media (min-width: 1024px) {
+    :root[data-skin="longying-ink"] .app-user-workspace .app-workspace-shell.is-spatial {
+        --workspace-shell-gutter: 8px;
+        --workspace-page: var(--ly-desk);
+        background-color: var(--ly-desk);
+    }
+    :root[data-skin="longying-ink"] .app-user-workspace .app-workspace-shell.is-spatial .app-workspace-sidebar {
+        border-right-color: transparent;
+    }
+    :root[data-skin="longying-ink"] .app-user-workspace .app-workspace-shell.is-spatial .app-workspace-stage {
+        --workspace-page: var(--ly-stage);
+        border-radius: 12px;
+        background-color: var(--ly-stage);
+        box-shadow: var(--ly-shadow-stage);
+    }
+    :root[data-skin="longying-ink"] .app-user-workspace .app-workspace-shell.is-spatial .app-workspace-topbar {
+        background: transparent;
+        border-bottom-color: var(--ly-divider);
+    }
+}
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-topbar-wallet {
+    border-color: var(--ly-hair);
+    background: var(--ly-sheet);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-topbar-topup {
+    position: relative;
+    padding-inline: 12px;
+    background: transparent;
+    color: var(--ly-ink);
+    font-weight: 500;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-topbar-topup::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 1px;
+    height: 14px;
+    background: var(--ly-hair-strong);
+    translate: 0 -50%;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-topbar-topup:hover {
+    background: var(--ly-wash);
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"].dark .app-user-workspace .app-workspace-topbar-credit-pill {
+    background: transparent;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-sidebar.is-mobile-expanded {
+    --workspace-page: var(--ly-sheet);
+    --workspace-navigation: var(--ly-sheet);
+    --workspace-sidebar: var(--ly-sheet);
+    --workspace-content: var(--ly-sheet);
+    --user-page-bg: var(--ly-sheet);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-sidebar.is-mobile-expanded {
+    background-color: var(--ly-sheet);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .app-workspace-sidebar.is-mobile-expanded {
+    box-shadow:
+        1px 0 0 var(--ly-hair),
+        8px 0 32px rgb(31 28 24 / 0.14);
+}
+:root[data-skin="longying-ink"] .app-workspace-sidebar-scrim {
+    background: var(--ly-ov-l2-scrim);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+:root[data-skin="longying-ink"] :is(.ant-btn, .product-icon-button):not(:disabled):active {
+    scale: 0.98;
+}
+:root[data-skin="longying-ink"] {
+    --product-icon-button-transition: color 140ms var(--ly-ease), background-color 140ms var(--ly-ease), border-color 140ms var(--ly-ease), box-shadow 140ms var(--ly-ease), scale 140ms var(--ly-ease);
+}
+:root[data-skin="longying-ink"] .product-icon-button {
+    transition:
+        background var(--user-motion),
+        color var(--user-motion),
+        scale var(--user-motion);
+}
+@media (prefers-reduced-motion: reduce) {
+    :root[data-skin="longying-ink"] {
+        --product-icon-button-transition: none;
+    }
+    :root[data-skin="longying-ink"] .product-icon-button {
+        transition: none;
+    }
+    :root[data-skin="longying-ink"] :is(.ant-btn, .product-icon-button):not(:disabled):active {
+        scale: none;
+    }
+    :root[data-skin="longying-ink"] :is(.assets-cover-more, .inspiration-card-actions, .inspiration-card-action, .assets-filter-item, .assets-filter-count) {
+        transition: none;
+    }
+    :root[data-skin="longying-ink"] .canvas-collection-preview::after {
+        transition: none;
+    }
+}

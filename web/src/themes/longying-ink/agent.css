@@ -1,0 +1,85 @@
+/* 助手入口 */
+:root[data-skin="longying-ink"] .canvas-agent-launcher:is(.is-capsule, .is-orb, .is-collapsed) {
+    box-shadow: none;
+}
+:root[data-skin="longying-ink"] .canvas-agent-launcher:is(.is-capsule, .is-orb, .is-collapsed)::before {
+    border: 0;
+    background: var(--ly-sheet);
+    box-shadow: var(--ly-shadow-float);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    transition:
+        background-color 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
+        box-shadow 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+:root[data-skin="longying-ink"] .canvas-agent-launcher:is(.is-capsule, .is-orb, .is-collapsed):hover::before {
+    background: var(--ly-raised);
+    box-shadow: var(--ly-shadow-lift);
+}
+:root[data-skin="longying-ink"] .canvas-agent-launcher-capsule-text {
+    color: var(--ly-ink);
+    letter-spacing: 0.02em;
+}
+:root[data-skin="longying-ink"] .canvas-agent-launcher.is-collapsed::before {
+    inset: 0;
+}
+:root[data-skin="longying-ink"] .canvas-agent-launcher:is(.is-capsule, .is-orb, .is-collapsed) .canvas-agent-launcher-status.is-pending {
+    border-color: var(--ly-sheet);
+    background: var(--ly-seal);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ly-seal) 18%, transparent);
+}
+:root[data-skin="longying-ink"] .canvas-agent-launcher-badge {
+    border-color: var(--ly-hair);
+    background: var(--ly-raised);
+    box-shadow: var(--ly-ov-l0-shadow);
+    color: var(--ly-ink);
+}
+@media (prefers-reduced-motion: reduce) {
+    :root[data-skin="longying-ink"] .canvas-agent-launcher:is(.is-capsule, .is-orb, .is-collapsed)::before {
+        transition: none;
+    }
+}
+:root[data-skin="longying-ink"] .canvas-agent-launcher:is(.is-capsule, .is-orb, .is-collapsed):has(.ink-orb[data-state="work"])::before {
+    box-shadow:
+        var(--ly-shadow-float),
+        0 0 0 4px color-mix(in srgb, var(--ly-ink) 6%, transparent),
+        0 0 18px 2px color-mix(in srgb, var(--ly-ink) 7%, transparent);
+}
+@media (max-width: 639px) {
+    :root[data-skin="longying-ink"] :is(.canvas-agent-launcher.is-collapsed, .canvas-agent-launcher-toggle) {
+        translate: 0 calc(-1 * env(safe-area-inset-bottom, 0px));
+    }
+    :root[data-skin="longying-ink"] body:has(.drama-queue) :is(.canvas-agent-launcher.is-collapsed, .canvas-agent-launcher-toggle) {
+        translate: 0 calc(-1 * (env(safe-area-inset-bottom, 0px) + 54px));
+    }
+}
+:root[data-skin="longying-ink"] .canvas-agent-launcher.is-capsule {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    padding-inline: 7px 14px;
+}
+:root[data-skin="longying-ink"] .canvas-agent-launcher:is(.is-capsule, .is-orb)::before {
+    inset: 0;
+}
+:root[data-skin="longying-ink"] .canvas-agent-launcher.is-capsule > .ink-orb {
+    position: relative;
+    inset: auto;
+    transform: none;
+    flex-shrink: 0;
+}
+:root[data-skin="longying-ink"] .canvas-agent-launcher-capsule-text {
+    position: relative;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+:root[data-skin="longying-ink"] .canvas-agent-launcher:is(.is-capsule, .is-orb) .canvas-agent-launcher-status {
+    top: 1px;
+    right: 1px;
+    width: 8px;
+    height: 8px;
+}

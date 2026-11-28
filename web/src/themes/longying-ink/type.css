@@ -1,0 +1,5 @@
+/* 编号与计数 */
+
+:root[data-skin="longying-ink"] :is(.app-workspace-sidebar-storage-used, .task-center-row-time, .drama-ep-num, .drama-sg-cover-dur, .inspiration-mode-count) {
+    font-variant-numeric: tabular-nums;
+}

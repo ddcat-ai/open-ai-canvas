@@ -242,6 +242,7 @@ export const CanvasNode = React.memo(function CanvasNode({
         <div
             ref={nodeRef}
             data-node-id={data.id}
+            data-node-kind={data.metadata?.workflowKind === "character" ? "character" : data.type}
             data-popover-anchor-container
             data-node-lod={effectiveRenderLOD}
             data-agent-enter={entranceDelay === null ? undefined : "true"}
@@ -770,6 +771,7 @@ function NodeExternalHeader({
 
     return (
         <div
+            data-node-kind={node.metadata?.workflowKind === "character" ? "character" : node.type}
             className="canvas-node-external-header absolute bottom-full left-0 z-[var(--node-z-overlay)] flex h-6 items-center gap-1 overflow-hidden"
             style={
                 {
@@ -788,7 +790,7 @@ function NodeExternalHeader({
             onPointerDown={(event) => event.stopPropagation()}
         >
             <div className="flex min-w-0 items-center gap-1" style={{ maxWidth: maxHeaderWidth }}>
-                <Icon className="size-3 shrink-0" strokeWidth={1.8} />
+                <Icon className="canvas-node-type-icon size-3 shrink-0" strokeWidth={1.8} />
                 {editing ? (
                     <input
                         autoFocus

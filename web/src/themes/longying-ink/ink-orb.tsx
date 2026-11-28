@@ -150,7 +150,7 @@ export function InkOrb({ size = 60, state = "idle", className }: { size?: number
     }, [box, dark, reducedMotion, state]);
 
     return (
-        <span className={cn("ink-orb", className)} style={{ width: size, height: size }} aria-hidden="true">
+        <span className={cn("ink-orb", className)} data-state={state} style={{ width: size, height: size }} aria-hidden="true">
             <canvas ref={canvasRef} style={{ width: box, height: box }} />
         </span>
     );

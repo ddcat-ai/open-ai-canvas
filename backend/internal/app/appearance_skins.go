@@ -1,6 +1,8 @@
 package app
 
 import (
+	"bytes"
+	"crypto/sha256"
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -16,6 +18,8 @@ const maxAppearanceSkinThemes = 16
 
 //go:embed appearance_theme_packs.json
 var appearanceThemePackDefinitions []byte
+
+var quotedAppearanceColor = regexp.MustCompile(`"#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?"`)
 
 var (
 	appearanceSkinIDPattern  = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`)
@@ -214,6 +218,36 @@ func loadAppearanceThemePackSkins() [2]AppearanceSkinTheme {
 		panic(fmt.Errorf("decode bundled appearance theme packs: %w", err))
 	}
 	return [2]AppearanceSkinTheme{definitions.LongyingInk, definitions.YunheXianguan}
+}
+
+// 仅替换与版本 12 内置色板完全一致的 tokens。站点改名和十六进制颜色大小写不影响匹配。
+func upgradeStoredLongyingInk(themes []AppearanceSkinTheme, storedJSON string) {
+	const legacyDigest = "5745f05bb2ffdb6e810934796b8f6f17b34f28f51ad86bb316e8c44794cdaef9"
+	current := &appearanceThemePackSkins[0]
+	i := slices.IndexFunc(themes, func(s AppearanceSkinTheme) bool { return s.ID == current.ID })
+	if i < 0 || themes[i].Tokens == current.Tokens {
+		return
+	}
+	var stored struct {
+		SkinThemes []json.RawMessage `json:"skinThemes"`
+	}
+	if err := json.Unmarshal([]byte(storedJSON), &stored); err != nil || i >= len(stored.SkinThemes) {
+		return
+	}
+	var candidate struct {
+		Tokens map[string]any `json:"tokens"`
+	}
+	if err := json.Unmarshal(stored.SkinThemes[i], &candidate); err != nil {
+		return
+	}
+	encoded, err := json.Marshal(candidate.Tokens)
+	if err != nil {
+		return
+	}
+	normalized := quotedAppearanceColor.ReplaceAllFunc(encoded, bytes.ToLower)
+	if fmt.Sprintf("%x", sha256.Sum256(normalized)) == legacyDigest {
+		themes[i].Tokens = current.Tokens
+	}
 }
 
 // Existing sites can keep their own version of an imported skin and their

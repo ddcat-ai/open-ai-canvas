@@ -1,0 +1,613 @@
+/* 画布节点与工具条 */
+:root[data-skin="longying-ink"] .canvas-gen-state {
+    font-variant-numeric: tabular-nums;
+}
+:root[data-skin="longying-ink"] [data-node-kind] {
+    --ly-node-paint: var(--palette-node-config);
+}
+:root[data-skin="longying-ink"] [data-node-kind="image"] {
+    --ly-node-paint: var(--palette-node-image);
+}
+:root[data-skin="longying-ink"] [data-node-kind="video"] {
+    --ly-node-paint: var(--palette-node-video);
+}
+:root[data-skin="longying-ink"] [data-node-kind="text"] {
+    --ly-node-paint: var(--palette-node-text);
+}
+:root[data-skin="longying-ink"] [data-node-kind="audio"] {
+    --ly-node-paint: var(--palette-node-audio);
+}
+:root[data-skin="longying-ink"] [data-node-kind="script"] {
+    --ly-node-paint: var(--palette-node-script);
+}
+:root[data-skin="longying-ink"] [data-node-kind="drawing"] {
+    --ly-node-paint: var(--palette-node-drawing);
+}
+:root[data-skin="longying-ink"] [data-node-kind="frame"] {
+    --ly-node-paint: var(--palette-node-frame);
+}
+:root[data-skin="longying-ink"] [data-node-kind="character"] {
+    --ly-node-paint: var(--palette-node-character);
+}
+:root[data-skin="longying-ink"] [data-node-kind="skill"] {
+    --ly-node-paint: var(--palette-node-skill);
+}
+:root[data-skin="longying-ink"] .canvas-node-external-header > div:first-child::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    flex: none;
+    margin-inline-end: 2px;
+    border-radius: 50%;
+    background: var(--ly-node-paint);
+}
+:root[data-skin="longying-ink"] .canvas-node-external-header :is(button, span) {
+    font-size: 12px;
+    font-weight: 500;
+}
+:root[data-skin="longying-ink"] .canvas-node-shell:is([data-node-state="selected"], [data-node-state="focus"]) {
+    outline: 1px solid var(--ly-ink);
+    outline-offset: 0;
+}
+:root[data-skin="longying-ink"].dark .canvas-node-shell:is([data-node-state="selected"], [data-node-state="focus"]) {
+    outline: 0;
+}
+:root[data-skin="longying-ink"] .node-element {
+    --node-radius: 12px;
+}
+:root[data-skin="longying-ink"] .node-element:is([data-node-kind="image"], [data-node-kind="video"]) {
+    --node-radius: 8px;
+}
+:root[data-skin="longying-ink"] .app-user-workspace :is(.canvas-bottom-dock, .canvas-view-pill, .canvas-view-help) {
+    border-color: var(--ly-hair);
+    border-radius: var(--ly-r-float);
+    background: var(--ly-island-bg);
+    box-shadow: var(--ly-shadow-float);
+    -webkit-backdrop-filter: var(--ly-island-blur);
+    backdrop-filter: var(--ly-island-blur);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-bottom-dock {
+    --dock-surface: var(--ly-island-bg);
+    --dock-border: var(--ly-hair);
+    --dock-shadow: var(--ly-shadow-float);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-topbar > .canvas-topbar-cluster {
+    --dock-surface: var(--ly-sheet);
+    border-color: var(--ly-hair);
+    border-radius: var(--ly-r-float);
+    box-shadow: var(--ly-shadow-float);
+    -webkit-backdrop-filter: var(--ly-island-blur);
+    backdrop-filter: var(--ly-island-blur);
+}
+:root[data-skin="longying-ink"] .canvas-workspace-rail .canvas-workspace-rail-button > span {
+    color: var(--ly-ink-muted);
+    font-size: 10px;
+    font-weight: 500;
+}
+:root[data-skin="longying-ink"] .previs-desk.is-floating {
+    --overlay-previs-desk: var(--ly-desk);
+    --overlay-previs-radius: 12px;
+    --overlay-previs-glass: color-mix(in srgb, var(--ly-sheet) 90%, transparent);
+    --overlay-previs-blur: blur(12px) saturate(1.05);
+}
+:root[data-skin="longying-ink"] .previs-add-dialog-root {
+    --overlay-previs-dialog-radius: var(--ly-ov-l3-radius);
+    --overlay-previs-dialog-shadow: 0 0 0 1px var(--ly-ov-l3-border), var(--ly-ov-l3-shadow);
+}
+:root[data-skin="longying-ink"] :is(.previs-desk.is-floating > *, .previs-add-dialog-root) {
+    --pd-s0: var(--ly-desk);
+    --pd-s1: color-mix(in srgb, var(--ly-sheet) 90%, transparent);
+    --pd-s2: color-mix(in srgb, var(--ly-ink) 4%, var(--ly-sheet));
+    --pd-s3: color-mix(in srgb, var(--ly-ink) 8%, var(--ly-sheet));
+    --pd-s4: color-mix(in srgb, var(--ly-ink) 12%, var(--ly-sheet));
+    --pd-s5: var(--ly-raised);
+    --pd-b0: var(--ly-hair);
+    --pd-b1: var(--ly-hair-strong);
+    --pd-b2: color-mix(in srgb, var(--ly-ink) 30%, transparent);
+    --pd-t0: var(--ly-ink);
+    --pd-t1: var(--ly-ink-muted);
+    --pd-t2: var(--ly-ink-muted);
+    --pd-text: var(--ly-ink);
+    --pd-t3: color-mix(in srgb, var(--ly-ink-muted) 52%, transparent);
+    --pd-a0: var(--ly-ink);
+    --pd-a1: var(--ly-ink);
+    --pd-a-bg: var(--ly-wash);
+    --pd-a-bd: color-mix(in srgb, var(--ly-ink) 55%, transparent);
+    --pd-a-on: var(--ly-raised);
+    --pd-accent-rgb: 31 28 24;
+    --previs-accent: var(--ly-ink);
+    --pd-a-on-theme: var(--ly-raised);
+    --pd-a-bg-theme: var(--ly-wash);
+    --pd-a-bd-theme: color-mix(in srgb, var(--ly-ink) 55%, transparent);
+    --pd-shadow-raised: var(--ly-shadow-sheet);
+    --pd-shadow-floating: var(--ly-shadow-float);
+    --pv-raised: var(--ly-raised);
+    --pv-fill: color-mix(in srgb, var(--ly-ink) 4%, var(--ly-sheet));
+    --pv-fill-strong: color-mix(in srgb, var(--ly-ink) 8%, var(--ly-sheet));
+    --pv-wash: var(--ly-wash);
+    --pv-glass: color-mix(in srgb, var(--ly-sheet) 90%, transparent);
+    --pv-ink: var(--ly-ink);
+    --pv-ink-muted: var(--ly-ink-muted);
+    --pv-ink-faint: color-mix(in srgb, var(--ly-ink-muted) 78%, transparent);
+    --pv-on-ink: var(--ly-raised);
+    --pv-accent: var(--ly-ink);
+    --pv-accent-hover: color-mix(in srgb, var(--ly-ink) 86%, var(--ly-raised));
+    --pv-line: var(--ly-hair);
+    --pv-line-strong: var(--ly-hair-strong);
+    --pv-line-bold: color-mix(in srgb, var(--ly-ink) 30%, transparent);
+}
+:root[data-skin="longying-ink"].dark :is(.previs-desk.is-floating > *, .previs-add-dialog-root) {
+    --pd-accent-rgb: 236 229 214;
+}
+:root[data-skin="longying-ink"] .previs-desk.is-floating > * {
+    color: var(--pd-t0);
+}
+:root[data-skin="longying-ink"] .previs-add-dialog-root {
+    --ad-bg: var(--ly-raised);
+    --ad-surface: color-mix(in srgb, var(--ly-ink) 4%, var(--ly-raised));
+    --ad-surface-2: color-mix(in srgb, var(--ly-ink) 8%, var(--ly-raised));
+    --ad-line: var(--ly-hair);
+    --ad-line-strong: var(--ly-hair-strong);
+    --ad-text: var(--ly-ink);
+    --ad-muted: var(--ly-ink-muted);
+    --ad-faint: color-mix(in srgb, var(--ly-ink-muted) 78%, transparent);
+    --ad-accent: var(--ly-ink);
+    --ad-accent-bg: var(--ly-wash);
+}
+:root[data-skin="longying-ink"] .canvas-image-preset-menu {
+    max-height: min(460px, calc(100dvh - 24px));
+    overflow-y: auto;
+    border-radius: var(--ly-ov-l1-radius);
+}
+:root[data-skin="longying-ink"] .canvas-workspace-corner {
+    --canvas-workspace-material: var(--ly-island-bg);
+}
+:root[data-skin="longying-ink"] :is(.canvas-workspace-corner > .canvas-topbar-project-cluster, .canvas-workspace-shell) {
+    -webkit-backdrop-filter: var(--ly-island-blur);
+    backdrop-filter: var(--ly-island-blur);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-bottom-dock {
+    --dock-item-radius: var(--ly-r-control);
+    --canvas-main-tool-size: var(--ly-hit-sm);
+    height: var(--ly-island-h);
+    gap: 2px;
+    padding: calc(var(--ly-island-pad) - 1px);
+    border-radius: var(--ly-r-float);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-bottom-dock :is(.aceternity-dock-command, .aceternity-dock-switch-option, .aceternity-dock-switch-thumb) {
+    border-radius: var(--ly-r-control);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-bottom-dock svg {
+    stroke-width: 1.75;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-bottom-dock .aceternity-dock-separator {
+    height: var(--ly-island-divider-h);
+    margin-inline: 4px;
+    background: var(--ly-divider);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-bottom-dock .aceternity-dock-switch-thumb {
+    background: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-bottom-dock .aceternity-dock-switch-option[aria-checked="true"],
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-bottom-dock .aceternity-dock-command.is-active {
+    color: var(--ly-raised);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-bottom-dock .aceternity-dock-command.is-active {
+    background: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-bottom-dock .aceternity-dock-command:is(:hover:not(:disabled):not(.is-active), [aria-expanded="true"]) {
+    background: var(--ly-wash);
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-bottom-dock .aceternity-dock-command:active:not(:disabled):not(.is-active) {
+    background: var(--ly-wash-press);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-bottom-dock .aceternity-dock-command:disabled {
+    opacity: 0.38;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-bottom-dock :is(.aceternity-dock-command, .aceternity-dock-switch-option):focus-visible {
+    outline: none;
+    box-shadow: var(--ly-focus);
+}
+@media (max-width: 640px) and (pointer: coarse) {
+    :root[data-skin="longying-ink"] .app-user-workspace .canvas-main-toolbar {
+        inset-inline: 12px;
+    }
+    :root[data-skin="longying-ink"] .app-user-workspace .canvas-main-toolbar > .canvas-bottom-dock {
+        left: 0;
+        max-width: calc(100vw - 24px);
+        gap: 1px;
+        padding: calc(var(--ly-island-pad) - 1px) 2px;
+    }
+    :root[data-skin="longying-ink"] .app-user-workspace .canvas-main-toolbar > .canvas-bottom-dock .aceternity-dock-switch {
+        gap: 1px;
+    }
+    :root[data-skin="longying-ink"] .app-user-workspace .canvas-main-toolbar > .canvas-bottom-dock .aceternity-dock-separator {
+        margin-inline: 2px;
+    }
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-zoom-controls {
+    gap: 0;
+}
+:root[data-skin="longying-ink"] .app-user-workspace :is(.canvas-view-pill, .canvas-view-help) {
+    height: var(--ly-island-h);
+    padding: calc(var(--ly-island-pad) - 1px);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-view-pill > button {
+    width: var(--ly-hit-sm);
+    height: var(--ly-hit-sm);
+    border-radius: var(--ly-r-control);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-view-pill > button:hover:not(:disabled) {
+    background: var(--ly-wash);
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-view-pill > button:active:not(:disabled) {
+    background: var(--ly-wash-press);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-view-pill > button[aria-pressed="true"] {
+    background: var(--ly-ink);
+    color: var(--ly-raised);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-view-pill > .canvas-view-scale {
+    width: auto;
+    min-width: 48px;
+    font-family: var(--font-data, inherit);
+    font-size: 12px;
+    font-weight: 500;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-zoom-controls > .canvas-view-pill:has(+ .canvas-view-help) {
+    border-right-width: 0;
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-zoom-controls > .canvas-view-pill + .canvas-view-help {
+    width: calc(var(--ly-hit-sm) + var(--ly-island-pad));
+    padding-inline-start: 0;
+    border-left: 1px solid var(--ly-divider);
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-view-help:hover {
+    background: var(--ly-island-bg);
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-zoom-controls :is(button, input):focus-visible {
+    outline: none;
+    box-shadow: var(--ly-focus);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-topbar-cluster {
+    --canvas-topbar-menu-size: var(--ly-hit-sm);
+    --canvas-topbar-menu-radius: var(--ly-r-control);
+    --canvas-topbar-button-size: var(--ly-hit-sm);
+    --canvas-topbar-button-radius: var(--ly-r-control);
+    --canvas-topbar-credit-height: var(--ly-hit-sm);
+    --canvas-topbar-rename-size: 24px;
+    --canvas-topbar-rename-radius: var(--ly-r-chip);
+    min-height: var(--ly-island-h);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-topbar-cluster:not(.canvas-topbar-view-switch) {
+    padding: calc(var(--ly-island-pad) - 1px) 8px;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-topbar-view-option {
+    width: var(--ly-hit-sm);
+    height: var(--ly-hit-sm);
+    border-radius: var(--ly-r-control);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-floating-dock:not(.canvas-bottom-dock) {
+    --canvas-floating-dock-bg: var(--ly-ov-l1-bg);
+    --dock-surface: var(--ly-ov-l1-bg);
+    --dock-item-radius: var(--ly-r-control);
+    max-width: 100%;
+    height: var(--ly-island-h);
+    gap: 2px;
+    padding: calc(var(--ly-island-pad) - 1px);
+    background: var(--ly-ov-l1-bg);
+    box-sizing: border-box;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-floating-dock:not(.canvas-bottom-dock) .aceternity-dock-command {
+    width: var(--ly-hit-sm);
+    height: var(--ly-hit-sm);
+    border-radius: var(--ly-r-control);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-floating-dock:not(.canvas-bottom-dock) .aceternity-dock-command:hover:not(:disabled) {
+    background: var(--ly-wash);
+    color: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-floating-dock:not(.canvas-bottom-dock) .aceternity-dock-command:active:not(:disabled) {
+    background: var(--ly-wash-press);
+}
+:root[data-skin="longying-ink"] .app-user-workspace .canvas-node-toolbar-dock {
+    --dock-surface: var(--ly-ov-l1-bg);
+    --dock-border: var(--ly-ov-l1-border);
+    --dock-shadow: var(--ly-ov-l1-shadow);
+    --dock-item-radius: var(--ly-r-control);
+    height: var(--ly-island-h);
+    padding-inline: var(--ly-island-pad);
+    border-radius: var(--ly-r-float);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+:root[data-skin="longying-ink"] [data-canvas-viewport] {
+    --canvas-selection-stroke: var(--ly-select-stroke);
+    --canvas-selection-fill: var(--ly-select-fill);
+}
+:root[data-skin="longying-ink"] [data-node-id][data-canvas-selection-preview="include"] {
+    outline: calc(1px * var(--canvas-live-inverse-scale)) solid var(--ly-ink);
+    outline-offset: calc(2px * var(--canvas-live-inverse-scale));
+    box-shadow: 0 0 0 calc(3px * var(--canvas-live-inverse-scale)) var(--ly-select-halo);
+}
+:root[data-skin="longying-ink"] [data-node-id][data-canvas-selection-preview="remove"] {
+    outline: calc(1px * var(--canvas-live-inverse-scale)) dashed var(--ly-seal);
+    outline-offset: calc(2px * var(--canvas-live-inverse-scale));
+}
+:root[data-skin="longying-ink"] .app-user-workspace,
+:root[data-skin="longying-ink"] body.app-user-overlays {
+    --canvas-replace-hint-accent: var(--ly-raised);
+    --canvas-replace-hint-label: var(--ly-raised);
+    --canvas-draft-region: var(--ly-ink);
+    --canvas-link: var(--ly-ink);
+}
+:root[data-skin="longying-ink"] .canvas-node-external-header {
+    height: 20px;
+    gap: 6px;
+    margin-bottom: calc(6px * var(--canvas-live-inverse-scale, 1));
+}
+:root[data-skin="longying-ink"] .canvas-node-external-header[data-header-lod="dot"] {
+    display: flex;
+}
+:root[data-skin="longying-ink"] .canvas-node-external-header button {
+    min-height: 24px;
+    margin-block: -2px;
+}
+:root[data-skin="longying-ink"] .canvas-node-tool-button {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+:root[data-skin="longying-ink"] .canvas-video-preview-play {
+    width: var(--ly-hit-sm);
+    height: var(--ly-hit-sm);
+    border-radius: var(--ly-r-control);
+    background: color-mix(in srgb, var(--ly-darkroom) 72%, transparent);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    transition: opacity var(--ly-dur-hover) var(--ly-ease);
+}
+@media (hover: hover) {
+    :root[data-skin="longying-ink"] .node-element:not(:hover, :focus-within) .canvas-video-preview-play {
+        opacity: 0;
+    }
+}
+:root[data-skin="longying-ink"] .app-user-workspace {
+    --canvas-settings-trigger-radius: var(--ly-r-control);
+}
+:root[data-skin="longying-ink"] .canvas-node-composer-camera-tools-trigger {
+    border-radius: var(--ly-r-control);
+}
+:root[data-skin="longying-ink"] .canvas-angle-panel {
+    border-color: var(--ly-ov-l1-border);
+    border-radius: var(--ly-ov-l1-radius);
+    background: var(--ly-ov-l1-bg);
+    box-shadow: var(--ly-ov-l1-shadow);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+:root[data-skin="longying-ink"] .canvas-grid-split-picker,
+:root[data-skin="longying-ink"] .canvas-node-toolbar-menu-style .canvas-node-toolbar-menu-stack {
+    border-color: var(--ly-ov-l1-border);
+    border-radius: var(--ly-ov-l1-radius);
+    background: var(--ly-ov-l1-bg);
+    box-shadow: var(--ly-ov-l1-shadow);
+    scrollbar-gutter: stable;
+}
+:root[data-skin="longying-ink"] .canvas-context-panel {
+    --canvas-context-border: var(--ly-ov-l0-border);
+    --canvas-context-hover: var(--ly-wash);
+    --canvas-context-danger: var(--ly-danger);
+}
+:root[data-skin="longying-ink"] .canvas-context-panel [data-menu-danger-divider] {
+    display: block;
+}
+:root[data-skin="longying-ink"] .canvas-context-panel .canvas-menu-item:focus-visible {
+    box-shadow: var(--ly-focus);
+}
+:root[data-skin="longying-ink"] {
+    --canvas-frame-swatch-blue: var(--palette-node-text);
+    --canvas-frame-swatch-green: var(--palette-node-frame);
+    --canvas-frame-swatch-violet: var(--palette-node-script);
+    --canvas-frame-swatch-amber: var(--palette-node-image);
+    --canvas-frame-swatch-rose: var(--palette-node-video);
+    --canvas-frame-swatch-teal: var(--palette-node-audio);
+    --canvas-frame-swatch-slate: var(--palette-node-config);
+    --canvas-frame-swatch-on: var(--ly-raised);
+}
+:root[data-skin="longying-ink"].dark {
+    --canvas-frame-swatch-on: var(--ly-desk);
+}
+:root[data-skin="longying-ink"] [data-frame-color] {
+    --canvas-frame-tint-blue: var(--canvas-frame-swatch-blue);
+    --canvas-frame-tint-green: var(--canvas-frame-swatch-green);
+    --canvas-frame-tint-violet: var(--canvas-frame-swatch-violet);
+    --canvas-frame-tint-amber: var(--canvas-frame-swatch-amber);
+    --canvas-frame-tint-rose: var(--canvas-frame-swatch-rose);
+    --canvas-frame-tint-teal: var(--canvas-frame-swatch-teal);
+    --canvas-frame-tint-slate: var(--canvas-frame-swatch-slate);
+}
+:root[data-skin="longying-ink"] .canvas-project-sidebar.canvas-drama-sidebar,
+:root[data-skin="longying-ink"] .canvas-project-sidebar.is-collapsed {
+    --canvas-sidebar-surface: var(--ly-ov-l2-bg);
+    border-right-width: 0;
+    box-shadow:
+        var(--ly-gloss),
+        1px 0 0 var(--ly-ov-l2-border),
+        var(--ly-ov-l2-shadow-start);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+:root[data-skin="longying-ink"] .canvas-project-sidebar.canvas-drama-sidebar :is(.canvas-project-sidebar-header, .canvas-project-sidebar-assets) {
+    border-color: var(--ly-divider);
+}
+:root[data-skin="longying-ink"] :has(> .canvas-project-sidebar.is-collapsed) {
+    --ly-sidebar-foreground: var(--foreground);
+}
+:root[data-skin="longying-ink"] .canvas-project-sidebar.is-collapsed {
+    --foreground: var(--ly-ov-l2-bg);
+}
+:root[data-skin="longying-ink"] .canvas-project-sidebar.is-collapsed > * {
+    --foreground: var(--ly-sidebar-foreground);
+}
+:root[data-skin="longying-ink"] :is(.previs-desk.is-floating > *, .previs-add-dialog-root) {
+    --pd-bg: var(--pd-s0);
+    --pd-surface: var(--pd-s1);
+    --pd-surface-2: var(--pd-s2);
+    --pd-surface-3: var(--pd-s3);
+    --pd-line: var(--pd-b0);
+    --pd-line-strong: var(--pd-b1);
+    --pd-muted: var(--pd-t1);
+    --pd-faint: var(--pd-t2);
+    --pd-accent: var(--ly-ink);
+    --pd-accent-2: var(--ly-ink);
+    --pd-green: var(--status-success-text);
+    --pd-orange: var(--status-warning-text);
+    --pd-red: var(--ly-danger);
+    --pv-gloss: var(--ly-gloss);
+    --pv-shadow-xs: 0 0 0 1px var(--ly-hair), 0 1px 2px rgb(62 46 24 / 0.06);
+    --pv-shadow-sm: var(--ly-shadow-sheet);
+    --pv-shadow-active: none;
+    --pv-shadow-label: var(--ly-ov-l0-shadow);
+    --pv-shadow-pop: var(--ly-ov-l1-shadow);
+    --pv-shadow-dock: var(--ly-shadow-float);
+    --pv-focus-ring: 0 0 0 3px var(--ly-wash-press);
+    --pv-key-ring: 0 0 0 1px color-mix(in srgb, var(--ly-ink) 50%, transparent);
+    --pv-label-blur: none;
+    --pv-label-bg: color-mix(in srgb, var(--ly-ink) 82%, transparent);
+    --pv-fill-subtle: var(--pv-fill);
+    --pv-mark: var(--ly-seal);
+    --pv-sketch: var(--palette-node-script);
+    --pv-danger: var(--ly-danger);
+    --pv-danger-line: color-mix(in srgb, var(--ly-danger) 45%, transparent);
+    --pv-warn-bg: color-mix(in srgb, var(--status-warning-text) 10%, transparent);
+    --pv-card-bg: var(--ly-wash);
+    --pv-row-active-bg: var(--ly-wash);
+    --pv-row-active-border: color-mix(in srgb, var(--ly-ink) 30%, transparent);
+    --pv-badge-bg: var(--ly-wash-press);
+    --pv-chip-active: var(--ly-ink);
+    --pv-chip-active-text: var(--ly-raised);
+    --pv-nav-bg: var(--ly-island-bg);
+    --pv-nav-border: var(--ly-hair);
+    --pv-nav-shadow: var(--ly-shadow-float);
+    --pv-nav-fg: var(--ly-ink-muted);
+    --pv-nav-fg-strong: var(--ly-ink);
+    --pv-nav-hover: var(--ly-wash);
+    --pv-nav-divider: var(--ly-divider);
+    --pv-axis-x: color-mix(in srgb, var(--palette-node-video) 55%, transparent);
+    --pv-axis-y: color-mix(in srgb, var(--palette-node-frame) 55%, transparent);
+    --pv-axis-z: color-mix(in srgb, var(--palette-node-text) 55%, transparent);
+    --pv-seq-shot-fill: color-mix(in srgb, var(--ly-ink) 7%, transparent);
+    --pv-seq-shot-line: color-mix(in srgb, var(--ly-ink) 36%, transparent);
+    --pv-seq-shot-ink: var(--ly-ink);
+    --pv-seq-camera-fill: color-mix(in srgb, var(--palette-node-text) 16%, transparent);
+    --pv-seq-camera-line: color-mix(in srgb, var(--palette-node-text) 55%, transparent);
+    --pv-seq-camera-ink: var(--ly-ink);
+    --pv-seq-camera-key: var(--palette-node-text);
+    --pv-seq-move-fill: color-mix(in srgb, var(--palette-node-audio) 16%, transparent);
+    --pv-seq-move-fill-strong: color-mix(in srgb, var(--palette-node-audio) 32%, transparent);
+    --pv-seq-move-line: color-mix(in srgb, var(--palette-node-audio) 55%, transparent);
+    --pv-seq-move-line-strong: var(--palette-node-audio);
+    --pv-seq-move-ink: var(--ly-ink);
+    --pv-thumb-top: color-mix(in srgb, var(--ly-ink) 18%, var(--ly-sheet));
+    --pv-thumb-side: color-mix(in srgb, var(--ly-ink) 40%, var(--ly-sheet));
+    --pv-thumb-shade: color-mix(in srgb, var(--ly-ink) 58%, var(--ly-sheet));
+}
+:root[data-skin="longying-ink"].dark :is(.previs-desk.is-floating > *, .previs-add-dialog-root) {
+    --pv-shadow-xs: 0 0 0 1px var(--ly-hair), inset 0 1px 0 rgb(236 229 214 / 0.045);
+    --pv-thumb-top: color-mix(in srgb, var(--ly-ink) 72%, var(--ly-sheet));
+    --pv-thumb-side: color-mix(in srgb, var(--ly-ink) 50%, var(--ly-sheet));
+    --pv-thumb-shade: color-mix(in srgb, var(--ly-ink) 34%, var(--ly-sheet));
+    --pv-axis-ink: color-mix(in srgb, var(--ly-ink) 20%, #fff);
+    --pv-axis-x: color-mix(in srgb, var(--palette-node-video) 48%, transparent);
+    --pv-axis-y: color-mix(in srgb, var(--palette-node-frame) 48%, transparent);
+    --pv-axis-z: color-mix(in srgb, var(--palette-node-text) 48%, transparent);
+}
+:root[data-skin="longying-ink"] .previs-desk.is-floating .previs-color-row .ant-color-picker-trigger {
+    border-color: var(--pv-line-strong);
+    background: var(--pv-raised);
+}
+:root[data-skin="longying-ink"] .previs-desk.is-floating .previs-color-row .ant-color-picker-trigger:hover {
+    border-color: var(--pv-line-bold);
+}
+:root[data-skin="longying-ink"] .previs-desk.is-floating {
+    --previs-sequencer-surface-raised: color-mix(in srgb, var(--ly-ink) 4%, var(--ly-sheet));
+    --previs-sequencer-border: var(--ly-hair);
+    --previs-sequencer-muted: var(--ly-ink-muted);
+    --previs-sequencer-grid: var(--ly-divider);
+    --previs-dock-surface: var(--ly-island-bg);
+    --previs-dock-fg: var(--ly-ink-muted);
+    --previs-dock-fg-strong: var(--ly-ink);
+    --previs-dock-active-surface: var(--ly-wash-press);
+    --previs-control-hover: var(--ly-wash);
+}
+:root[data-skin="longying-ink"] .previs-add-menu-overlay {
+    --pv-menu-bg: var(--ly-ov-l0-bg);
+    --pv-menu-border: var(--ly-ov-l0-border);
+    --pv-menu-shadow: var(--ly-ov-l0-shadow);
+    --pv-menu-fg: var(--ly-ink);
+    --pv-menu-fg-strong: var(--ly-ink);
+    --pv-menu-hover: var(--ly-wash);
+    --pv-menu-divider: var(--ly-divider);
+    --pv-menu-faint: var(--ly-ink-muted);
+}
+:root[data-skin="longying-ink"] .canvas-collaboration-layer {
+    --collaboration-surface: var(--ly-ov-l0-bg);
+}
+:root[data-skin="longying-ink"] .canvas-collaboration-layer .canvas-collaboration-device--0 {
+    --collaboration-color: var(--ly-ink-muted);
+}
+:root[data-skin="longying-ink"] .canvas-collaboration-layer .canvas-collaboration-cursor-label {
+    border: 1px solid var(--ly-ov-l0-border);
+    box-shadow: var(--ly-ov-l0-shadow);
+    color: color-mix(in srgb, var(--collaboration-color) 70%, var(--ly-ink));
+}
+:root[data-skin="longying-ink"] .canvas-collaboration-layer .canvas-collaboration-cursor > svg {
+    stroke: var(--ly-raised);
+}
+:root[data-skin="longying-ink"] .canvas-collaboration-layer .canvas-collaboration-members > summary {
+    height: var(--ly-island-h);
+    border: 1px solid var(--ly-hair);
+    border-radius: var(--ly-r-float);
+    background: var(--ly-island-bg);
+    box-shadow: var(--ly-shadow-float);
+    -webkit-backdrop-filter: var(--ly-island-blur);
+    backdrop-filter: var(--ly-island-blur);
+}
+:root[data-skin="longying-ink"] .canvas-collaboration-layer .canvas-collaboration-members > summary:hover {
+    background: color-mix(in srgb, var(--ly-ink) 5%, var(--ly-sheet));
+}
+:root[data-skin="longying-ink"] .canvas-collaboration-layer .canvas-collaboration-members > summary:focus-visible {
+    outline: none;
+    box-shadow: var(--ly-focus);
+}
+:root[data-skin="longying-ink"] .canvas-collaboration-layer .canvas-collaboration-member-panel {
+    border: 1px solid var(--ly-ov-l1-border);
+    border-radius: var(--ly-ov-l1-radius);
+    background: var(--ly-ov-l1-bg);
+    box-shadow: var(--ly-ov-l1-shadow);
+}
+:root[data-skin="longying-ink"] .canvas-collaboration-layer .canvas-collaboration-member-avatar {
+    border-radius: var(--ly-r-chip);
+}
+:root[data-skin="longying-ink"] .canvas-collaboration-layer .canvas-collaboration-drag {
+    border-radius: var(--ly-r-control);
+}
+@media (max-width: 640px) and (pointer: coarse) {
+    :root[data-skin="longying-ink"] .app-user-workspace .canvas-main-with-workspace :is(.canvas-workspace-zoom-controls, .canvas-mini-map) {
+        left: max(12px, env(safe-area-inset-left));
+    }
+}
+:root[data-skin="longying-ink"] :is(.canvas-context-panel, .canvas-node-toolbar-menu) {
+    border-radius: var(--ly-ov-l1-radius);
+    box-shadow: var(--ly-ov-l1-shadow);
+    backdrop-filter: none;
+}

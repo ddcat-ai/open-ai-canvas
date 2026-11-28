@@ -130,7 +130,7 @@ export function AudioSettingsPanel({ config, referenceAudioLabels, references = 
                                     </option>
                                 ))}
                             </datalist>
-                            <Radio.Group aria-label="常用音色" value={voice} onChange={(event) => selectVoice(event.target.value)} options={currentVoice} className="flex flex-wrap gap-2" />
+                            <Radio.Group aria-label="常用音色" value={voice} onChange={(event) => selectVoice(event.target.value)} options={currentVoice} className="media-option-radios flex flex-wrap gap-2" />
                         </>
                     )}
                 </fieldset>
@@ -138,7 +138,7 @@ export function AudioSettingsPanel({ config, referenceAudioLabels, references = 
                     <legend className="mb-2 text-xs" style={{ color: theme.node.muted }}>
                         音频格式
                     </legend>
-                    <Radio.Group aria-label="音频格式" value={format} options={formats} onChange={(event) => onConfigChange("audioFormat", event.target.value)} className="flex flex-wrap gap-2" />
+                    <Radio.Group aria-label="音频格式" value={format} options={formats} onChange={(event) => onConfigChange("audioFormat", event.target.value)} className="media-option-radios flex flex-wrap gap-2" />
                 </fieldset>
                 <fieldset className="space-y-2">
                     <legend className="mb-2 text-xs" style={{ color: theme.node.muted }}>
