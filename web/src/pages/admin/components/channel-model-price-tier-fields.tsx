@@ -17,6 +17,7 @@ import { normalizeTierResolution } from "@/lib/model-pricing";
 export function PriceTierFields({
     index,
     ordinal,
+    id,
     form,
     capability,
     protocol,
@@ -27,6 +28,7 @@ export function PriceTierFields({
 }: {
     index: number;
     ordinal: number;
+    id?: string;
     form: FormInstance<FormValues>;
     capability: EditableCapability | undefined;
     protocol: ModelProtocol | undefined;
@@ -59,7 +61,7 @@ export function PriceTierFields({
     const amountsComplete = Boolean(watchedTier && priceTierAmountsComplete(capability, watchedTier, referenceVideoBilling));
     const requirePrice = priceConfigured || tierEnabled;
     return (
-        <article className="admin-price-tier-card">
+        <article id={id} tabIndex={-1} aria-label={`价格档 ${ordinal}`} className="admin-price-tier-card">
             <header className="admin-price-tier-card-header">
                 <Form.Item name={[index, "priceConfigured"]} hidden valuePropName="checked">
                     <Switch />

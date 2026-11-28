@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Alert, App, Button, Form, Input, Segmented, Select, Switch, Tabs } from "antd";
+import { useUserStore } from "@/stores/use-user-store";
 import { ModelDisplayNameInput } from "./model-display-name-input";
 import { AdminModal } from "@/pages/admin/ui/overlays";
 import { FlaskConical, Plus } from "lucide-react";
@@ -14,11 +15,12 @@ import { createAdminChannelModel, getAdminChannelProtocolSuggestion, testAdminCh
 import type { ModelChannel } from "@/stores/use-config-store";
 import { priceCurrencyOptions } from "@/services/api/user-groups";
 import { defaultPriceTier, normalizeUpstreamModelKey, priceTierPayloadFromForm } from "./channel-model-price-tier-form";
+import { usePriceTierPagination } from "./price-tier-pagination";
 import { PriceTierFields } from "./channel-model-price-tier-fields";
 import { TokenPriceRulesSection } from "./channel-model-token-rules";
 import { ChannelModelTagsEditor } from "./channel-model-tags-editor";
 import { CapabilityTemplatePanel, PricingTemplatePanel } from "./channel-model-template-panels";
-import { priceSelectorIssues } from "./channel-model-templates";
+import { priceSelectorProblems } from "./channel-model-templates";
 import {
     changeChannelModelCapability,
     changeChannelModelProtocol,
@@ -27,6 +29,7 @@ import {
     opensModelParameters,
     replaceChannelModelFormValues,
     updateChannelModelUpstreamCapabilities,
+    PriceTierIssue,
     validateChannelModelPrices,
     validateChannelModelProtocol,
     type ChannelModelFormValues as FormValues,
@@ -56,6 +59,11 @@ export function ChannelModelEditor({
 }) {
     const { message, modal } = App.useApp();
     const [form] = Form.useForm<FormValues>();
+    const account = useUserStore((state) => state.user?.id);
+    const [openedBy] = useState(account);
+    useEffect(() => {
+        if (openedBy !== account) onClose();
+    }, [account, openedBy, onClose]);
     const enabledHintId = useId();
     const [initialValues] = useState(() => draftValues ?? initialChannelModelValues(editing, protocols));
     const [editVersion] = useState(() => (editing ? { expectedUpdatedAt: editing.updatedAt, expectedPriceVersion: editing.priceVersion } : {}));
@@ -78,7 +86,9 @@ export function ChannelModelEditor({
     const capabilityConfig = Form.useWatch("capabilityConfig", form);
     const modelEnabled = Form.useWatch("enabled", form) !== false;
     const referenceVideoBilling = Form.useWatch("referenceVideoBilling", form) === true;
-    const priceTiers = Form.useWatch("priceTiers", form) || [];
+    const priceTiers = Form.useWatch("priceTiers", { form, preserve: true }) || [];
+    const pages = usePriceTierPagination(priceTiers.length);
+    const invalidPrice = useRef<number | null>(null);
     const hasDefaultPriceTier = priceTiers.some((tier) => tier.matchMode === "default");
     const tiersWithOwnUpstream = priceTiers.filter((tier) => tier.providerModelKey?.trim());
     const modelUpstream = normalizeUpstreamModelKey(providerModelKey || modelKey);
@@ -99,7 +109,7 @@ export function ChannelModelEditor({
         },
     };
     const busy = saving || testing;
-    const selectorIssues = modelCapability ? priceSelectorIssues({ capability: modelCapability, protocol: modelProtocol, capabilityConfig, priceTiers, protocols }) : [];
+    const selectorIssues = modelCapability ? priceSelectorProblems({ capability: modelCapability, protocol: modelProtocol, capabilityConfig, priceTiers, protocols }) : [];
 
     useEffect(() => {
         // 复制草稿保留预填协议，但预填本身不构成新的明确选择事件。
@@ -188,7 +198,8 @@ export function ChannelModelEditor({
             const fields = (error as { errorFields?: { name: (string | number)[] }[] }).errorFields;
             if (fields?.length) {
                 setActiveSection(editorSectionForField(fields[0].name));
-                requestAnimationFrame(() => form.scrollToField(fields[0].name, { block: "center", focus: true }));
+                if (fields[0].name.length === 1 && fields[0].name[0] === "priceTiers" && invalidPrice.current !== null) pages.reveal(invalidPrice.current);
+                else requestAnimationFrame(() => form.scrollToField(fields[0].name, { block: "center", focus: true }));
                 message.warning("请检查标记的配置项后重试");
             } else message.error(error instanceof Error ? error.message : "表单校验失败");
             return undefined;
@@ -200,7 +211,7 @@ export function ChannelModelEditor({
     const save = async () => {
         if (busyRef.current) return;
         const values = await validateEditor();
-        if (!values) return;
+        if (!values || useUserStore.getState().user?.id !== openedBy) return;
         const upstreamModel = values.providerModelKey?.trim() || values.modelKey.trim();
         const capabilityConfig =
             values.capability === "text" || values.capability === "image" || values.capability === "video" ? normalizeModelCapabilityConfig(values.capabilityConfig || defaultModelCapabilityConfig(values.protocol, upstreamModel)) : undefined;
@@ -246,7 +257,7 @@ export function ChannelModelEditor({
     const testModel = async () => {
         if (busyRef.current) return;
         const values = await validateEditor(["modelKey", "providerModelKey", "capability", "protocol", "protocolRelease", "capabilityConfig"]);
-        if (!values) return;
+        if (!values || useUserStore.getState().user?.id !== openedBy) return;
         const upstreamModel = values.providerModelKey?.trim() || values.modelKey.trim();
         const capabilityConfig =
             values.capability === "text" || values.capability === "image" || values.capability === "video" ? normalizeModelCapabilityConfig(values.capabilityConfig || defaultModelCapabilityConfig(values.protocol, upstreamModel)) : undefined;
@@ -270,6 +281,7 @@ export function ChannelModelEditor({
         }
     };
 
+    if (openedBy !== account) return null;
     return (
         <AdminModal
             open
@@ -556,7 +568,11 @@ export function ChannelModelEditor({
                                             description={
                                                 <ul>
                                                     {selectorIssues.map((issue) => (
-                                                        <li key={issue}>{issue}</li>
+                                                        <li key={issue.message}>
+                                                            <button type="button" className="text-left underline" onClick={() => pages.reveal(issue.row)}>
+                                                                {issue.message}
+                                                            </button>
+                                                        </li>
                                                     ))}
                                                 </ul>
                                             }
@@ -598,26 +614,34 @@ export function ChannelModelEditor({
                                                 rules={[
                                                     {
                                                         validator: async (_, value) => {
-                                                            validateChannelModelPrices({
-                                                                capability: form.getFieldValue("capability"),
-                                                                protocol: form.getFieldValue("protocol"),
-                                                                priceTiers: value,
-                                                                capabilityConfig: form.getFieldValue("capabilityConfig"),
-                                                                protocols,
-                                                                referenceVideoBilling: form.getFieldValue("referenceVideoBilling"),
-                                                            });
+                                                            invalidPrice.current = null;
+                                                            try {
+                                                                validateChannelModelPrices({
+                                                                    capability: form.getFieldValue("capability"),
+                                                                    protocol: form.getFieldValue("protocol"),
+                                                                    priceTiers: value,
+                                                                    capabilityConfig: form.getFieldValue("capabilityConfig"),
+                                                                    protocols,
+                                                                    referenceVideoBilling: form.getFieldValue("referenceVideoBilling"),
+                                                                });
+                                                            } catch (error) {
+                                                                if (error instanceof PriceTierIssue) invalidPrice.current = error.row;
+                                                                throw error;
+                                                            }
                                                         },
                                                     },
                                                 ]}
                                             >
                                                 {(fields, { add, remove }, { errors }) => (
                                                     <div className="admin-price-tier-list-shell">
+                                                        {pages.controls}
                                                         <div className="admin-price-tier-list" aria-label="积分价格规则列表">
-                                                            {fields.map((field, index) => (
+                                                            {fields.slice(pages.start, pages.end).map((field) => (
                                                                 <PriceTierFields
                                                                     key={field.key}
                                                                     index={field.name}
-                                                                    ordinal={index + 1}
+                                                                    ordinal={field.name + 1}
+                                                                    id={pages.rowId(field.name)}
                                                                     form={form}
                                                                     capability={modelCapability}
                                                                     protocol={modelProtocol}
@@ -626,12 +650,24 @@ export function ChannelModelEditor({
                                                                     onDirty={() => {
                                                                         dirtyRef.current = true;
                                                                     }}
-                                                                    onRemove={() => remove(field.name)}
+                                                                    onRemove={() => {
+                                                                        remove(field.name);
+                                                                        if (fields.length > 1) pages.reveal(Math.min(field.name, fields.length - 2));
+                                                                    }}
                                                                 />
                                                             ))}
                                                         </div>
                                                         <div className="admin-price-tier-list-footer">
-                                                            <Button className="admin-model-editor-add-tier" type="dashed" block icon={<Plus className="size-4" />} onClick={() => add(defaultPriceTier(hasDefaultPriceTier ? "advanced" : "default"))}>
+                                                            <Button
+                                                                className="admin-model-editor-add-tier"
+                                                                type="dashed"
+                                                                block
+                                                                icon={<Plus className="size-4" />}
+                                                                onClick={() => {
+                                                                    add(defaultPriceTier(hasDefaultPriceTier ? "advanced" : "default"));
+                                                                    pages.reveal(fields.length);
+                                                                }}
+                                                            >
                                                                 {hasDefaultPriceTier ? "新增规格价格" : "新增统一默认价格"}
                                                             </Button>
                                                             <Form.ErrorList errors={errors} />

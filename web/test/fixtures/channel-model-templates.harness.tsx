@@ -973,6 +973,51 @@ test("视频支持模式平铺多选，默认模式只能取已勾选值，最�
     }
 });
 
+test("价卡分页保留全部 48 档，定位隐藏错误并支持模板跨页增删", async () => {
+    const capabilityConfig = defaultModelCapabilityConfig("video-test");
+    const resolutions = Array.from({ length: 48 }, (_, i) => `${480 + i * 16}p`);
+    capabilityConfig.video!.resolutions = resolutions;
+    const editing = savedModel({ ...draft(), capability: "video", protocol: "video-test", capabilityConfig });
+    const tiers = resolutions.map((resolution, i) => ({
+        ...editing.priceTiers![0],
+        id: `tier-${i}`,
+        resolution,
+        selector: { vquality: resolution },
+        unitPriceMicrocredits: (i + 1) * 1000000,
+    }));
+    const catalog = [{ ...protocols[0], capability: "video" as const, value: "video-test", imageParameters: undefined }];
+    const broken = await mountEditor({ ...editing, priceTiers: tiers.map((tier, i) => (i === 46 ? { ...tier, unitPriceMicrocredits: -1 } : tier)) }, catalog);
+    try {
+        await click("保存修改");
+        expect(broken.saves).toHaveLength(0);
+        expect(document.activeElement?.getAttribute("aria-label")).toBe("价格档 47");
+    } finally {
+        await broken.close();
+    }
+    const fixture = await mountEditor({ ...editing, priceTiers: tiers }, catalog);
+    try {
+        await tab("积分定价");
+        expect(document.querySelectorAll(".admin-price-tier-card")).toHaveLength(4);
+        const lastPage = document.querySelector<HTMLElement>('.ant-pagination-item[title="12"]')!;
+        await act(async () => lastPage.dispatchEvent(new dom.KeyboardEvent("keydown", { key: "Enter", keyCode: 13, bubbles: true })));
+        expect(document.activeElement?.getAttribute("aria-label")).toBe("价格档 45");
+        await click("将当前配置保存为模板");
+        await inputValue('input[aria-label="积分模板名称"]', "全量四十八档");
+        await click("新增价格档");
+        expect(document.activeElement?.getAttribute("aria-label")).toBe("价格档 49");
+        await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="删除价格档 49"]')!.click());
+        expect(document.activeElement?.getAttribute("aria-label")).toBe("价格档 48");
+        await click("保存模板");
+        await click("应用定价模板");
+        await click("保存修改");
+        expect(fixture.saves).toHaveLength(1);
+        expect(fixture.saves[0].priceTiers.map((tier: { unitPriceMicrocredits: number }) => tier.unitPriceMicrocredits)).toEqual(tiers.map((tier) => tier.unitPriceMicrocredits));
+        expect(fixture.saves[0].priceTiers.map((tier: { resolution: string }) => tier.resolution)).toEqual(resolutions);
+    } finally {
+        await fixture.close();
+    }
+});
+
 test("完整模型编辑器：未操作保存保留参考视频计价及独立成本", async () => {
     const values = { ...draft(), capability: "video" as const, protocol: "video-test", referenceVideoBilling: true, capabilityConfig: defaultModelCapabilityConfig("video-test") };
     values.priceTiers = [{ ...defaultPriceTier(), billingMode: "per_second", unitPrice: 3, referenceVideoUnitPrice: 4, costConfigured: true, costUnitPrice: 1, costReferenceVideoUnitPrice: 2 }];

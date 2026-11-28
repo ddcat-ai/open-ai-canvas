@@ -5,11 +5,12 @@ import { useUserStore } from "@/stores/use-user-store";
 import type { ModelProtocolDefinition } from "@/lib/model-protocols";
 import { priceCurrencyOptions, priceCurrencyUnit } from "@/services/api/user-groups";
 import { AdminModal } from "../ui/overlays";
-import { validateChannelModelPrices, type ChannelModelFormValues } from "./channel-model-editor-form";
+import { PriceTierIssue, validateChannelModelPrices, type ChannelModelFormValues } from "./channel-model-editor-form";
 import { defaultPriceTier } from "./channel-model-price-tier-form";
+import { usePriceTierPagination } from "./price-tier-pagination";
 import { PriceTierFields } from "./channel-model-price-tier-fields";
 import { TokenPriceRulesSection } from "./channel-model-token-rules";
-import { priceSelectorIssues } from "./channel-model-templates";
+import { priceSelectorProblems } from "./channel-model-templates";
 import { assertPricingTemplateScope, PRICING_TEMPLATES_CHANGED, pricingTemplatesKey, readPricingTemplates, savePricingTemplate, templatePricingForModel, type PricingSnapshot, type SavedPricingTemplate } from "./saved-pricing-templates";
 
 type Props = { form: FormInstance<ChannelModelFormValues>; protocols?: ModelProtocolDefinition[]; disabled?: boolean; onApplied: (action: "apply" | "undo") => void };
@@ -181,7 +182,8 @@ function PricingTemplateEditor({
     const [error, setError] = useState("");
     Form.useWatch([], { form, preserve: true });
     const values: ChannelModelFormValues = { ...draft.values, ...form.getFieldsValue(true), capability: currentValues.capability, protocol: currentValues.protocol, capabilityConfig: currentValues.capabilityConfig };
-    const issues = priceSelectorIssues({ ...values, protocols });
+    const pages = usePriceTierPagination(values.priceTiers.length);
+    const issues = priceSelectorProblems({ ...values, protocols });
     const save = async () => {
         try {
             assertPricingTemplateScope(scope);
@@ -190,6 +192,7 @@ function PricingTemplateEditor({
             const saved = savePricingTemplate(scope, name, values, draft.template);
             onSaved(saved);
         } catch (cause) {
+            if (cause instanceof PriceTierIssue) pages.reveal(cause.row);
             setError(cause instanceof Error ? cause.message : "请检查模板中标记的配置项");
         }
     };
@@ -222,7 +225,11 @@ function PricingTemplateEditor({
                         description={
                             <ul>
                                 {issues.map((issue) => (
-                                    <li key={issue}>{issue}</li>
+                                    <li key={issue.message}>
+                                        <button type="button" className="text-left underline" onClick={() => pages.reveal(issue.row)}>
+                                            {issue.message}
+                                        </button>
+                                    </li>
                                 ))}
                             </ul>
                         }
@@ -240,21 +247,33 @@ function PricingTemplateEditor({
                     <Form.List name="priceTiers">
                         {(fields, { add, remove }) => (
                             <div className="space-y-3">
-                                {fields.map((field, index) => (
+                                {pages.controls}
+                                {fields.slice(pages.start, pages.end).map((field) => (
                                     <PriceTierFields
                                         key={field.key}
                                         index={field.name}
-                                        ordinal={index + 1}
+                                        ordinal={field.name + 1}
+                                        id={pages.rowId(field.name)}
                                         form={form}
                                         capability={values.capability}
                                         protocol={values.protocol}
                                         capabilityConfig={values.capabilityConfig}
                                         modelUpstream={values.providerModelKey || values.modelKey}
                                         onDirty={() => setError("")}
-                                        onRemove={() => remove(field.name)}
+                                        onRemove={() => {
+                                            remove(field.name);
+                                            if (fields.length > 1) pages.reveal(Math.min(field.name, fields.length - 2));
+                                        }}
                                     />
                                 ))}
-                                <Button block type="dashed" onClick={() => add({ ...defaultPriceTier(values.priceTiers.some((tier) => tier.matchMode === "default") ? "advanced" : "default"), unitPrice: null, priceConfigured: false, enabled: false })}>
+                                <Button
+                                    block
+                                    type="dashed"
+                                    onClick={() => {
+                                        add({ ...defaultPriceTier(values.priceTiers.some((tier) => tier.matchMode === "default") ? "advanced" : "default"), unitPrice: null, priceConfigured: false, enabled: false });
+                                        pages.reveal(fields.length);
+                                    }}
+                                >
                                     新增价格档
                                 </Button>
                             </div>

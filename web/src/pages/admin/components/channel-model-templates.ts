@@ -175,11 +175,15 @@ export function buildPricingTemplate(id: string, selectedDimensions: string[], v
 }
 
 export function priceSelectorIssues(values: PricingContext & { priceTiers: PriceTierFormValues[] }): string[] {
-    const issues: string[] = [];
+    return priceSelectorProblems(values).map((issue) => issue.message);
+}
+
+export function priceSelectorProblems(values: PricingContext & { priceTiers: PriceTierFormValues[] }) {
+    const issues: { row: number; message: string }[] = [];
     const dimensions = pricingDimensions(values);
     const specific = (value: unknown) => value !== undefined && value !== "" && value !== "*";
     const selectors = values.priceTiers.map((tier, index) => {
-        const fail = (message: string) => issues.push(`价格档 ${index + 1}：${message}`);
+        const fail = (message: string) => issues.push({ row: index, message: `价格档 ${index + 1}：${message}` });
         if (tier.matchMode === "advanced") {
             if (specific(tier.operation)) {
                 const operations = values.capability === "text" ? ["text_generation"] : dimensions.find((item) => item.id === "operation")?.values;
@@ -221,7 +225,7 @@ export function priceSelectorIssues(values: PricingContext & { priceTiers: Price
         for (let previous = 0; previous < index; previous++) {
             const other = selectors[previous];
             if (Object.keys(other).length !== entries.length) continue;
-            if (entries.every(([key, value]) => other[key] === undefined || other[key] === value)) issues.push(`价格档 ${previous + 1} 与 ${index + 1} 条件重复或同优先级重叠，请调整`);
+            if (entries.every(([key, value]) => other[key] === undefined || other[key] === value)) issues.push({ row: index, message: `价格档 ${previous + 1} 与 ${index + 1} 条件重复或同优先级重叠，请调整` });
         }
     });
     return issues;
