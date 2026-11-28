@@ -91,9 +91,7 @@ function AdminSkillRecommendationsModal({ open, onClose, onInstalled }: SkillRec
     };
 
     const starterIds = new Set(industry?.starterSkillIds || []);
-    const pendingStarterIds = industry
-        ? industry.starterSkillIds.filter((skillId) => industry.skills.some((skill) => skill.skillId === skillId && !skill.isAdded))
-        : [];
+    const pendingStarterIds = industry ? industry.starterSkillIds.filter((skillId) => industry.skills.some((skill) => skill.skillId === skillId && !skill.isAdded)) : [];
 
     return (
         <AppModal open={open} width={760} title="按行业推荐技能" className="library-modal skill-recommendations-modal" footer={null} onCancel={onClose} mask={{ closable: !installing }}>
@@ -150,9 +148,7 @@ function AdminSkillRecommendationsModal({ open, onClose, onInstalled }: SkillRec
                                 <div className="min-w-0 flex-1">
                                     <div className="flex flex-wrap items-center gap-2 text-sm font-medium [overflow-wrap:anywhere]">
                                         {skill.skillName}
-                                        {starterIds.has(skill.skillId) ? (
-                                            <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-normal text-foreground/60">起步</span>
-                                        ) : null}
+                                        {starterIds.has(skill.skillId) ? <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-normal text-foreground/60">起步</span> : null}
                                     </div>
                                     <p className="mt-1 text-xs leading-5 text-foreground/65">{skill.reason}</p>
                                     {skill.description ? (
