@@ -229,12 +229,16 @@ func TestQueryAPICallLogsHidesInternalPollStages(t *testing.T) {
 	}
 }
 
-func TestLatestProviderRequestIDsForTasksReturnsNewestPerTask(t *testing.T) {
+func TestTaskProviderEvidenceReturnsNewestCreateInTheOriginalRun(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:latest-provider-ids?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.ApiCallLog{}); err != nil {
+	if err := db.AutoMigrate(&model.ApiCallLog{}, &model.RouteAttempt{}, &model.Task{}); err != nil {
+		t.Fatal(err)
+	}
+	tasks := []model.Task{{ID: "task-1", UserID: "owner"}, {ID: "task-2", UserID: "owner"}, {ID: "task-3", UserID: "owner"}}
+	if err := db.Create(&tasks).Error; err != nil {
 		t.Fatal(err)
 	}
 	base := time.Now().Add(-time.Hour)
@@ -246,21 +250,20 @@ func TestLatestProviderRequestIDsForTasksReturnsNewestPerTask(t *testing.T) {
 		{ID: "poll", TaskID: "task-1", RequestKind: "poll", ProviderRequestID: "trace", CreatedAt: base.Add(3 * time.Minute)},
 		{ID: "upload", TaskID: "task-3", RequestKind: "upload", ProviderRequestID: "asset", CreatedAt: base.Add(time.Minute)},
 	} {
+		log.UserID = "owner"
+		log.Status = model.ApiCallStatusSucceeded
 		if err := db.Create(&log).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
-	ids, err := New(db).LatestProviderRequestIDsForTasks([]string{"task-1", "task-2", "task-3"})
+	ids, err := New(db).TaskProviderEvidenceForTasks(tasks)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ids["task-1"] != "provider-new" || ids["task-2"] != "provider-2" {
+	if ids["task-1"].RequestID != "provider-new" || ids["task-2"].RequestID != "provider-2" {
 		t.Fatalf("unexpected provider IDs: %#v", ids)
 	}
 	if _, ok := ids["task-3"]; ok {
 		t.Fatalf("empty provider ID should be omitted: %#v", ids)
-	}
-	if id, err := New(db).LatestProviderRequestIDForTask("task-1"); err != nil || id != ids["task-1"] {
-		t.Fatalf("single recovery ID = %q, err=%v", id, err)
 	}
 }

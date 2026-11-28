@@ -177,6 +177,9 @@ func (s *Service) cloudAgentMediaContinuesAfterStop(run *model.CloudAgentExecuti
 	if task.Status != model.TaskStatusQueued && task.Status != model.TaskStatusRunning {
 		return false
 	}
-	s.hydrateTaskProviderRequestID(task)
+	if err := s.hydrateTaskProviderRequestID(task); err != nil {
+		// 证据暂不可读时保留媒体任务，调度器会再次检查。
+		return true
+	}
 	return taskUpstreamSubmitted(task)
 }

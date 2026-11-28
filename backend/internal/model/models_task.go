@@ -70,6 +70,14 @@ type Task struct {
 	UpdatedAt         time.Time  `json:"updatedAt"`
 }
 
+// InitialRouteRun is zero for direct tasks and one for logical model routes.
+func (t *Task) InitialRouteRun() int {
+	if t.LogicalModelID != "" {
+		return 1
+	}
+	return 0
+}
+
 func (t *Task) BeforeCreate(tx *gorm.DB) error {
 	if t.CreatedAtEpoch == 0 {
 		if t.CreatedAt.IsZero() {

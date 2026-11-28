@@ -287,31 +287,9 @@ func (s *Service) TasksWithOptions(userID string, options TaskListOptions) ([]Ta
 	if err != nil {
 		return nil, err
 	}
-	orders, err := s.repo.BillingOrdersByTaskIDs(userID, taskBillingTaskIDs(tasks))
+	orders, err := s.hydrateTaskReceipts(tasks)
 	if err != nil {
 		return nil, err
-	}
-	// Active task lists are the primary source for the canvas cancel affordance.
-	// The worker may have already logged an upstream request while the task row
-	// is waiting for its next lease update, so hydrate the list read model from
-	// the API log in one query instead of briefly exposing a stale cancel button.
-	taskIDs := make([]string, 0, len(tasks))
-	for _, task := range tasks {
-		taskIDs = append(taskIDs, task.ID)
-	}
-	providerRequestIDs, err := s.repo.LatestProviderRequestIDsForTasks(taskIDs)
-	if err != nil {
-		return nil, err
-	}
-	for index := range tasks {
-		if strings.TrimSpace(tasks[index].ProviderRequestID) != "" {
-			continue
-		}
-		if order, ok := orders[tasks[index].ID]; ok && strings.TrimSpace(order.ProviderRequestID) != "" {
-			tasks[index].ProviderRequestID = strings.TrimSpace(order.ProviderRequestID)
-			continue
-		}
-		tasks[index].ProviderRequestID = providerRequestIDs[tasks[index].ID]
 	}
 	return taskSummariesForOutputWithBilling(tasks, orders), nil
 }
@@ -321,24 +299,80 @@ func (s *Service) Task(userID string, id string) (*model.Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.hydrateTaskProviderRequestID(task)
-	return taskForOutput(*task), nil
+	tasks := []model.Task{*task}
+	if _, err := s.hydrateTaskReceipts(tasks); err != nil {
+		return nil, err
+	}
+	return taskForOutput(tasks[0]), nil
 }
 
-func (s *Service) hydrateTaskProviderRequestID(task *model.Task) {
-	if task == nil || task.ProviderRequestID != "" {
-		return
+func (s *Service) hydrateTaskProviderRequestID(task *model.Task) error {
+	tasks := []model.Task{*task}
+	orders, err := s.hydrateTaskReceipts(tasks)
+	if err != nil {
+		return err
 	}
-	if task.BillingOrderID != "" {
-		if order, err := s.repo.BillingOrder(task.BillingOrderID); err == nil {
+	if _, ok := orders[task.ID]; task.BillingOrderID != "" && !ok {
+		return errors.New("无法确认当前任务的计费订单")
+	}
+	task.ProviderRequestID, task.Stage = tasks[0].ProviderRequestID, tasks[0].Stage
+	return nil
+}
+
+// Retry keeps the task ID but replaces the order. Use the same receipt and
+// dispatch evidence for the list, detail and cancellation decision.
+func (s *Service) hydrateTaskReceipts(tasks []model.Task) (map[string]model.BillingOrder, error) {
+	var orderIDs []string
+	for _, task := range tasks {
+		if task.BillingOrderID != "" {
+			orderIDs = append(orderIDs, task.BillingOrderID)
+		}
+	}
+	orders, err := s.repo.BillingOrdersByIDs(orderIDs)
+	if err != nil {
+		return nil, err
+	}
+	activeOrders := make(map[string]model.BillingOrder, len(orders))
+	for i := range tasks {
+		task := &tasks[i]
+		if task.BillingOrderID == "" {
+			continue
+		}
+		order, found := orders[task.BillingOrderID]
+		owner := order.UserID
+		if order.TeamID != "" {
+			owner = model.TeamContentKey(order.TeamID)
+		}
+		if !found || order.TaskID != task.ID || owner != task.UserID {
+			continue
+		}
+		activeOrders[task.ID] = order
+		if task.ProviderRequestID == "" {
 			task.ProviderRequestID = strings.TrimSpace(order.ProviderRequestID)
 		}
 	}
-	if task.ProviderRequestID == "" {
-		if providerRequestID, err := s.repo.LatestProviderRequestIDForTask(task.ID); err == nil {
-			task.ProviderRequestID = providerRequestID
+	evidence, err := s.repo.TaskProviderEvidenceForTasks(tasks)
+	if err != nil {
+		return nil, err
+	}
+	for i := range tasks {
+		task := &tasks[i]
+		if task.ProviderRequestID != "" {
+			continue
+		}
+		state := evidence[task.ID]
+		if _, ok := activeOrders[task.ID]; task.BillingOrderID != "" && !ok {
+			// A dangling reference affects this row only. Commands require a matching order.
+			state = repository.TaskProviderEvidence{SubmissionUnknown: true}
+		}
+		task.ProviderRequestID = state.RequestID
+		pending := task.Status == model.TaskStatusQueued || task.Status == model.TaskStatusRunning
+		unknown := state.SubmissionUnknown || (state.RequestID == "" && (task.PollStage == "accepted" || task.PollStage == "poll"))
+		if pending && unknown && taskStageAllowsUserCancellation(task.Status, task.Stage) {
+			task.Stage = "submission_unknown"
 		}
 	}
+	return activeOrders, nil
 }
 
 // 上游请求日志会在任务执行期间更新 provider 状态，终态保存前必须重新合并，避免旧任务对象覆盖可恢复 ID。

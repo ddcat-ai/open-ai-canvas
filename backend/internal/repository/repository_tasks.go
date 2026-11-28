@@ -286,7 +286,7 @@ func (r *Repository) UpdateTaskExecutionDiagnostic(userID, taskID, diagnosticJSO
 	return nil
 }
 
-func (r *Repository) CancelTaskIfStatus(userID string, id string, expected model.TaskStatus, now time.Time, intents ...model.TaskCancellationIntent) (bool, error) {
+func (r *Repository) CancelTaskIfStatus(task *model.Task, now time.Time, intents ...model.TaskCancellationIntent) (bool, error) {
 	updates := map[string]any{
 		"status": model.TaskStatusCancelled, "stage": "任务已取消", "error": "任务已取消", "completed_at": &now,
 		"lease_owner": "", "lease_expires_at": nil, "updated_at": now,
@@ -300,9 +300,16 @@ func (r *Repository) CancelTaskIfStatus(userID string, id string, expected model
 		updates["cancellation_source"], updates["cancellation_actor_id"], updates["cancellation_requested_at"] = intent.Source, intent.ActorID, intent.RequestedAt
 		updates["execution_diagnostic_json"] = string(diagnostic)
 	}
-	result := r.db.Model(&model.Task{}).
-		Where("id = ? AND user_id = ? AND status = ?", id, userID, expected).
-		Updates(updates)
+	query := r.db.Model(&model.Task{}).
+		Where("id = ? AND user_id = ? AND status = ?", task.ID, task.UserID, task.Status).
+		Where("COALESCE(route_run, 0) = ? AND COALESCE(billing_order_id, '') = ?", task.RouteRun, task.BillingOrderID)
+	if len(intents) > 0 && intents[0].Source == model.TaskCancellationUserRequest {
+		// A worker can advance the same running task after the initial read.
+		query = query.Where("COALESCE(stage, '') = ? AND COALESCE(media_stage, '') = '' AND COALESCE(provider_request_id, '') = ''", task.Stage).
+			Where("COALESCE(poll_stage, '') NOT IN ?", []string{"accepted", "poll"}).
+			Where("NOT EXISTS (SELECT 1 FROM route_attempts WHERE task_id = tasks.id AND route_run = ? AND dispatch_state IN ?)", task.RouteRun, []string{"accepted", "submission_unknown"})
+	}
+	result := query.Updates(updates)
 	return result.RowsAffected == 1, result.Error
 }
 
@@ -395,7 +402,7 @@ func (r *Repository) TasksWithWorkbenchKind(userID string, limit int, projectID 
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	query := r.db.Select("id", "project_id", "type", "workbench_kind", "status", "stage", "media_stage", "media_recovery_json", "progress", "prompt", "operation", "provider", "model", "input_json", "result_json", "billing_order_id", "provider_request_id", "provider_cancel_status", "provider_cancel_error", "provider_cancel_attempts", "provider_cancel_requested_at", "provider_cancelled_at", "provider_cancel_next_check_at", "attempts", "started_at", "completed_at", "created_at", "updated_at", "agent_run_id", "generation_id", "approval_id", "authorized_charge_microcredits", "execution_diagnostic_json", "cancellation_source", "cancellation_actor_id", "cancellation_requested_at").
+	query := r.db.Select("id", "user_id", "route_run", "logical_model_id", "project_id", "type", "workbench_kind", "status", "stage", "media_stage", "media_recovery_json", "progress", "prompt", "operation", "provider", "model", "input_json", "result_json", "billing_order_id", "provider_request_id", "poll_stage", "provider_cancel_status", "provider_cancel_error", "provider_cancel_attempts", "provider_cancel_requested_at", "provider_cancelled_at", "provider_cancel_next_check_at", "attempts", "started_at", "completed_at", "created_at", "updated_at", "agent_run_id", "generation_id", "approval_id", "authorized_charge_microcredits", "execution_diagnostic_json", "cancellation_source", "cancellation_actor_id", "cancellation_requested_at").
 		Where("user_id = ?", userID)
 	if strings.TrimSpace(projectID) != "" {
 		query = query.Where("project_id = ?", strings.TrimSpace(projectID))

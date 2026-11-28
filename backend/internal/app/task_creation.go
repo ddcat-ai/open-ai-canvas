@@ -200,7 +200,7 @@ func (s *Service) CreateTask(userID string, req CreateTaskRequest) (*model.Task,
 		task.LogicalModelRevisionID = routed.Revision.ID
 		task.RouteID = routed.Route.ID
 		task.ChannelModelID = routed.ChannelModel.ID
-		task.RouteRun = 1
+		task.RouteRun = task.InitialRouteRun()
 		task.Model = routed.LogicalModel.Code
 		task.Provider = "managed"
 	}

@@ -273,6 +273,8 @@ Agent 通过 `mcp_list_tools` 分三步读取连接目录、指定连接的工�
 
 `GET /api/workbench/tasks` 与 `GET /api/tasks` 的列表项对 `metadata.source=workbench` 且批次合法的任务返回 `clientContext.batchId`、`batchIndex`、`batchCount`（`batchIndex` 为 0 时省略）；任务详情的 `inputJson.workbench.batch` 保留同一批次。旧任务没有批次，页面按单任务展示。
 
+主动重试沿用原任务 ID。任务详情和列表的 `providerRequestId` 取自当前执行，列表的计费摘要取自当前绑定的订单。新一轮尚未执行时，任务所有者可以取消并退回本轮预扣。已受理或提交结果待确认时，取消接口会保留任务和预扣。重试后，缺少订单归属的创建日志单独出现时不能指定要操作的上游任务。
+
 ## 图片响应格式
 
 渠道模型的 `capabilityConfig.image.responseFormat` 包含 `supported` 和可选的 `default`。默认值为 `auto`，表示请求中不发送 `response_format`，由上游决定返回 URL 或 Base64；`b64_json` 和 `url` 会分别强制发送对应值。该配置按模型保存，不根据 `openai-image` 协议名称自动推断，避免兼容网关不接受 Base64 时生成失败。需要持久化 Base64 结果的模型（例如已验证的 ddcat 图片模型）应将默认值设为 `b64_json`。

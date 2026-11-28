@@ -224,7 +224,7 @@ func (r *Repository) RetryTaskWithBilling(userID string, prepared *model.Task, o
 			"provider_request_id": "", "poll_stage": "", "next_poll_at": nil,
 			"provider_cancel_status": "", "provider_cancel_error": "", "provider_cancel_attempts": 0,
 			"provider_cancel_requested_at": nil, "provider_cancelled_at": nil, "provider_cancel_next_check_at": nil,
-			"route_run":                 gorm.Expr("route_run + ?", 1),
+			"route_run":                 max(task.RouteRun, task.InitialRouteRun()) + 1,
 			"logical_model_revision_id": prepared.LogicalModelRevisionID, "route_id": prepared.RouteID,
 			"channel_model_id": prepared.ChannelModelID, "input_json": prepared.InputJSON, "protocol_binding_json": prepared.ProtocolBindingJSON,
 			"model": prepared.Model, "provider": prepared.Provider,
