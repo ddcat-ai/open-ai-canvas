@@ -1,7 +1,7 @@
 import { workspacePath } from "@/lib/workspace-routes";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router";
-import { Clapperboard, CloudDownload, CopyPlus, Focus, FolderKanban, Home, LayoutGrid, Workflow, LoaderCircle, Menu, PanelsLeftBottom, Pencil, Plus, Redo2, Save, Search, Share2, Trash2, Undo2, Upload } from "lucide-react";
+import { Clapperboard, CloudDownload, CopyPlus, Focus, FolderKanban, Home, ImagePlus, LayoutGrid, Workflow, LoaderCircle, Menu, PanelsLeftBottom, Pencil, Plus, Redo2, Save, Search, Share2, Trash2, Undo2, Upload } from "lucide-react";
 import { Button, Dropdown } from "antd";
 import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
 
@@ -46,6 +46,7 @@ type CanvasTopBarProps = Pick<CanvasProjectHeadingProps, "view" | "onViewChange"
     projectHeading?: ReactNode;
     onImportLibTV: () => void;
     onImportTapNow: () => void;
+    onImportJimeng: () => void;
     onShare?: () => void;
     shortcutRequestNonce: number;
     onEnterFocusMode: () => void;
@@ -179,7 +180,7 @@ export function CanvasProjectHeading({
     );
 }
 
-export function CanvasTopBar({ projectHeading, view, onViewChange, onOpenSearch, onImportLibTV, onImportTapNow, onShare, shortcutRequestNonce, onEnterFocusMode, shortDramaGuide }: CanvasTopBarProps) {
+export function CanvasTopBar({ projectHeading, view, onViewChange, onOpenSearch, onImportLibTV, onImportTapNow, onImportJimeng, onShare, shortcutRequestNonce, onEnterFocusMode, shortDramaGuide }: CanvasTopBarProps) {
     const theme = canvasThemes[useCanvasThemeStore((state) => state.theme)];
     const dockStyle = canvasDockStyle(theme, theme.node.text);
     const user = useUserStore((state) => state.user);
@@ -219,6 +220,7 @@ export function CanvasTopBar({ projectHeading, view, onViewChange, onOpenSearch,
                                 items: [
                                     { key: "libtv", icon: <CopyPlus className="size-4" />, label: "导入 LibTV 画布", onClick: onImportLibTV },
                                     { key: "tapnow", icon: <CloudDownload className="size-4" />, label: "导入 TapNow 画布", onClick: onImportTapNow },
+                                    { key: "jimeng", icon: <ImagePlus className="size-4" />, label: "导入即梦画布", onClick: onImportJimeng },
                                 ],
                             }}
                         >

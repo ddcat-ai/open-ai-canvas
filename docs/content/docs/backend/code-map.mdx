@@ -327,7 +327,7 @@ HTTP 请求 -> handler -> service（稳定导入面 / 别名）-> app（组合�
 | `outbound` | 出站 URL/Header 校验、SSRF 防护、HTTP 客户端 | **已抽出**：`internal/outbound` |
 | `skills` | 技能库、GitHub/ZIP 包、内置技能种子、后台同步 | **已抽出**：`internal/skills` |
 | `prompts` | 提示词模板、用户定制、风格档案、JSON 抽取 | **已抽出**：`internal/prompts` |
-| `auth` | 登录注册、OAuth、邮件验证码、LibTV/TapNow 导入 | **已抽出**：`internal/auth` |
+| `auth` | 登录注册、OAuth、邮件验证码、LibTV/TapNow/即梦导入 | **已抽出**：`internal/auth` |
 | `canvas` | 画布公开分享、媒体引用守卫、用户画布/素材库同步 | **已抽出**：`internal/canvas` |
 | `assets` | 资源 URL/引用解析、流式交付类型 | **部分抽出**：`internal/assets`；OSS/配额/转码仍在 `app` |
 | `agentcontext` | Agent 上下文检查点的编码、解析与压缩提示词（provider 中立，不含触发与调度） | **已抽出**：`internal/agentcontext`；触发、暂停与恢复在 `app/cloud_agent_context_compaction.go` |
