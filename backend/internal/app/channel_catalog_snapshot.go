@@ -86,11 +86,7 @@ func (s *Service) ReadAdminChannelCatalog(ctx context.Context, actor *model.User
 	if err != nil {
 		return nil, err
 	}
-	headers, err := ParseOutboundHeadersJSON(channel.HeadersJSON)
-	if err != nil {
-		return nil, err
-	}
-	models, err := s.FetchChannelModels(ctx, actor, ChannelModelsRequest{BaseURL: channel.BaseURL, APIKey: channel.APIKey, APIFormat: channel.APIFormat, ProxyURL: channel.ProxyURL, Headers: headers})
+	models, err := s.adminChannelCatalogModels(ctx, actor, channel)
 	if err != nil {
 		return nil, err
 	}

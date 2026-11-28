@@ -24,6 +24,7 @@ import { Select } from "@/components/ui/base/select";
 import { listAdminChannelWebsites, deleteAdminChannelWebsite, type ChannelWebsite } from "@/services/api/channel-websites";
 import { ChannelWebsiteDialog } from "./channel-website-dialog";
 import { useChannelKeySort } from "./use-channel-key-sort";
+import { AntigravityConnection } from "./antigravity-connection";
 
 type ChannelFormValues = {
     apiFormat?: ModelChannel["apiFormat"];
@@ -90,6 +91,8 @@ export default function ChannelsPage() {
     const requestSequence = useRef(0);
     const [form] = Form.useForm<ChannelFormValues>();
     const useGlobalConcurrency = Form.useWatch("useGlobalConcurrency", form) !== false;
+    // Antigravity 分组的凭据由 agy 登录保存，抽屉只保留名称、代理、并发和启停。
+    const antigravityKey = (editingChannel?.apiFormat ?? addingToWebsite?.apiFormat) === "antigravity";
     const hasFilters = Boolean(keyword || status !== "all" || category !== "all");
     const { visibleChannels, selectedChannel: fallbackChannel } = selectChannelWorkspace(channels, keyword, status, selectedChannelId, category);
     const visibleWebsites = websites.filter(
@@ -229,7 +232,7 @@ export default function ChannelsPage() {
             message.error(headerError);
             return;
         }
-        if (!editingChannel && !values.apiKey?.trim()) {
+        if (!editingChannel && !antigravityKey && !values.apiKey?.trim()) {
             message.error("请填写 API Key 或 Access Key");
             return;
         }
@@ -243,8 +246,10 @@ export default function ChannelsPage() {
             setDrawerOpen(false);
             form.resetFields();
             await reload();
-            if (!editingChannel) setAutoFetchChannelId(channel.id);
-            message.success(editingChannel ? (editingChannel.websiteId !== channel.websiteId ? "Key 分组已保存；公共连接变化后已归入独立网站" : "Key 分组已更新") : "Key 已保存，正在读取模型目录");
+            if (!editingChannel && !antigravityKey) setAutoFetchChannelId(channel.id);
+            message.success(
+                editingChannel ? (editingChannel.websiteId !== channel.websiteId ? "Key 分组已保存；公共连接变化后已归入独立网站" : "Key 分组已更新") : antigravityKey ? "Key 分组已保存，请在分组里安装 CLI 并登录" : "Key 已保存，正在读取模型目录",
+            );
         } catch (error) {
             message.error(error instanceof Error ? error.message : "保存系统渠道失败");
         } finally {
@@ -637,10 +642,11 @@ export default function ChannelsPage() {
                                                         {channel.name}
                                                     </h3>
                                                     <AdminStatusBadge label={channel.enabled !== false ? "启用" : "停用"} tone={channel.enabled !== false ? "success" : "neutral"} />
-                                                    {!channel.hasApiKey && <AdminStatusBadge label="未配置凭证" tone="warning" />}
+                                                    {!channel.hasApiKey && channel.apiFormat !== "antigravity" && <AdminStatusBadge label="未配置凭证" tone="warning" />}
                                                 </>
                                             }
                                             groupActions={(openSort) => channelActions(channel, openSort)}
+                                            groupPanel={channel.apiFormat === "antigravity" ? <AntigravityConnection channel={channel} onSignedIn={() => setAutoFetchChannelId(channel.id)} /> : undefined}
                                             autoFetch={autoFetchChannelId === channel.id}
                                             onAutoFetchConsumed={() => setAutoFetchChannelId((current) => (current === channel.id ? null : current))}
                                             refreshVersion={importVersion}
@@ -686,11 +692,12 @@ export default function ChannelsPage() {
                     <Form.Item name="name" label="Key 分组名称" rules={[{ required: true, message: "请填写 Key 分组名称" }]}>
                         <Input placeholder="例如：OpenAI 官方渠道" />
                     </Form.Item>
-                    <Form.Item name="baseUrl" label="Base URL" rules={[{ required: true, message: "请填写 Base URL" }]}>
+                    <Form.Item name="baseUrl" label="Base URL" hidden={antigravityKey} rules={[{ required: true, message: "请填写 Base URL" }]}>
                         <Input disabled={Boolean(addingToWebsite)} placeholder="填写云端渠道 Base URL" />
                     </Form.Item>
+                    {antigravityKey && <p className="mb-4 text-xs text-foreground/55">这个 Key 分组由服务器上的官方 Antigravity CLI 调用模型。保存后在分组的 Antigravity 面板里安装 CLI、选择登录方式并登录，再读取模型。</p>}
                     {editingChannel?.websiteId && <p className="mb-4 text-xs text-foreground/55">修改地址、目录格式、代理或公共请求头会将当前 Key 分组移到独立网站。批量修改请使用“编辑网站”。</p>}
-                    <Form.Item name="apiFormat" label="模型目录格式">
+                    <Form.Item name="apiFormat" label="模型目录格式" hidden={antigravityKey}>
                         <Select
                             disabled={Boolean(addingToWebsite)}
                             options={[
@@ -699,28 +706,34 @@ export default function ChannelsPage() {
                             ]}
                         />
                     </Form.Item>
-                    <Form.Item
-                        name="apiKey"
-                        label={editingChannel ? `API Key / Access Key（${configuredSecretText}）` : "API Key / Access Key"}
-                        rules={editingChannel ? [] : [{ required: true, message: "请填写 API Key 或 Access Key" }]}
-                        extra="OpenAI 兼容协议填写 API Key；即梦官方协议填写 IAM Access Key。"
-                    >
-                        <Input.Password autoComplete="new-password" placeholder={editingChannel ? "留空保留原凭证" : "API Key 或 Access Key"} />
-                    </Form.Item>
-                    <Form.Item name="secretKey" label={editingChannel ? `Secret Key（${channelSecretText(editingChannel)}）` : "Secret Key（可选）"} extra="仅即梦官方等 AK/SK 签名协议需要；其他渠道留空。">
-                        <Input.Password autoComplete="new-password" placeholder={editingChannel ? "留空保留原 Secret Key" : "IAM Secret Key"} />
-                    </Form.Item>
-                    <div className="mb-6">
-                        <Form.Item name="headers" noStyle>
-                            <ChannelHeadersEditor />
-                        </Form.Item>
-                    </div>
-                    <Form.Item name="proxyUrl" label="代理地址" extra="为该渠道单独配置出站代理，支持 socks5://、socks5h://、http://、https://。留空则使用全局环境变量代理。">
+                    {!antigravityKey && (
+                        <>
+                            <Form.Item
+                                name="apiKey"
+                                label={editingChannel ? `API Key / Access Key（${configuredSecretText}）` : "API Key / Access Key"}
+                                rules={editingChannel ? [] : [{ required: true, message: "请填写 API Key 或 Access Key" }]}
+                                extra="OpenAI 兼容协议填写 API Key；即梦官方协议填写 IAM Access Key。"
+                            >
+                                <Input.Password autoComplete="new-password" placeholder={editingChannel ? "留空保留原凭证" : "API Key 或 Access Key"} />
+                            </Form.Item>
+                            <Form.Item name="secretKey" label={editingChannel ? `Secret Key（${channelSecretText(editingChannel)}）` : "Secret Key（可选）"} extra="仅即梦官方等 AK/SK 签名协议需要；其他渠道留空。">
+                                <Input.Password autoComplete="new-password" placeholder={editingChannel ? "留空保留原 Secret Key" : "IAM Secret Key"} />
+                            </Form.Item>
+                            <div className="mb-6">
+                                <Form.Item name="headers" noStyle>
+                                    <ChannelHeadersEditor />
+                                </Form.Item>
+                            </div>
+                        </>
+                    )}
+                    <Form.Item name="proxyUrl" label="代理地址" extra={antigravityKey ? "agy 访问 Google 时使用的代理；留空跟随系统代理。" : "为该渠道单独配置出站代理，支持 socks5://、socks5h://、http://、https://。留空则使用全局环境变量代理。"}>
                         <Input disabled={Boolean(addingToWebsite)} placeholder="例如：socks5://127.0.0.1:1080 或 http://127.0.0.1:7890" />
                     </Form.Item>
-                    <Form.Item name="mediaTransport" label="参考素材发送方式" extra="作为本渠道默认值；渠道内模型可单独覆盖。未设置时保持现有协议行为。">
-                        <MediaTransportFields />
-                    </Form.Item>
+                    {!antigravityKey && (
+                        <Form.Item name="mediaTransport" label="参考素材发送方式" extra="作为本渠道默认值；渠道内模型可单独覆盖。未设置时保持现有协议行为。">
+                            <MediaTransportFields />
+                        </Form.Item>
+                    )}
                     <Form.Item name="useGlobalConcurrency" label="跟随系统并发配置" valuePropName="checked">
                         <Switch />
                     </Form.Item>

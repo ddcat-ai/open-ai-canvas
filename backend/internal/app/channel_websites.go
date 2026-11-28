@@ -81,8 +81,8 @@ func (s *Service) SaveAdminChannelWebsite(actor *model.User, id string, req Chan
 	if format == "" {
 		format = "openai"
 	}
-	if format != "openai" && format != "gemini" {
-		return nil, BadAuthRequest("目录格式只支持 OpenAI 或 Gemini")
+	if format != "openai" && format != "gemini" && format != model.AntigravityAPIFormat {
+		return nil, BadAuthRequest("目录格式只支持 OpenAI、Gemini 或 Antigravity")
 	}
 	for _, header := range req.Headers {
 		if !model.IsWebsitePublicHeader(header.Name) {

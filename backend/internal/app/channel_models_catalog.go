@@ -18,12 +18,8 @@ func (s *Service) FetchAdminChannelModels(ctx context.Context, actor *model.User
 	if err != nil {
 		return nil, err
 	}
-	headers, err := ParseOutboundHeadersJSON(channel.HeadersJSON)
-	if err != nil {
-		return nil, err
-	}
 	// 使用服务端保存的渠道密钥和请求头访问上游，避免敏感配置再次经过浏览器。
-	models, err := s.FetchChannelModels(ctx, actor, ChannelModelsRequest{BaseURL: channel.BaseURL, APIKey: channel.APIKey, APIFormat: channel.APIFormat, ProxyURL: channel.ProxyURL, Headers: headers})
+	models, err := s.adminChannelCatalogModels(ctx, actor, channel)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +45,7 @@ func (s *Service) FetchAdminChannelModels(ctx context.Context, actor *model.User
 		if idErr != nil {
 			return nil, idErr
 		}
-		missing = append(missing, model.ChannelModel{ID: modelID, ChannelID: channelID, ModelKey: name, ProviderModelKey: name, DisplayName: "未分类", BillingMode: "fixed_request", Enabled: false, PriceVersion: 1})
+		missing = append(missing, s.newCatalogChannelModel(channel, modelID, name))
 	}
 	var added int64
 	err = s.repo.Transaction(func(repo *repository.Repository) error {
@@ -142,7 +138,7 @@ func (s *Service) ImportAdminChannelModels(ctx context.Context, actor *model.Use
 		if idErr != nil {
 			return nil, idErr
 		}
-		missing = append(missing, model.ChannelModel{ID: modelID, ChannelID: channelID, ModelKey: name, ProviderModelKey: name, DisplayName: "未分类", BillingMode: "fixed_request", Enabled: false, PriceConfigured: false, PriceVersion: 1})
+		missing = append(missing, s.newCatalogChannelModel(channel, modelID, name))
 		known[key] = struct{}{}
 	}
 	var added int64

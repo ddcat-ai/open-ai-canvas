@@ -344,8 +344,10 @@ func (s *Service) DeleteSystemChannel(actor *model.User, id string) error {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return BadAuthRequest("系统渠道不存在或已删除")
 	}
-	if err == nil {
-		s.invalidateRouteCatalog()
+	if err != nil {
+		return err
 	}
-	return err
+	s.invalidateRouteCatalog()
+	// Antigravity 的登录凭据保存在 agy 资料目录里，和渠道密钥一起清除。
+	return s.removeAntigravityProfile(channel)
 }

@@ -207,8 +207,8 @@ func (s *Service) channelFromRequest(req ChannelRequest, channel model.ModelChan
 	// 系统渠道只保存地址与凭证；实际协议和鉴权方式由所选模型决定。
 	if req.APIFormat != nil {
 		format := strings.ToLower(strings.TrimSpace(*req.APIFormat))
-		if format != "openai" && format != "gemini" {
-			return channel, BadAuthRequest("目录格式只支持 OpenAI 或 Gemini")
+		if format != "openai" && format != "gemini" && format != model.AntigravityAPIFormat {
+			return channel, BadAuthRequest("目录格式只支持 OpenAI、Gemini 或 Antigravity")
 		}
 		channel.APIFormat = format
 	} else if channel.APIFormat == "" {

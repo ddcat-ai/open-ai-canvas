@@ -5,6 +5,10 @@ description: 当前项目已实现的核心工作台能力与使用入口
 
 # 功能清单
 
+## Antigravity 渠道
+
+后台「渠道与模型」新增「Antigravity（官方 agy CLI）」目录格式。每个 Key 分组在面板里安装官方 Antigravity CLI，用 Google 账号、Gemini Enterprise、Gemini API Key 或 Agent Platform 登录，再按原有流程读取、导入并定价模型。画布 Agent 和文本任务都能使用这些模型，画布工具经本机 MCP 工具桥交给 agy。详见[渠道配置](/docs/backend/channel-configuration#antigravity-渠道)。
+
 ## 后台声明式请求协议工作台
 
 管理员可在「模型与渠道 → 请求协议」（也可从「插件管理 → 请求协议工作台」进入）可视化配置、复制模板、离线校验并发布声明式供应商请求协议。发布产物为标准 `.yingce-plugin` 插件包，保持稳定协议标识并按 SemVer 递增归档历史发行版；在「版本」历史和「绑定」弹窗中，可将渠道模型按 `protocolRelease` 摘要批量升级或回退到指定发行版，进行中的任务继续使用入队时锁定的协议摘要。详见[请求协议管理](/docs/backend/request-protocols)。

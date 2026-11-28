@@ -6,6 +6,9 @@ import (
 	"gorm.io/gorm"
 )
 
+// AntigravityAPIFormat 标记由服务器上的官方 Antigravity CLI（agy）执行模型请求的渠道。
+const AntigravityAPIFormat = "antigravity"
+
 type ModelChannel struct {
 	WebsiteID string       `json:"websiteId,omitempty" gorm:"size:36;index;not null;default:''"`
 	ID        string       `json:"id" gorm:"primaryKey;size:36"`

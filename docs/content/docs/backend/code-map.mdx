@@ -5,6 +5,12 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## Antigravity 渠道
+
+- 后台入口：`pages/admin/channels/channel-website-dialog.tsx` 的目录格式选项，`pages/admin/channels/antigravity-connection.tsx` 连接面板（经 `ChannelModelManager` 的 `groupPanel` 显示在分组标题下），`services/api/antigravity.ts`。
+- 接口与组合：`handler/admin_antigravity_routes.go` → `app/antigravity_channel.go`；目录读取在 `adminChannelCatalogModels` 分流，`resolveProviderConfig` 为 Antigravity 渠道附加 agy 资料目录，`runTextTask` / `runAgentToolTask` 改走 `runAntigravityTextTask` / `runAntigravityAgentTask`。
+- 协议实现：`internal/antigravity`。`runtime.go` 安装官方 agy，`acp.go` 是 stdio JSON-RPC 客户端，`login.go` 处理贴码登录，`mcp.go` 是本次调用专用的本机 MCP 工具桥，`chat.go` 转写对话并截获工具调用。
+
 ## 团队空间
 
 - `web/src/router.tsx` 为个人和团队挂载相同的 `pages/canvas`、`pages/create`、`pages/assets`；`lib/workspace-routes.ts` 选择 API 前缀，`lib/user-scope.ts` 隔离本地缓存。`pages/teams` 只负责空间、成员、邀请和钱包。

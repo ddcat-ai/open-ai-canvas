@@ -5,6 +5,22 @@ description: 信封、错误码与 OpenAPI
 
 # HTTP API 合同
 
+## Antigravity 渠道
+
+以下接口均在 `/api` 下，要求管理员登录。`:id` 是目录格式为 `antigravity` 的系统渠道（Key 分组）；其他渠道返回 400。响应 `data.antigravity` 为连接状态：`runtime`（`installed`、`version`、`target`、`supported`）、`authMethod`、`gcpProject`、`gcpLocation`、`hasApiKey`、最近一次检查 `connection`（`signedIn`、`models[]`、`defaultModel`、`agentVersion`、`checkedAt`、`error`）和登录流程 `login`（`phase` 为 `idle`、`waiting`、`verifying`、`succeeded` 或 `failed`，等待时带 `authorizationUrl` 与 `expiresAt`）。状态不含 API Key 或 agy 凭据。
+
+| 接口 | 说明 |
+| --- | --- |
+| `POST /admin/antigravity/runtime/install` | 按官方发行清单安装或更新服务器上的 agy，返回 `{ runtime }`；已是最新版本时不重复下载 |
+| `GET /admin/channels/:id/antigravity` | 读取连接状态；`?refresh=1` 时启动一次 agy 重新检查登录和可用模型 |
+| `PUT /admin/channels/:id/antigravity/settings` | 保存 `{ authMethod, apiKey?, gcpProject?, gcpLocation? }`；`apiKey` 留空保留原值，切换方式会结束进行中的登录 |
+| `POST /admin/channels/:id/antigravity/login` | 启动 `agy acp --login`，返回带 Google 登录链接的状态；仅 Google 账号与 Gemini Enterprise 方式可用 |
+| `POST /admin/channels/:id/antigravity/login/code` | 提交 `{ code }`（Antigravity 页面显示的授权码或该页完整网址），成功后立即检查连接并读取模型 |
+| `POST /admin/channels/:id/antigravity/login/cancel` | 结束进行中的登录 |
+| `POST /admin/channels/:id/antigravity/logout` | 通过 agy 的 ACP `logout` 清除该分组的 Google 登录 |
+
+读取目录沿用 `POST /admin/channels/:id/models/fetch` 与 `models/import`；Antigravity 渠道的目录来自 agy 为当前账号列出的模型，未登录时返回 400。系统渠道中转 `/api/ai/system/:channelId/*` 对 Antigravity 渠道返回 400，模型只能由后台任务调用。
+
 ## 团队空间
 
 以下接口均在 `/api` 下，使用登录 Cookie。`teamId`、`membershipId`、素材 ID 只用于定位；操作权限由服务端根据当前账号及其有效成员关系决定。成员不能访问其他团队或冒用所有者，待处理邀请不授予读取权限。

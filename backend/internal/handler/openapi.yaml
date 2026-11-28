@@ -3557,6 +3557,91 @@ paths:
           description: 信封 data 包含 models 字符串数组、可选 readAt 和 stale；从未读取时 models 为空且无 readAt，连接或凭据变化后 stale 为 true
         "401": {$ref: "#/components/responses/Error"}
         "403": {$ref: "#/components/responses/Error"}
+  /admin/antigravity/runtime/install:
+    post:
+      tags: [admin]
+      summary: 按官方发行清单安装或更新服务器上的 Antigravity CLI（agy）
+      responses:
+        "200": {description: 信封 data.runtime 包含 installed、version、target、supported}
+        "400": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/channels/{id}/antigravity:
+    get:
+      tags: [admin]
+      summary: 读取 Antigravity Key 分组的连接状态
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+        - {in: query, name: refresh, required: false, schema: {type: string, enum: ["1"]}, description: 为 1 时启动一次 agy 重新检查登录和可用模型}
+      responses:
+        "200": {description: 信封 data.antigravity 包含 runtime、authMethod、gcpProject、gcpLocation、hasApiKey、可选 connection 与 login；不含任何凭据}
+        "400": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/channels/{id}/antigravity/settings:
+    put:
+      tags: [admin]
+      summary: 保存 Antigravity 登录方式，apiKey 留空保留原值
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [authMethod]
+              properties:
+                authMethod: {type: string, enum: [oauth-personal, oauth-business, gemini-api-key, agent-platform]}
+                apiKey: {type: string}
+                gcpProject: {type: string}
+                gcpLocation: {type: string}
+      responses:
+        "200": {description: 信封 data.antigravity 为保存后的连接状态}
+        "400": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/channels/{id}/antigravity/login:
+    post:
+      tags: [admin]
+      summary: 启动 agy 贴码登录，返回 Google 登录链接
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      responses:
+        "200": {description: 信封 data.antigravity.login 为 waiting，带 authorizationUrl 与 expiresAt}
+        "400": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/channels/{id}/antigravity/login/code:
+    post:
+      tags: [admin]
+      summary: 提交 Antigravity 页面显示的授权码或该页完整网址
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [code], properties: {code: {type: string}}}
+      responses:
+        "200": {description: 信封 data.antigravity.login 为 succeeded 或 failed；成功时 connection 为登录后的检查结果}
+        "400": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/channels/{id}/antigravity/login/cancel:
+    post:
+      tags: [admin]
+      summary: 结束进行中的 Antigravity 登录
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      responses:
+        "200": {description: 信封 data.antigravity 为当前连接状态}
+        "403": {$ref: "#/components/responses/Error"}
+  /admin/channels/{id}/antigravity/logout:
+    post:
+      tags: [admin]
+      summary: 通过 agy 清除该 Key 分组保存的 Google 登录
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: string}}
+      responses:
+        "200": {description: 信封 data.antigravity 为退出后的连接状态}
+        "400": {$ref: "#/components/responses/Error"}
+        "403": {$ref: "#/components/responses/Error"}
   /admin/channels/{id}/models/fetch:
     post:
       tags: [admin]

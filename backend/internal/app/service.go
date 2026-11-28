@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"yingce/backend/internal/antigravity"
 	"yingce/backend/internal/auth"
 	"yingce/backend/internal/canvas"
 	"yingce/backend/internal/inspirations"
@@ -31,6 +32,8 @@ import (
 type Service struct {
 	repo                     *repository.Repository
 	dataDir                  string
+	antigravityOnce          sync.Once
+	antigravity              *antigravity.Manager
 	cancelMu                 sync.Mutex
 	registrationMu           sync.Mutex
 	emailCodeMu              sync.Mutex

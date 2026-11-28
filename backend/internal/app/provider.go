@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"yingce/backend/internal/antigravity"
 	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/protocol"
@@ -107,6 +108,10 @@ type providerConfig struct {
 	RunningHubUseWallet   bool                    `json:"runningHubUseWallet"`
 	RunningHubWalletKey   string                  `json:"runningHubWalletApiKey"`
 	RunningHubUploadKey   string                  `json:"runningHubUploadApiKey"`
+
+	// Antigravity 系统渠道由 resolveProviderConfig 附加 agy 资料目录；不从任务输入反序列化。
+	antigravity        *antigravity.Manager
+	antigravityProfile antigravity.Profile
 }
 
 const providerHTTPTimeout = 5 * time.Minute
@@ -232,7 +237,8 @@ func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string
 			return nil, errors.New("后端任务队列暂不支持该 Gemini 调用格式，请选择已安装的 Gemini 协议插件")
 		}
 	}
-	if strings.TrimSpace(input.Config.BaseURL) == "" || strings.TrimSpace(input.Config.APIKey) == "" || strings.TrimSpace(input.Config.Model) == "" {
+	// Antigravity 渠道的凭据由 agy 资料目录保存，渠道上可以没有 API Key。
+	if strings.TrimSpace(input.Config.BaseURL) == "" || (input.Config.APIFormat != antigravityAPIFormat && strings.TrimSpace(input.Config.APIKey) == "") || strings.TrimSpace(input.Config.Model) == "" {
 		return nil, errors.New("后端生成任务缺少 Base URL、API Key 或模型名")
 	}
 	if err := validateGenerationInterfaceWithRegistry(config.registry, input.Mode, input.Config.InterfaceType); err != nil {
@@ -321,7 +327,8 @@ type providerMediaHydrationPolicy struct {
 }
 
 func providerMediaHydrationPolicyFor(ctx context.Context, input canvasGenerationInput) providerMediaHydrationPolicy {
-	policy := providerMediaHydrationPolicy{preferURL: providerPrefersMediaURLs(input.Config.InterfaceType, input)}
+	// agy 的 ACP prompt 只能内嵌图片数据，素材按 data URL 发送。
+	policy := providerMediaHydrationPolicy{preferURL: input.Config.APIFormat != antigravityAPIFormat && providerPrefersMediaURLs(input.Config.InterfaceType, input)}
 	switch strings.TrimSpace(input.Config.InterfaceType) {
 	case string(model.ChannelInterfaceNewAPIVideo), string(model.ChannelInterfaceNewAPIChannel1), string(model.ChannelInterfaceNewAPIChannel2), string(model.ChannelInterfaceVolcengineArkVideo), string(model.ChannelInterfaceVolcengineArkAgentPlanVideo), string(model.ChannelInterfaceMiniMaxVideo):
 		policy.requireURL = true
@@ -476,12 +483,20 @@ func (s *Service) resolveProviderConfig(config providerConfig, task *model.Task)
 	config.ChannelModelKey = modelKey
 	config.ProviderModelKey = providerModelKey
 	config.Model = firstNonEmpty(providerModelKey, channelModel.ProviderModelKey, modelKey)
+	if channel.APIFormat == antigravityAPIFormat {
+		config.antigravity = s.antigravityManager()
+		config.antigravityProfile = antigravityProfile(*channel)
+	}
 	return config, nil
 }
 
 // channelAPIFormatForProtocol 以模型协议而不是客户端缓存决定鉴权和请求封装格式。
 // 同一系统渠道可以挂载不同协议的模型，因此渠道级 APIFormat 只能作为协议缺失时的兼容值。
 func channelAPIFormatForProtocol(channelDefault string, protocol model.ChannelInterfaceType) string {
+	// Antigravity 渠道的所有模型都由 agy 执行，与模型登记的协议无关。
+	if strings.TrimSpace(channelDefault) == antigravityAPIFormat {
+		return antigravityAPIFormat
+	}
 	switch protocol {
 	case model.ChannelInterfaceGeminiVeo, model.ChannelInterfaceGeminiImage:
 		return "gemini"
