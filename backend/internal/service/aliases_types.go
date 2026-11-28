@@ -210,6 +210,16 @@ type (
 	ImageSizePreset                        = app.ImageSizePreset
 	ImportProjectUnitsRequest              = app.ImportProjectUnitsRequest
 	InputConstraint                        = app.InputConstraint
+	JimengImportRequest                    = app.JimengImportRequest
+	JimengImportResult                     = app.JimengImportResult
+	JimengCanvasConnection                 = app.JimengCanvasConnection
+	JimengCanvasNode                       = app.JimengCanvasNode
+	JimengImportIssue                      = app.JimengImportIssue
+	JimengImportMetadata                   = app.JimengImportMetadata
+	JimengImportWarning                    = app.JimengImportWarning
+	JimengMediaRequest                     = app.JimengMediaRequest
+	JimengImportMediaItem                  = app.JimengImportMediaItem
+	JimengImportMediaResult                = app.JimengImportMediaResult
 	LibTVImportRequest                     = app.LibTVImportRequest
 	LibTVImportResult                      = app.LibTVImportResult
 	LibTVCanvasConnection                  = app.LibTVCanvasConnection

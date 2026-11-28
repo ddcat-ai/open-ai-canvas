@@ -49,6 +49,16 @@ type (
 	TapNowImportIssue           = auth.TapNowImportIssue
 	TapNowImportMetadata        = auth.TapNowImportMetadata
 	TapNowImportWarning         = auth.TapNowImportWarning
+	JimengImportRequest         = auth.JimengImportRequest
+	JimengImportResult          = auth.JimengImportResult
+	JimengCanvasConnection      = auth.JimengCanvasConnection
+	JimengCanvasNode            = auth.JimengCanvasNode
+	JimengImportIssue           = auth.JimengImportIssue
+	JimengImportMetadata        = auth.JimengImportMetadata
+	JimengImportWarning         = auth.JimengImportWarning
+	JimengMedia                 = auth.JimengMedia
+	JimengMediaRequest          = auth.JimengMediaRequest
+	JimengResolvedMedia         = auth.JimengResolvedMedia
 )
 
 type authHost struct {
@@ -278,6 +288,14 @@ func (s *Service) DisconnectLibTV(actor *model.User) (*PublicLibTVSetting, error
 
 func (s *Service) ImportTapNow(userID, canvasProjectID, shareID string) (*TapNowImportResult, error) {
 	return s.authDomain().ImportTapNow(userID, canvasProjectID, shareID)
+}
+
+func (s *Service) ImportJimeng(userID, canvasProjectID, projectID string) (*JimengImportResult, error) {
+	return s.authDomain().ImportJimeng(userID, canvasProjectID, projectID)
+}
+
+func (s *Service) ResolveJimengMedia(userID, canvasProjectID, projectID string, resourceIDs []string) ([]JimengResolvedMedia, error) {
+	return s.authDomain().ResolveJimengMedia(userID, canvasProjectID, projectID, resourceIDs)
 }
 
 func hashPassword(password string) (string, error) {

@@ -217,6 +217,8 @@ const LibTVImportDialog = lazy(() => import("./components/libtv-import-dialog").
 
 const TapNowImportDialog = lazy(() => import("./components/tapnow-import-dialog").then((module) => ({ default: module.TapNowImportDialog })));
 
+const JimengImportDialog = lazy(() => import("./components/jimeng-import-dialog").then((module) => ({ default: module.JimengImportDialog })));
+
 const CanvasImageCompareModal = lazy(() => import("@/components/canvas/canvas-image-compare-modal").then((module) => ({ default: module.CanvasImageCompareModal })));
 
 const NODE_STATUS_SUCCESS = "success" as const;
@@ -307,6 +309,7 @@ function CanvasViewportPage() {
     const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
     const [shareModalOpen, setShareModalOpen] = useState(false);
     const [tapNowImportOpen, setTapNowImportOpen] = useState(false);
+    const [jimengImportOpen, setJimengImportOpen] = useState(false);
     const [nodeSearchOpen, setNodeSearchOpen] = useState(false);
     const [toolbarNodeId, setToolbarNodeId] = useState<string | null>(null);
     const [arkPrivateAssetUploadNodeId, setArkPrivateAssetUploadNodeId] = useState<string | null>(null);
@@ -3018,6 +3021,7 @@ function CanvasViewportPage() {
                                     onViewChange={changeCanvasView}
                                     onImportLibTV={() => setLibTVImportOpen(true)}
                                     onImportTapNow={() => setTapNowImportOpen(true)}
+                                    onImportJimeng={() => setJimengImportOpen(true)}
                                     onShare={workspaceTeamId ? undefined : () => setShareModalOpen(true)}
                                     shortcutRequestNonce={shortcutRequestNonce}
                                     onOpenSearch={() => setNodeSearchOpen(true)}
@@ -3058,6 +3062,11 @@ function CanvasViewportPage() {
                             {tapNowImportOpen ? (
                                 <Suspense fallback={null}>
                                     <TapNowImportDialog key={projectId} open projectId={projectId} viewport={viewport} viewportSize={size} onClose={() => setTapNowImportOpen(false)} onApply={applyImportedCanvas} />
+                                </Suspense>
+                            ) : null}
+                            {jimengImportOpen ? (
+                                <Suspense fallback={null}>
+                                    <JimengImportDialog key={projectId} open projectId={projectId} viewport={viewport} viewportSize={size} onClose={() => setJimengImportOpen(false)} beforeImport={saveCanvasProject} onApply={applyImportedCanvas} />
                                 </Suspense>
                             ) : null}
 

@@ -311,6 +311,17 @@ export type CanvasNodeMetadata = {
               nodeId: string;
               batchId: string;
               sourceType?: string;
+          }
+        | {
+              provider: "jimeng";
+              projectId: string;
+              nodeId: string;
+              /** 即梦侧的素材 ID。画布保存会把名为 resourceId 的字段当作影策资源校验，不能沿用那个名字。 */
+              mediaResourceId?: string;
+              batchId: string;
+              sourceType?: string;
+              /** 即梦临时媒体地址的过期时间；素材转存后不再依赖它。 */
+              expiresAt?: string;
           };
     content?: string;
     officialAssetId?: string;
