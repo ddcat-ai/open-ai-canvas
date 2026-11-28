@@ -121,6 +121,13 @@ export function readNodeGenerationSpec(node: Pick<CanvasNodeData, "type" | "meta
             if (value === undefined || value === null || (value === "" && field.name !== "audioVoice")) delete options[field.name];
             else options[field.name] = optionValue(value, field.kind, field.node);
         }
+    } else if (mode === "video" && !Object.prototype.hasOwnProperty.call(options, "durationSeconds")) {
+        // A valid generationSpec written by an older Agent may omit duration
+        // while the compatibility mirror still carries the user's choice.
+        // Migrate only this field so other flat mirrors cannot override the
+        // canonical contract.
+        const legacyDuration = metadata.seconds;
+        if (legacyDuration !== undefined && legacyDuration !== null && legacyDuration !== "") options.durationSeconds = optionValue(legacyDuration, "number", "seconds");
     }
     const modelSelection =
         stored?.modelSelection ||

@@ -1,10 +1,10 @@
 // 兑换码批次的创建抽屉、生成结果与批次明细弹窗。
 
-import { App, Button, Form, Input, InputNumber, Popconfirm, Space } from "antd";
+import { App, Button, Form, Input, InputNumber, Popconfirm, Segmented, Space, Switch } from "antd";
 import { AdminDrawer, AdminModal } from "@/pages/admin/ui/overlays";
 import { Ban, Copy, KeyRound, TicketCheck } from "lucide-react";
 import { formatCredits } from "@/constant/credits";
-import { type AdminRedeemCode, disableAdminRedeemCode, listAdminRedeemBatchCodes, type RedeemBatch } from "@/services/api/wallet";
+import { disableAdminRedeemCode, listAdminRedeemBatchCodes, redeemCapabilityLabel, type AdminRedeemCode, type RedeemAllowedCapability, type RedeemBatch } from "@/services/api/wallet";
 import { AdminDataTable, AdminExportButton, AdminStatusBadge, AdminTableEmpty } from "./admin-ui";
 import { useEffect, useRef, useState } from "react";
 import { type ColumnsType } from "antd/es/table";
@@ -49,6 +49,9 @@ export function CreateRedeemBatchDrawer({
     onPendingChange: (values: PendingRedeemBatch | null) => void;
     onConfirm: () => void;
 }) {
+    const watchedOnePerUser = Form.useWatch("onePerUser", form);
+    const watchedAllowedCapability = Form.useWatch("allowedCapability", form) as RedeemAllowedCapability | undefined;
+    const watchedExpiresAt = Form.useWatch("expiresAt", form) as string | undefined;
     return (
         <>
             <AdminDrawer
@@ -133,6 +136,25 @@ export function CreateRedeemBatchDrawer({
                         >
                             <Input type="datetime-local" aria-label="批次过期时间" />
                         </Form.Item>
+                        <Form.Item name="allowedCapability" label="可用能力范围" extra="可选。限制本次卡密积分仅能用于图片或视频（充值渠道通用积分无限制，Agent 对话也不受限制）。">
+                            <Segmented
+                                block
+                                options={[
+                                    { label: "无限制", value: "" },
+                                    { label: "仅限图片", value: "image" },
+                                    { label: "仅限视频", value: "video" },
+                                ]}
+                            />
+                        </Form.Item>
+                        <div className="mb-5 flex items-center justify-between gap-4 rounded-lg border border-[var(--admin-card-border)] px-3.5 py-2.5">
+                            <div className="min-w-0">
+                                <div className="text-[13px] font-medium text-[var(--admin-text-primary)]">限制单账号兑换次数</div>
+                                <div className="mt-0.5 text-xs text-[var(--admin-text-muted)]">{watchedOnePerUser ? "已开启：同一账号在本批次内最多兑换 1 次" : "未限制：同一账号可兑换本批次多个兑换码"}</div>
+                            </div>
+                            <Form.Item name="onePerUser" valuePropName="checked" noStyle>
+                                <Switch aria-label="限制单账号兑换次数" />
+                            </Form.Item>
+                        </div>
                         <Form.Item name="note" label="批次备注" extra="用于列表检索和后续追溯，不会展示给兑换用户。">
                             <Input.TextArea rows={3} maxLength={500} showCount placeholder="例如：2026 年秋季活动发放" />
                         </Form.Item>
@@ -148,6 +170,18 @@ export function CreateRedeemBatchDrawer({
                             <div className="is-emphasis">
                                 <dt>批次总面值</dt>
                                 <dd>{draftTotal !== null ? formatCredits(draftTotal) : "--"}</dd>
+                            </div>
+                            <div>
+                                <dt>可用范围</dt>
+                                <dd>{redeemCapabilityLabel(watchedAllowedCapability)}</dd>
+                            </div>
+                            <div>
+                                <dt>账号限兑</dt>
+                                <dd>{watchedOnePerUser ? "单账号限兑 1 次" : "不限次数"}</dd>
+                            </div>
+                            <div>
+                                <dt>有效期</dt>
+                                <dd>{watchedExpiresAt ? watchedExpiresAt.replace("T", " ") : "永久有效"}</dd>
                             </div>
                         </dl>
                     </section>
@@ -188,6 +222,14 @@ export function CreateRedeemBatchDrawer({
                             <div>
                                 <dt>过期时间</dt>
                                 <dd>{pending.expiresAt ? formatTime(pending.expiresAt) : "永久有效"}</dd>
+                            </div>
+                            <div>
+                                <dt>可用范围</dt>
+                                <dd>{redeemCapabilityLabel(pending.allowedCapability)}</dd>
+                            </div>
+                            <div>
+                                <dt>账号限兑</dt>
+                                <dd>{pending.onePerUser ? "单账号限兑 1 次" : "不限次数"}</dd>
                             </div>
                             <div className="is-wide">
                                 <dt>批次备注</dt>
@@ -433,6 +475,12 @@ export function RedeemBatchCodesModal({ batch, onClose, onBatchChanged }: { batc
                 <span>总数 {batchSummary?.count ?? batch?.count ?? 0}</span>
                 <span>{batchSummary?.expiresAt || batch?.expiresAt ? `到期 ${formatTime(batchSummary?.expiresAt || batch?.expiresAt)}` : "永久有效"}</span>
                 <span>创建 {formatTime(batchSummary?.createdAt || batch?.createdAt)}</span>
+                {(batchSummary?.allowedCapability ?? batch?.allowedCapability) ? (
+                    <AdminStatusBadge label={redeemCapabilityLabel(batchSummary?.allowedCapability ?? batch?.allowedCapability)} tone={(batchSummary?.allowedCapability ?? batch?.allowedCapability) === "image" ? "warning" : "info"} />
+                ) : (
+                    <span>能力无限制</span>
+                )}
+                {(batchSummary?.onePerUser ?? batch?.onePerUser) ? <AdminStatusBadge label="单账号限兑 1 次" tone="info" /> : <span>不限账号兑换次数</span>}
                 <code>批次 {String(batchSummary?.id || batch?.id || "").slice(0, 8)}</code>
             </div>
             <div className={`admin-modal-data-table-shell${detailsMutating ? " is-mutating" : ""}`}>

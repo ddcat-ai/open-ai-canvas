@@ -14,7 +14,7 @@ import { generationErrorMessage } from "@/lib/generation-error";
 import { isGenerationCostUncertainError } from "@/lib/canvas/canvas-generation-batch";
 import { generationPhaseHint, generationPhaseLabel, generationPhaseStep, generationTaskPhase, generationTaskSavingState, generationTaskShowsProgress, type GenerationPhase } from "@/lib/generation-task-display";
 import { useTaskElapsed } from "@/hooks/use-task-elapsed";
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode, type VideoHTMLAttributes } from "react";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { type CreationReference, displayCreationPrompt } from "./creation-references";
 import { useUserStore } from "@/stores/use-user-store";
@@ -183,6 +183,7 @@ function CreationSyncNotice({ refreshing, onRefresh, onRetry }: { refreshing: bo
 
 export function CreationUserMessage({ item, shotNumber, onEditUserMessage }: { item: CreationMessage; shotNumber: number; onEditUserMessage: (text: string) => void }) {
     const [previewUrl, setPreviewUrl] = useState("");
+    const [previewStorageKey, setPreviewStorageKey] = useState<string | undefined>(undefined);
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
     const copyText = useCopyText();
     const visiblePrompt = displayCreationPrompt(item.content, item.references || []);
@@ -221,13 +222,14 @@ export function CreationUserMessage({ item, shotNumber, onEditUserMessage }: { i
                                 onClick={() => {
                                     if (!previewable) return;
                                     setPreviewType(kind === "video" ? "video" : "image");
+                                    setPreviewStorageKey(attachment.storageKey);
                                     setPreviewUrl(kind === "video" ? attachment.url || "" : previewUrl);
                                 }}
                                 aria-label={previewable ? `预览 ${attachment.name || "附件"}` : attachment.name || "附件"}
                                 disabled={previewable && !previewUrl}
                             >
                                 {kind === "video" ? (
-                                    <video src={attachment.url || ""} poster={url !== attachment.url ? url : undefined} muted playsInline preload="metadata" />
+                                    <CreationSignedVideo storageKey={attachment.storageKey} src={attachment.url || ""} poster={url !== attachment.url ? url : undefined} muted playsInline preload="metadata" />
                                 ) : kind === "image" ? (
                                     <CachedResourceImage storageKey={attachment.storageKey} src={imageUrl} alt={attachment.name || "附件"} width={44} height={44} loading="lazy" decoding="async" />
                                 ) : kind === "audio" ? (
@@ -257,7 +259,15 @@ export function CreationUserMessage({ item, shotNumber, onEditUserMessage }: { i
                     </button>
                 </Tooltip>
             </div>
-            <CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} />
+            <CreationMediaPreviewModal
+                url={previewUrl}
+                storageKey={previewStorageKey}
+                type={previewType}
+                onClose={() => {
+                    setPreviewUrl("");
+                    setPreviewStorageKey(undefined);
+                }}
+            />
         </article>
     );
 }
@@ -282,6 +292,7 @@ export function MediaResult({
     openingCanvas: boolean;
 }) {
     const [previewUrl, setPreviewUrl] = useState("");
+    const [previewStorageKey, setPreviewStorageKey] = useState<string | undefined>(undefined);
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
     const assets = useAssetStore((state) => state.assets);
     const storedResultUrls = item.resultUrls || [];
@@ -702,7 +713,7 @@ export function CreationMessageReferences({ references }: { references: Creation
                 return (
                     <span key={reference.id} className="creation-user-message-reference">
                         {imageUrl && reference.kind === "video" ? (
-                            <video src={imageUrl} muted playsInline preload="metadata" aria-label={reference.label} />
+                            <CreationSignedVideo storageKey={reference.storageKey} src={imageUrl} muted playsInline preload="metadata" aria-label={reference.label} />
                         ) : imageUrl && reference.kind === "image" ? (
                             <CachedResourceImage storageKey={reference.storageKey} src={imageUrl} alt="" loading="lazy" decoding="async" />
                         ) : (
@@ -716,17 +727,43 @@ export function CreationMessageReferences({ references }: { references: Creation
     );
 }
 
-export function CreationMediaPreviewModal({ url, type, onClose }: { url: string; type: "image" | "video"; onClose: () => void }) {
-    if (type === "image") return <CanvasImagePreview src={url} alt="媒体预览" onClose={onClose} />;
+function CreationSignedVideo({ storageKey, src = "", ...props }: Omit<VideoHTMLAttributes<HTMLVideoElement>, "src"> & { storageKey?: string; src?: string }) {
+    const resourceId = resourceIdFromStorageKey(storageKey);
+    const [resolvedSrc, setResolvedSrc] = useState(resourceId ? "" : src);
+
+    useEffect(() => {
+        if (!storageKey || !resourceId) {
+            setResolvedSrc(src);
+            return;
+        }
+        let cancelled = false;
+        void getResourceAccess(storageKey, "display", "playback")
+            .then((access) => {
+                if (!cancelled) setResolvedSrc(resolveResourceAccessURL(access.url) || src);
+            })
+            .catch(() => {
+                if (!cancelled) setResolvedSrc(src);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [storageKey, resourceId, src]);
+
+    const effectiveSrc = resolvedSrc || (!resourceId ? src : "");
+    return <video {...props} src={effectiveSrc || undefined} />;
+}
+
+export function CreationMediaPreviewModal({ url, storageKey, type, onClose }: { url: string; storageKey?: string; type: "image" | "video"; onClose: () => void }) {
+    if (type === "image") return <CanvasImagePreview storageKey={storageKey} src={url} alt="媒体预览" onClose={onClose} />;
 
     return (
         <AppModal flush open={Boolean(url)} title={null} footer={null} centered destroyOnHidden width="min(1160px, calc(100vw - 32px))" onCancel={onClose} className="creation-media-preview-modal">
-            {url ? <video controls autoPlay className="creation-media-preview-video" src={url} /> : null}
+            {url || storageKey ? <CreationSignedVideo controls autoPlay className="creation-media-preview-video" storageKey={storageKey} src={url} /> : null}
         </AppModal>
     );
 }
 
-export function CreationAttachmentThumbnail({ item, onPreview, onRemove }: { item: CreationAttachment; onPreview: (type: "image" | "video", url: string) => void; onRemove: (id: string) => void }) {
+export function CreationAttachmentThumbnail({ item, onPreview, onRemove }: { item: CreationAttachment; onPreview: (type: "image" | "video", url: string, storageKey?: string) => void; onRemove: (id: string) => void }) {
     const kind = creationAttachmentKind(item);
     const previewable = kind === "image" || kind === "video";
     const url = (kind === "video" ? item.url : item.previewUrl) || "";
@@ -734,7 +771,7 @@ export function CreationAttachmentThumbnail({ item, onPreview, onRemove }: { ite
     const previewUrl = kind === "image" ? imageUrl : url;
     const content =
         kind === "video" ? (
-            <video src={item.url} poster={item.previewUrl !== item.url ? item.previewUrl : undefined} muted playsInline preload="metadata" aria-label={item.name} />
+            <CreationSignedVideo storageKey={item.storageKey} src={item.url} poster={item.previewUrl !== item.url ? item.previewUrl : undefined} muted playsInline preload="metadata" aria-label={item.name} />
         ) : kind === "image" ? (
             <CachedResourceImage
                 storageKey={item.storageKey}
@@ -757,7 +794,7 @@ export function CreationAttachmentThumbnail({ item, onPreview, onRemove }: { ite
     return (
         <div className="creation-reference-card-content">
             {previewable ? (
-                <button type="button" className="creation-reference-card-preview" onClick={() => onPreview(kind === "video" ? "video" : "image", previewUrl)} aria-label={`放大预览 ${item.name}`} disabled={!previewUrl}>
+                <button type="button" className="creation-reference-card-preview" onClick={() => onPreview(kind === "video" ? "video" : "image", previewUrl, item.storageKey)} aria-label={`放大预览 ${item.name}`} disabled={!previewUrl}>
                     {content}
                     <span aria-hidden="true">
                         <Maximize2 />

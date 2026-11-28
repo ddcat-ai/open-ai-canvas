@@ -315,16 +315,12 @@ func (s *Service) storeTaskMediaFile(task *model.Task, index int, path, mimeType
 		if _, err := file.Seek(0, io.SeekStart); err != nil {
 			return nil, nil, err
 		}
-	} else if kind == "audio" || kind == "video" {
-		// Audio and video-processing duration is the source of truth for per-second
-		// settlement. The media can still be saved when ffprobe is unavailable;
-		// settlement then falls back to provider usage or moves the order to review.
-		// Video width/height come from the same probe; unknown stays 0, never a fake size.
+	} else if kind == "audio" {
+		durationMs, _ = measureAudioFile(path)
+	} else if kind == "video" {
 		if probed, probeErr := probeMediaFile(context.Background(), path); probeErr == nil {
 			durationMs = probed.DurationMs
-			if kind == "video" {
-				width, height = probed.Width, probed.Height
-			}
+			width, height = probed.Width, probed.Height
 		}
 	}
 	day, err := s.reserveGeneratedResourceQuota(task.UserID, info.Size())
@@ -346,7 +342,9 @@ func (s *Service) storeTaskMediaFile(task *model.Task, index int, path, mimeType
 		if resource.UserID != task.UserID || resource.Size != info.Size() || resource.MimeType != mimeType {
 			return nil, nil, errors.New("恢复文件与原始资源不一致")
 		}
-		resource.DurationMs = durationMs
+		if kind != "audio" || durationMs > 0 {
+			resource.DurationMs = durationMs
+		}
 		if kind == "video" && width > 0 && height > 0 {
 			resource.Width, resource.Height = width, height
 		}

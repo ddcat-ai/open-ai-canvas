@@ -160,16 +160,28 @@ export function ModelCapabilityEditor({ value, onChange, protocol, definition, c
                     <ReferenceCard title="音频引用" description={supportsAudioInput ? "输入音频的数量、大小与时长限制" : modes.some((mode) => mode.inputRoles?.includes("voice")) ? "全能参考接受音色 ID，音频文件不可用" : "当前型号不接受音频文件"}>
                         {supportsAudioInput || profile.references.maxAudios > 0 ? (
                             <>
-                                <NumberField label="最大音频引用" value={profile.references.maxAudios} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxAudios: value || 0 })} />
+                                <NumberField label="参考音频最多段数" value={profile.references.maxAudios} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxAudios: value || 0 })} />
                                 <NumberField label="单个音频上限 MB" value={bytesToMB(profile.references.maxAudioBytes)} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxAudioBytes: mbToBytes(value) })} />
-                                <NumberField label="单个音频最长秒数" value={profile.references.maxAudioDurationSeconds} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxAudioDurationSeconds: value || 0 })} />
+                                <NumberField
+                                    label="参考音频总时长上限（秒，0 为不限）"
+                                    value={profile.references.maxTotalAudioDurationSeconds ?? 0}
+                                    min={0}
+                                    disabled={disabled}
+                                    onChange={(value) => updateReferences({ maxTotalAudioDurationSeconds: value ?? 0 })}
+                                />
                             </>
                         ) : null}
                     </ReferenceCard>
                     <ReferenceCard title="视频引用" description="视频数量、大小与时长限制">
-                        <NumberField label="最大视频引用" value={profile.references.maxVideos} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxVideos: value || 0 })} />
+                        <NumberField label="参考视频最多段数" value={profile.references.maxVideos} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxVideos: value || 0 })} />
                         <NumberField label="单个视频上限 MB" value={bytesToMB(profile.references.maxVideoBytes)} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxVideoBytes: mbToBytes(value) })} />
-                        <NumberField label="单个视频最长秒数" value={profile.references.maxVideoDurationSeconds} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxVideoDurationSeconds: value || 0 })} />
+                        <NumberField
+                            label="参考视频总时长上限（秒，0 为不限）"
+                            value={profile.references.maxTotalVideoDurationSeconds ?? 0}
+                            min={0}
+                            disabled={disabled}
+                            onChange={(value) => updateReferences({ maxTotalVideoDurationSeconds: value ?? 0 })}
+                        />
                     </ReferenceCard>
                     <ReferenceCard title="通用限制" description="所有视频请求共用的基础约束">
                         <NumberField label="提示词最大字符数" value={profile.references.promptMaxChars} min={1} disabled={disabled} onChange={(value) => updateReferences({ promptMaxChars: value || 1 })} />
@@ -294,9 +306,15 @@ export function ModelCapabilityEditor({ value, onChange, protocol, definition, c
                 {section === "all" ? (
                     <CapabilityBlock title="视频引用">
                         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                            <NumberField label="最大视频引用" value={profile.references.maxVideos} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxVideos: value || 0 })} />
+                            <NumberField label="参考视频最多段数" value={profile.references.maxVideos} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxVideos: value || 0 })} />
                             <NumberField label="单个视频上限 MB" value={bytesToMB(profile.references.maxVideoBytes)} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxVideoBytes: mbToBytes(value) })} />
-                            <NumberField label="单个视频最长秒数" value={profile.references.maxVideoDurationSeconds} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxVideoDurationSeconds: value || 0 })} />
+                            <NumberField
+                                label="参考视频总时长上限（秒，0 为不限）"
+                                value={profile.references.maxTotalVideoDurationSeconds ?? 0}
+                                min={0}
+                                disabled={disabled}
+                                onChange={(value) => updateReferences({ maxTotalVideoDurationSeconds: value ?? 0 })}
+                            />
                         </div>
                     </CapabilityBlock>
                 ) : null}
@@ -323,9 +341,15 @@ export function ModelCapabilityEditor({ value, onChange, protocol, definition, c
 
                     <CapabilityGroup title="音频" description="输入音频的数量、大小与时长限制">
                         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                            <NumberField label="最大音频引用" value={profile.references.maxAudios} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxAudios: value || 0 })} />
+                            <NumberField label="参考音频最多段数" value={profile.references.maxAudios} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxAudios: value || 0 })} />
                             <NumberField label="单个音频上限 MB" value={bytesToMB(profile.references.maxAudioBytes)} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxAudioBytes: mbToBytes(value) })} />
-                            <NumberField label="单个音频最长秒数" value={profile.references.maxAudioDurationSeconds} min={0} disabled={disabled} onChange={(value) => updateReferences({ maxAudioDurationSeconds: value || 0 })} />
+                            <NumberField
+                                label="参考音频总时长上限（秒，0 为不限）"
+                                value={profile.references.maxTotalAudioDurationSeconds ?? 0}
+                                min={0}
+                                disabled={disabled}
+                                onChange={(value) => updateReferences({ maxTotalAudioDurationSeconds: value ?? 0 })}
+                            />
                         </div>
                     </CapabilityGroup>
 

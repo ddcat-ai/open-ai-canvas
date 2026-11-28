@@ -54,18 +54,8 @@ func (s *Service) AudioOutputDurationMs(task model.Task) (int64, error) {
 	if capabilityFromTaskType(task.Type) != "audio" {
 		return 0, nil
 	}
-	resourceID, _ := taskOutputResource(task.ResultJSON, task.Type)
-	if resourceID == "" {
-		return 0, errors.New("音频结果缺少已保存的资源")
-	}
-	resource, err := s.repo.ResourceForUser(task.UserID, resourceID)
-	if err != nil {
-		return 0, err
-	}
-	if resource.DurationMs <= 0 {
-		return 0, errors.New("音频结果缺少有效时长")
-	}
-	return resource.DurationMs, nil
+	_, ms, err := s.measuredAudioOutput(task)
+	return ms, err
 }
 
 func generationMediaAssetID(taskID string, index int) string {

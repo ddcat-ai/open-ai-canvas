@@ -21,6 +21,7 @@ type BatchChannelModelUpdate struct {
 type BatchChannelModelChanges struct {
 	Capability         *string                       `json:"capability,omitempty"`
 	Protocol           *string                       `json:"protocol,omitempty"`
+	ProtocolRelease    *string                       `json:"protocolRelease,omitempty"`
 	DisplayName        *string                       `json:"displayName,omitempty"`
 	Description        *string                       `json:"description,omitempty"`
 	Enabled            *bool                         `json:"enabled,omitempty"`

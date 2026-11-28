@@ -51,14 +51,16 @@ description: Host Updater、Release 检查、数据库备份迁移、健康验�
 
 停服后的迁移、启动或健康验证失败会触发自动回退：
 
-1. 停止目标 web/backend；
+1. 停止目标 web/backend/yingce-agent，PostgreSQL 和 Redis 保持运行；
 2. 恢复更新前保存的 Compose 文件；
 3. 恢复更新前保存的 `.env`，确保 backend/web 镜像仍绑定到原 digest；
-4. 再次校验备份 ZIP 和 SHA-256；
-5. 使用 `pg_restore --clean --if-exists` 恢复 PostgreSQL；
+4. 校验恢复后的 Compose 配置，再次校验备份 ZIP 和 SHA-256；
+5. 重建待恢复数据库，使用 `pg_restore` 恢复 PostgreSQL；
 6. 启动旧服务并重新进行稳定窗口验证。
 
-回退任一步失败时状态变为 `manual_intervention`，不伪造成功。管理后台仅在存在旧版本和已校验备份时开放人工回退按钮。
+停服、旧配置恢复与校验、备份校验或数据库恢复任一步失败时，立即停止后续步骤，不启动旧服务；状态变为 `manual_intervention`，保留原更新错误和本次回退错误。管理后台仅在存在旧版本和已校验备份时开放人工回退按钮。
+
+当前回退实现只恢复 PostgreSQL，没有自动还原 ZIP 中的 `backend-data.tar`。涉及后端数据目录格式变化时，仍需人工完成成套数据恢复；数据库回退成功不能证明数据目录已经恢复。
 
 该备份覆盖旧服务停止前的写入。新版本启动后产生的业务写入不在此快照中，历史备份回退仍可能覆盖这些写入；需按恢复时的数据和 schema 状态另行确认。
 

@@ -7,7 +7,7 @@ import { getMediaBlob } from "@/services/file-storage";
 import { getImageBlob } from "@/services/image-storage";
 import { resourceIdFromStorageKey, resourceStorageKey, uploadResourceFile } from "@/services/api/resources";
 import { createGenerationTask, waitForGenerationTask, type GenerationTask, type CreateTaskInput } from "@/services/api/task-center";
-import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
+import { modelCapabilityConfigFor, referenceMediaLimitError } from "@/lib/model-capabilities";
 import { grokImagePromptLimitError } from "@/lib/grok-image-prompt-limit";
 import { resolveGenerationWorkflowExecution, type GenerationWorkflowExecution } from "@/lib/generation-workflow-execution";
 import { isArkPlanBaseUrl } from "@/lib/seedance-video";
@@ -253,6 +253,23 @@ async function prepareGenerationReferences({
     referenceAudios = [],
     mask,
 }: Pick<BackendGenerationTaskOptions, "config" | "mode" | "referenceImages" | "referenceVideos" | "referenceAudios" | "mask">): Promise<PreparedGenerationReferences> {
+    if (mode === "video" && (referenceVideos.length > 0 || referenceAudios.length > 0) && !logicalModelIDForConfig(config) && !resolveGenerationWorkflowExecution(config, mode)) {
+        const references = modelCapabilityConfigFor(config, config.model).video?.references;
+        if (references) {
+            const issue =
+                referenceMediaLimitError(
+                    "video",
+                    references,
+                    referenceVideos.map((video) => video.durationMs),
+                ) ||
+                referenceMediaLimitError(
+                    "audio",
+                    references,
+                    referenceAudios.map((audio) => audio.durationMs),
+                );
+            if (issue) throw new Error(issue);
+        }
+    }
     // asset:// 仅视频生成可用；Agent Plan Seedream 与 Seedance 共用 /api/plan/v3，不能按 BaseURL 误判。
     const preferArkAssetUrl = mode === "video" && usesArkVideoAssetReference(config);
     const requiresAudioReference = mode === "audio" && (config.audioMode === "unified_edit" || (config.audioMode !== "tts" && referenceAudios.length > 0));

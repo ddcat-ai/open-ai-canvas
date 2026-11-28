@@ -117,6 +117,7 @@ const adminNavigation: AdminNavigationGroup[] = [
         label: "模型与渠道",
         items: [
             { path: "/admin/channels", keywords: "渠道 模型 API Key 密钥 上游 定价 协议", label: "渠道与模型", shortLabel: "渠道", icon: <RadioTower className="size-4" /> },
+            { path: "/admin/request-protocols", keywords: "请求协议 接口 供应商 映射 声明式 插件 版本", label: "请求协议", shortLabel: "协议", icon: <PlugZap className="size-4" /> },
             { path: "/admin/models", keywords: "前台模型 逻辑模型 能力", label: "前台模型", shortLabel: "模型", icon: <Layers3 className="size-4" />, requireFeature: "frontendModelsEnabled" },
         ],
     },

@@ -13,6 +13,9 @@ func TestCreateWorkbenchVideoTaskUsesReferenceModeAndPrice(t *testing.T) {
 	profile := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceMiniMaxVideo), "MiniMax-H3")
 	profile.Video.Operations = []string{"text_to_video", "image_to_video", "reference_to_video", "audio_to_video"}
 	profile.Video.References.MaxImages = 2
+	totalVideoLimit := 15
+	profile.Video.References.MaxTotalVideoDuration = &totalVideoLimit
+	profile.Video.References.MaxTotalAudioDuration = ptr(15)
 	profile.Video.Resolutions = []string{"480P"}
 	profile.Video.DefaultResolution = "480P"
 	capabilityJSON, err := json.Marshal(profile)
@@ -25,6 +28,10 @@ func TestCreateWorkbenchVideoTaskUsesReferenceModeAndPrice(t *testing.T) {
 		&model.ChannelModelPriceTier{ID: "video-text-price", ChannelModelID: "video-model", SelectorKey: `{"operation":"text_to_video"}`, SelectorJSON: `{"operation":"text_to_video"}`, BillingMode: "fixed_request", UnitPriceMicrocredits: 10, PriceConfigured: true, Enabled: true},
 		&model.ChannelModelPriceTier{ID: "video-image-price", ChannelModelID: "video-model", SelectorKey: `{"operation":"image_to_video"}`, SelectorJSON: `{"operation":"image_to_video"}`, BillingMode: "fixed_request", UnitPriceMicrocredits: 20, PriceConfigured: true, Enabled: true},
 		&model.Resource{ID: "video-image", UserID: "user", Kind: "image", Status: model.ResourceStatusReady},
+		&model.Resource{ID: "video-ref-1", UserID: "user", Kind: "video", Status: model.ResourceStatusReady, DurationMs: 8064},
+		&model.Resource{ID: "video-ref-2", UserID: "user", Kind: "video", Status: model.ResourceStatusReady, DurationMs: 8064},
+		&model.Resource{ID: "audio-ref-1", UserID: "user", Kind: "audio", Status: model.ResourceStatusReady, DurationMs: 8064},
+		&model.Resource{ID: "audio-ref-2", UserID: "user", Kind: "audio", Status: model.ResourceStatusReady, DurationMs: 8064},
 	} {
 		if err := db.Create(record).Error; err != nil {
 			t.Fatal(err)
@@ -94,6 +101,26 @@ func TestCreateWorkbenchVideoTaskUsesReferenceModeAndPrice(t *testing.T) {
 				t.Fatalf("billing price = %q, error = %v, want %q", order.PriceTierID, err, tc.price)
 			}
 		})
+	}
+	referencePrice := &model.ChannelModelPriceTier{
+		ID: "video-reference-price", ChannelModelID: "video-model",
+		SelectorKey: `{"operation":"video_to_video"}`, SelectorJSON: `{"operation":"video_to_video"}`,
+		BillingMode: "fixed_request", UnitPriceMicrocredits: 20, PriceConfigured: true, Enabled: true,
+	}
+	if err := db.Create(referencePrice).Error; err != nil {
+		t.Fatal(err)
+	}
+	overLimit := WorkbenchTaskInput{
+		Kind: WorkbenchKindVideo, Prompt: "Animate the subject", Model: "MiniMax-H3", ChannelID: "channel",
+		Parameters: map[string]any{"resolution": "480P", "ratio": "16:9", "seconds": 15},
+		References: []workbench.TaskReference{{ResourceID: "video-ref-1", Kind: "video"}, {ResourceID: "video-ref-2", Kind: "video"}},
+	}
+	if _, err := s.CreateWorkbenchTask("user", overLimit, "", ""); err == nil || err.Error() != "参考视频总时长不能超过 15 秒" {
+		t.Fatalf("CreateWorkbenchTask() error = %v, want total reference duration rejection", err)
+	}
+	overLimit.References = []workbench.TaskReference{{ResourceID: "video-image", Kind: "image"}, {ResourceID: "audio-ref-1", Kind: "audio"}, {ResourceID: "audio-ref-2", Kind: "audio"}}
+	if _, err := s.CreateWorkbenchTask("user", overLimit, "", ""); err == nil || err.Error() != "参考音频总时长不能超过 15 秒" {
+		t.Fatalf("CreateWorkbenchTask() error = %v, want total audio duration rejection", err)
 	}
 	// An image-to-video-only model must still reject an ordinary reference image.
 	profile.Video.Operations = []string{"image_to_video"}

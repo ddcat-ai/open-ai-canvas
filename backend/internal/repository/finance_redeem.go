@@ -84,7 +84,7 @@ func (r *Repository) AdminRedeemBatches(keyword string, validity string, limit i
 	}
 	now := time.Now()
 	listQuery := query.Select(`redeem_batches.id, redeem_batches.amount_microcredits, redeem_batches.count,
-		redeem_batches.note, redeem_batches.created_by, redeem_batches.expires_at, redeem_batches.created_at,
+		redeem_batches.note, redeem_batches.one_per_user, redeem_batches.allowed_capability, redeem_batches.created_by, redeem_batches.expires_at, redeem_batches.created_at,
 		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND rc.status = 'unused' AND (rc.expires_at IS NULL OR rc.expires_at > ?)) AS available_count,
 		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND rc.status = 'redeemed') AS redeemed_count,
 		(SELECT COUNT(*) FROM redeem_codes rc WHERE rc.batch_id = redeem_batches.id AND rc.status = 'disabled') AS disabled_count,
@@ -136,6 +136,14 @@ func (r *Repository) AdminRedeemCodes(batchID string, status string, limit int, 
 func (r *Repository) RedeemCode(userID string, codeHash string, redeemedIP string) (*model.CreditAccount, error) {
 	var account model.CreditAccount
 	err := r.db.Transaction(func(tx *gorm.DB) error {
+		// 先创建并锁定当前用户积分账户行，使同一用户的并发兑换严格串行，防止绕过单批次限兑校验。
+		account = model.CreditAccount{UserID: userID}
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&account).Error; err != nil {
+			return err
+		}
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&account, "user_id = ?", userID).Error; err != nil {
+			return err
+		}
 		var code model.RedeemCode
 		if err := tx.First(&code, "code_hash = ?", codeHash).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -144,6 +152,31 @@ func (r *Repository) RedeemCode(userID string, codeHash string, redeemedIP strin
 			return err
 		}
 		now := time.Now()
+		if code.Status != model.RedeemCodeUnused || (code.ExpiresAt != nil && !code.ExpiresAt.After(now)) {
+			return ErrRedeemCodeInvalid
+		}
+		allowedCapability := model.RedeemCapabilityAll
+		if code.BatchID != "" {
+			var batch model.RedeemBatch
+			if err := tx.Select("id, one_per_user, allowed_capability").First(&batch, "id = ?", code.BatchID).Error; err != nil {
+				if !errors.Is(err, gorm.ErrRecordNotFound) {
+					return err
+				}
+			} else {
+				allowedCapability = strings.ToLower(strings.TrimSpace(batch.AllowedCapability))
+				if batch.OnePerUser {
+					var redeemedCount int64
+					if err := tx.Model(&model.RedeemCode{}).
+						Where("batch_id = ? AND status = ? AND redeemed_by = ?", code.BatchID, model.RedeemCodeRedeemed, userID).
+						Count(&redeemedCount).Error; err != nil {
+						return err
+					}
+					if redeemedCount > 0 {
+						return ErrRedeemBatchAlreadyRedeemed
+					}
+				}
+			}
+		}
 		query := tx.Model(&model.RedeemCode{}).Where("id = ? AND status = ?", code.ID, model.RedeemCodeUnused)
 		if code.ExpiresAt != nil {
 			query = query.Where("expires_at > ?", now)
@@ -155,14 +188,23 @@ func (r *Repository) RedeemCode(userID string, codeHash string, redeemedIP strin
 		if updated.RowsAffected != 1 {
 			return ErrRedeemCodeInvalid
 		}
-		account = model.CreditAccount{UserID: userID}
-		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&account).Error; err != nil {
-			return err
+		balanceColumn := "available_microcredits"
+		generalDelta := code.AmountMicrocredits
+		note := "兑换码充值"
+		switch allowedCapability {
+		case model.RedeemCapabilityImage:
+			balanceColumn = "image_available_microcredits"
+			generalDelta = 0
+			note = "兑换码充值（仅限图片）"
+		case model.RedeemCapabilityVideo:
+			balanceColumn = "video_available_microcredits"
+			generalDelta = 0
+			note = "兑换码充值（仅限视频）"
 		}
 		if err := tx.Model(&model.CreditAccount{}).Where("user_id = ?", userID).Updates(map[string]any{
-			"available_microcredits": gorm.Expr("available_microcredits + ?", code.AmountMicrocredits),
-			"version":                gorm.Expr("version + 1"),
-			"updated_at":             now,
+			balanceColumn: gorm.Expr(balanceColumn+" + ?", code.AmountMicrocredits),
+			"version":     gorm.Expr("version + 1"),
+			"updated_at":  now,
 		}).Error; err != nil {
 			return err
 		}
@@ -174,11 +216,11 @@ func (r *Repository) RedeemCode(userID string, codeHash string, redeemedIP strin
 			UserID:                     userID,
 			Type:                       model.CreditLedgerRedeem,
 			AmountMicrocredits:         code.AmountMicrocredits,
-			AvailableDeltaMicrocredits: code.AmountMicrocredits,
+			AvailableDeltaMicrocredits: generalDelta,
 			AvailableAfterMicrocredits: account.AvailableMicrocredits,
 			ReservedAfterMicrocredits:  account.ReservedMicrocredits,
 			RedeemCodeID:               code.ID,
-			Note:                       "兑换码充值",
+			Note:                       note,
 		}).Error
 	})
 	return &account, err

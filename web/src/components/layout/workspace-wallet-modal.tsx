@@ -254,7 +254,10 @@ export function WorkspaceWalletModal({
         if (next) setSelectedProductId(next.id);
     };
 
-    const available = wallet?.account.availableMicrocredits ?? 0;
+    const account = wallet?.account;
+    const available = account ? account.availableMicrocredits + (account.imageAvailableMicrocredits || 0) + (account.videoAvailableMicrocredits || 0) : 0;
+    const reserved = account ? account.reservedMicrocredits + (account.imageReservedMicrocredits || 0) + (account.videoReservedMicrocredits || 0) : 0;
+    const hasRestrictedCredits = Boolean(account && ((account.imageAvailableMicrocredits || 0) > 0 || (account.videoAvailableMicrocredits || 0) > 0));
     const totalPages = Math.max(1, Math.ceil((historyWallet?.total || 0) / 20));
 
     return (
@@ -275,7 +278,17 @@ export function WorkspaceWalletModal({
                                 <div className="workspace-wallet-balance">
                                     <span>{t("shell.account.availableCredits")}</span>
                                     <strong>{wallet ? formatCredits(available, 6) : "--"}</strong>
-                                    <small>{t("account.wallet.reserved", { amount: wallet ? formatCredits(wallet.account.reservedMicrocredits, 6) : "--" })}</small>
+                                    <small>
+                                        {hasRestrictedCredits && account
+                                            ? [
+                                                  `通用 ${formatCredits(account.availableMicrocredits, 6)}`,
+                                                  (account.imageAvailableMicrocredits || 0) > 0 ? `仅图片 ${formatCredits(account.imageAvailableMicrocredits || 0, 6)}` : null,
+                                                  (account.videoAvailableMicrocredits || 0) > 0 ? `仅视频 ${formatCredits(account.videoAvailableMicrocredits || 0, 6)}` : null,
+                                              ]
+                                                  .filter(Boolean)
+                                                  .join(" · ")
+                                            : t("account.wallet.reserved", { amount: wallet ? formatCredits(reserved, 6) : "--" })}
+                                    </small>
                                 </div>
                             ) : null}
                             <button type="button" className="workspace-wallet-balance is-storage" aria-label={t("account.wallet.viewStorage")} onClick={() => focusProducts("storage")}>

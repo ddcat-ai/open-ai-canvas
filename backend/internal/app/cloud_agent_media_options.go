@@ -66,6 +66,15 @@ func cloudAgentMediaDraftConfiguration(a cloudAgentMediaArgs, doc map[string]any
 			return nil, options, BadAuthRequest("草稿生成配置无效，未提交生成任务")
 		}
 	}
+	// A valid generation contract from an older Agent may omit fields that
+	// were still persisted in the flat canvas mirror. Preserve those values
+	// during migration without allowing the mirror to override an explicit
+	// canonical option (including zero or false).
+	if hasStoredContract && !legacyContract && options.DurationSeconds == nil {
+		if duration, ok := legacyCanvasDuration(meta["seconds"]); ok {
+			options.DurationSeconds = &duration
+		}
+	}
 	if !hasStoredContract || legacyContract {
 		config := map[string]any{}
 		if raw, ok := meta["generationSpec"].(map[string]any); ok {
@@ -107,6 +116,37 @@ func cloudAgentMediaDraftConfiguration(a cloudAgentMediaArgs, doc map[string]any
 		}
 	}
 	return selection, options, nil
+}
+
+func legacyCanvasDuration(value any) (int, bool) {
+	var text string
+	switch current := value.(type) {
+	case string:
+		text = strings.TrimSpace(current)
+	case json.Number:
+		text = string(current)
+	case float64:
+		if current != float64(int(current)) {
+			return 0, false
+		}
+		text = strconv.Itoa(int(current))
+	case float32:
+		if current != float32(int(current)) {
+			return 0, false
+		}
+		text = strconv.Itoa(int(current))
+	case int:
+		text = strconv.Itoa(current)
+	case int64:
+		text = strconv.FormatInt(current, 10)
+	default:
+		return 0, false
+	}
+	if text == "" {
+		return 0, false
+	}
+	duration, err := strconv.Atoi(text)
+	return duration, err == nil && duration >= 0
 }
 
 func applyCloudAgentMediaDraftOptions(a *cloudAgentMediaArgs, options contract.Options) {

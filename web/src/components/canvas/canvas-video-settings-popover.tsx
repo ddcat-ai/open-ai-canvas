@@ -7,7 +7,15 @@ import { resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-st
 import { useTranslation } from "react-i18next";
 import { CanvasSettingsPopover, type CanvasSettingsPlacement } from "./canvas-settings-popover";
 
-type VideoPopoverProps = { config: AiConfig; operation?: string; onConfigChange: (key: keyof AiConfig, value: string) => void; buttonClassName?: string; placement?: CanvasSettingsPlacement };
+type VideoPopoverProps = {
+    config: AiConfig;
+    operation?: string;
+    onConfigChange: (key: keyof AiConfig, value: string) => void;
+    buttonClassName?: string;
+    placement?: CanvasSettingsPlacement;
+    getPopupContainer?: (triggerNode: HTMLElement) => HTMLElement;
+    autoAdjustOverflow?: boolean;
+};
 
 export function CanvasVideoSettingsPopover({ config, operation, onConfigChange, ...popover }: VideoPopoverProps) {
     const { t } = useTranslation();

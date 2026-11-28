@@ -5006,6 +5006,67 @@ paths:
           description: 预期账号与登录账号不符
         "500":
           description: 持久化失败，客户端保留本机数据并可重试
+  /admin/request-protocols:
+    get:
+      tags: [admin]
+      summary: 列出声明式请求协议及其发行版本和渠道模型绑定
+      description: 仅管理员可用。返回当前插件注册表中的请求协议，包含每个发行版本的 SHA-256 摘要、归档清单以及绑定到对应版本的渠道模型。
+      responses:
+        "200":
+          description: 成功信封 data.protocols 为 RequestProtocolView 列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [protocols]
+                        properties:
+                          protocols:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/RequestProtocolView"
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [admin]
+      summary: 校验并发布声明式请求协议新版本
+      description: |
+        仅管理员可用。复用统一声明式插件包（.yingce-plugin）发行模型：保持稳定 pluginId/providerId，递增 SemVer 主版本号并通过原生 requestReleases 归档旧版本，不覆盖历史包或影响已入队任务。
+        expectedSha256 为乐观并发校验字段（新建留空，升级传当前发行包摘要），冲突返回 409。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishRequestProtocolRequest"
+      responses:
+        "200":
+          description: 成功信封 data.protocol 为新发布的 RequestProtocolView
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /admin/request-protocols/check:
+    post:
+      tags: [admin]
+      summary: 离线校验声明式请求协议映射与示例响应解析
+      description: 仅管理员可用。使用生产声明式适配器构造创建/查询/下载请求并解析示例响应，不访问真实供应商、不读取渠道密钥、不创建任务。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestProtocolCheck"
+      responses:
+        "200":
+          description: 成功信封 data 为 RequestProtocolCheckResult
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
 components:
   requestBodies:
     TeamTransfer:
@@ -5039,6 +5100,35 @@ components:
       in: cookie
       name: open_ai_canvas_session
   schemas:
+    EcommerceAgentRequest:
+      type: object
+      properties:
+        fileInfoList:
+          type: array
+          items:
+            type: object
+            properties:
+              url: { type: string }
+        query: { type: string }
+        platform: { type: string }
+        language: { type: string }
+        panelType: { type: string }
+        generateType: { type: integer }
+        imageCount: { type: integer }
+        aspectRatio: { type: string }
+        selectedRecommendationId: { type: string }
+        modelKey: { type: string }
+        channel: { type: string }
+        needText: { type: boolean, nullable: true }
+        userSellingPoints: { type: string }
+        brand:
+          type: object
+          properties:
+            brandName: { type: string }
+            styleDesc: { type: string }
+            themeColors: { type: string }
+        projectId: { type: string }
+        idempotencyKey: { type: string }
     SystemUpdateSources:
       type: object
       required: [githubSource, imageSource]
@@ -5539,6 +5629,7 @@ components:
                 properties:
                   capability: {type: string, enum: [text, image, video]}
                   protocol: {type: string}
+                  protocolRelease: {type: string, description: 目标插件发行版本 SHA-256 摘要；传空串表示切换到当前启用发行版，省略则沿用原行为}
                   displayName: {type: string, maxLength: 160}
                   description: {type: string, maxLength: 500}
                   enabled: {type: boolean}
@@ -5593,6 +5684,60 @@ components:
         projectId: { type: string }
         type: { type: string }
         operation: { type: string }
+    RequestProtocolBinding:
+      type: object
+      required: [channelId, modelId, modelKey]
+      properties:
+        channelId: { type: string }
+        modelId: { type: string }
+        modelKey: { type: string }
+        protocolRelease: { type: string, description: 绑定的插件发行包 SHA-256，空串表示跟随当前发行版 }
+    RequestProtocolRelease:
+      type: object
+      required: [version, sha256, current, manifest, bindings]
+      properties:
+        version: { type: string }
+        sha256: { type: string }
+        current: { type: boolean }
+        manifest: { type: object }
+        bindings:
+          type: array
+          items: { $ref: "#/components/schemas/RequestProtocolBinding" }
+    RequestProtocolView:
+      type: object
+      required: [id, providerId, version, sha256, source, readOnly, enabled, updatedAt, manifest, bindings, releases]
+      properties:
+        id: { type: string }
+        providerId: { type: string }
+        version: { type: string }
+        sha256: { type: string }
+        source: { type: string }
+        readOnly: { type: boolean }
+        enabled: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+        manifest: { type: object }
+        bindings:
+          type: array
+          items: { $ref: "#/components/schemas/RequestProtocolBinding" }
+        releases:
+          type: array
+          items: { $ref: "#/components/schemas/RequestProtocolRelease" }
+    RequestProtocolCheck:
+      type: object
+      required: [manifest, request, phase]
+      properties:
+        manifest: { type: object }
+        request: { type: object }
+        response: { type: object }
+        phase: { type: string, enum: [create, poll] }
+        taskId: { type: string }
+    PublishRequestProtocolRequest:
+      type: object
+      required: [id, check]
+      properties:
+        id: { type: string, pattern: "^[a-z][a-z0-9-]{0,39}$" }
+        expectedSha256: { type: string, description: 当前发行包的 SHA-256；首次发布留空，更新时用于乐观锁校验 }
+        check: { $ref: "#/components/schemas/RequestProtocolCheck" }
         prompt: { type: string }
         provider: { type: string }
         model: { type: string }

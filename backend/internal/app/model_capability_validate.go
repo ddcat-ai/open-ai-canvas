@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -170,8 +171,14 @@ func validateVideoCapabilityConfig(value *VideoCapabilityConfig) error {
 	if value.References.MinImages > value.References.MaxImages {
 		return BadAuthRequest("最少图片引用数不能超过最大图片引用数")
 	}
-	if value.References.MaxImageBytes < 0 || value.References.MaxVideoBytes < 0 || value.References.MaxAudioBytes < 0 || value.References.MaxVideoDuration < 0 || value.References.MaxAudioDuration < 0 {
+	if value.References.MaxImageBytes < 0 || value.References.MaxVideoBytes < 0 || value.References.MaxAudioBytes < 0 {
 		return BadAuthRequest("引用素材限制不能小于 0")
+	}
+	if limit := value.References.MaxTotalVideoDuration; limit != nil && (*limit < 0 || int64(*limit) > math.MaxInt64/1000) {
+		return BadAuthRequest("参考视频总时长上限无效")
+	}
+	if limit := value.References.MaxTotalAudioDuration; limit != nil && (*limit < 0 || int64(*limit) > math.MaxInt64/1000) {
+		return BadAuthRequest("参考音频总时长上限无效")
 	}
 	if err := validateVideoDuration(value.Duration); err != nil {
 		return err
@@ -438,8 +445,11 @@ func validateVideoTask(profile *VideoCapabilityConfig, input canvasGenerationInp
 	if capacity := profile.maxImagesFor(operation); len(input.ReferenceImages) > capacity {
 		return newModelCapabilityArgumentError("referenceNodeIds", "item_count", BadAuthRequest(fmt.Sprintf("当前视频模型在 %s 模式最多发送 %d 张图片，当前有 %d 张", operation, capacity, len(input.ReferenceImages))))
 	}
-	if len(input.ReferenceVideos) > profile.References.MaxVideos || len(input.ReferenceAudios) > profile.References.MaxAudios {
-		return newModelCapabilityArgumentError("referenceNodeIds", "item_count", BadAuthRequest("参考素材数量超过当前模型限制"))
+	if len(input.ReferenceVideos) > profile.References.MaxVideos {
+		return newModelCapabilityArgumentError("referenceNodeIds", "item_count", BadAuthRequest(fmt.Sprintf("参考视频最多支持 %d 段", profile.References.MaxVideos)))
+	}
+	if len(input.ReferenceAudios) > profile.References.MaxAudios {
+		return newModelCapabilityArgumentError("referenceNodeIds", "item_count", BadAuthRequest(fmt.Sprintf("参考音频最多支持 %d 段", profile.References.MaxAudios)))
 	}
 	if model.IsVolcengineArkVideoProtocol(model.ChannelInterfaceType(input.Config.InterfaceType)) && len(input.ReferenceAudios) > 0 && len(input.ReferenceImages) == 0 && len(input.ReferenceVideos) == 0 {
 		return newModelCapabilityArgumentError("referenceNodeIds", "invalid_combination", BadAuthRequest("火山方舟全模态参考不支持纯音频或文本+音频，请同时添加参考图片或参考视频"))
@@ -452,20 +462,22 @@ func validateVideoTask(profile *VideoCapabilityConfig, input canvasGenerationInp
 			return newModelCapabilityArgumentError("referenceNodeIds", "unsupported_value", BadAuthRequest("参考图片文件超过当前模型大小限制"))
 		}
 	}
+	var totalVideoMs int64
 	for _, media := range input.ReferenceVideos {
 		if profile.References.MaxVideoBytes > 0 && media.Bytes > profile.References.MaxVideoBytes {
 			return newModelCapabilityArgumentError("referenceNodeIds", "unsupported_value", BadAuthRequest("参考视频文件超过当前模型大小限制"))
 		}
-		if profile.References.MaxVideoDuration > 0 && media.DurationMs > int64(profile.References.MaxVideoDuration)*1000 {
-			return newModelCapabilityArgumentError("referenceNodeIds", "unsupported_value", BadAuthRequest("参考视频时长超过当前模型限制"))
+		if !addReferenceDuration(&totalVideoMs, media.DurationMs, profile.References.MaxTotalVideoDuration) {
+			return newModelCapabilityArgumentError("referenceNodeIds", "unsupported_value", BadAuthRequest(fmt.Sprintf("参考视频总时长不能超过 %d 秒", *profile.References.MaxTotalVideoDuration)))
 		}
 	}
+	var totalAudioMs int64
 	for _, media := range input.ReferenceAudios {
 		if profile.References.MaxAudioBytes > 0 && media.Bytes > profile.References.MaxAudioBytes {
 			return newModelCapabilityArgumentError("referenceNodeIds", "unsupported_value", BadAuthRequest("参考音频文件超过当前模型大小限制"))
 		}
-		if profile.References.MaxAudioDuration > 0 && media.DurationMs > int64(profile.References.MaxAudioDuration)*1000 {
-			return newModelCapabilityArgumentError("referenceNodeIds", "unsupported_value", BadAuthRequest("参考音频时长超过当前模型限制"))
+		if !addReferenceDuration(&totalAudioMs, media.DurationMs, profile.References.MaxTotalAudioDuration) {
+			return newModelCapabilityArgumentError("referenceNodeIds", "unsupported_value", BadAuthRequest(fmt.Sprintf("参考音频总时长不能超过 %d 秒", *profile.References.MaxTotalAudioDuration)))
 		}
 	}
 	seconds, err := strconv.Atoi(strings.TrimSpace(input.Config.VideoSeconds))
@@ -486,6 +498,17 @@ func validateVideoTask(profile *VideoCapabilityConfig, input canvasGenerationInp
 		return newModelCapabilityArgumentError("logicalModelId", "unsupported_value", BadAuthRequest("当前视频模型不支持该生成模式"))
 	}
 	return nil
+}
+
+func addReferenceDuration(totalMs *int64, durationMs int64, limitSeconds *int) bool {
+	if limitSeconds == nil || *limitSeconds <= 0 || durationMs <= 0 {
+		return true
+	}
+	if durationMs > int64(*limitSeconds)*1000-*totalMs {
+		return false
+	}
+	*totalMs += durationMs
+	return true
 }
 
 func validateImageTask(profile *ImageCapabilityConfig, input canvasGenerationInput) error {

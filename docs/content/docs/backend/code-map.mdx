@@ -71,6 +71,7 @@ description: 从产品功能快速定位主要代码入口
 
 - 网站与 Key 管理：`web/src/pages/admin/channels/`；统一批量弹窗与模板库：`pages/admin/components/channel-model-batch-*`、`capability-template-panel.tsx`、`pricing-template-panel.tsx`、`saved-*-templates.ts`。业务 API 在 `services/api/channel-websites.ts`、`wallet.ts`。
 - 后端：`handler/channel_websites.go`、`channel_model_batch.go` → `app/channel_websites.go`、`channel_model_batch*.go`；网站模型在 `model/channel_website.go`，Schema 97 在 `database/migration_channel_websites.go`。
+- 后台请求协议工作台：`web/src/pages/admin/request-protocols/`（`protocols-page.tsx`、`protocol-editor.tsx`、`protocol-form.ts`）与 `web/src/services/api/request-protocols.ts`；后端 `handler/request_protocols.go` → `app/request_protocol_management.go` → `protocol_plugins.go` 与 `repository/request_protocols.go`。直接复用 `.yingce-plugin` 归档与 `channel_model_batch.go` 的 `protocolRelease` 批量绑定。
 - 图片 / 视频设置适配入口：`web/src/lib/media-settings.ts`，调用方在画布生成、创作表单和工作台；生成请求在 `services/generation-task.ts`。版本预览沿用画布媒体历史及 `CanvasImagePreview` 组件。
 - 用户合同、并发和迁移说明见[渠道、模板与批量配置](/docs/backend/channel-configuration)、[HTTP API](/docs/backend/http-api)及[后端数据库](/docs/backend/backend-database)。
 

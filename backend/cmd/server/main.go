@@ -259,15 +259,21 @@ func cors() (gin.HandlerFunc, error) {
 		return nil, err
 	}
 	return func(c *gin.Context) {
-		origin := strings.TrimSpace(c.GetHeader("Origin"))
-		if origin != "" && !allowedOriginWithPolicy(c, origin, policy) {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"code": http.StatusForbidden, "data": nil, "msg": "不允许的跨域来源"})
-			return
-		}
-		if origin != "" {
-			c.Header("Access-Control-Allow-Origin", origin)
-			c.Header("Access-Control-Allow-Credentials", "true")
-			c.Header("Vary", "Origin, Access-Control-Request-Method, Access-Control-Request-Headers")
+		if isPublicCacheableResourceCORSRequest(c) {
+			// 匿名只读媒体签名接口不依赖 Cookie 鉴权；固定输出 ACAO:* 并省略 Vary: Origin，
+			// 使普通标签加载与带 Origin 的 fetch 共享同一份边缘缓存副本。
+			c.Header("Access-Control-Allow-Origin", "*")
+		} else {
+			origin := strings.TrimSpace(c.GetHeader("Origin"))
+			if origin != "" && !allowedOriginWithPolicy(c, origin, policy) {
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"code": http.StatusForbidden, "data": nil, "msg": "不允许的跨域来源"})
+				return
+			}
+			if origin != "" {
+				c.Header("Access-Control-Allow-Origin", origin)
+				c.Header("Access-Control-Allow-Credentials", "true")
+				c.Header("Vary", "Origin, Access-Control-Request-Method, Access-Control-Request-Headers")
+			}
 		}
 		c.Header("Access-Control-Allow-Headers", corsAllowedHeaders)
 		c.Header("Access-Control-Expose-Headers", "X-Request-ID, X-Canvas-Trace-ID, X-Diagnostic-Bundle-ID, X-Diagnostic-Schema-Version")
@@ -279,6 +285,18 @@ func cors() (gin.HandlerFunc, error) {
 		}
 		c.Next()
 	}, nil
+}
+
+func isPublicCacheableResourceCORSRequest(c *gin.Context) bool {
+	if !strings.HasPrefix(c.Request.URL.Path, "/api/public/resources/") {
+		return false
+	}
+	switch c.Request.Method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return true
+	default:
+		return false
+	}
 }
 
 func allowedOrigin(c *gin.Context, origin string) bool {

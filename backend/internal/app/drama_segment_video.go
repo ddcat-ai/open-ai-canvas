@@ -357,6 +357,7 @@ func (s *Service) dramaSegmentAudioReferences(request *DramaSegmentRequest, prof
 		}
 	}
 	media := []any{}
+	var totalAudioMs int64
 	for _, cast := range speakers {
 		reference := DramaSegmentAudioReference{CastID: cast.ID, Name: cast.Name, ResourceID: cast.VoiceSampleResourceID}
 		switch {
@@ -380,8 +381,8 @@ func (s *Service) dramaSegmentAudioReferences(request *DramaSegmentRequest, prof
 			switch {
 			case resource == nil || resource.Status != model.ResourceStatusReady || resource.Kind != "audio":
 				reference.Note = "声音样本已不可用，请重新指定"
-			case profile.MaxAudioSeconds > 0 && resource.DurationMs > int64(profile.MaxAudioSeconds)*1000:
-				reference.Note = fmt.Sprintf("声音样本 %d 秒，超过视频模型上限 %d 秒，请换一段更短的样本", (resource.DurationMs+999)/1000, profile.MaxAudioSeconds)
+			case !addReferenceDuration(&totalAudioMs, resource.DurationMs, profile.MaxTotalAudioDuration):
+				reference.Note = fmt.Sprintf("加入该声音样本后，参考音频总时长超过 %d 秒，请换一段更短的样本", *profile.MaxTotalAudioDuration)
 			default:
 				reference.Sent = true
 				reference.Label = fmt.Sprintf("参考音频%d", len(media)+1)

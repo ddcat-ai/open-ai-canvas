@@ -145,7 +145,7 @@ func GetS3ObjectRange(setting Settings, objectKey string, rangeHeader string) (*
 	if rangeHeader != "" && aws.StringValue(output.ContentRange) != "" {
 		status = http.StatusPartialContent
 	}
-	return &ObjectStream{Body: output.Body, StatusCode: status, ContentLength: aws.Int64Value(output.ContentLength), ContentRange: aws.StringValue(output.ContentRange), AcceptRanges: kernel.FirstNonEmpty(aws.StringValue(output.AcceptRanges), "bytes")}, nil
+	return &ObjectStream{Body: output.Body, ETag: aws.StringValue(output.ETag), StatusCode: status, ContentLength: aws.Int64Value(output.ContentLength), ContentRange: aws.StringValue(output.ContentRange), AcceptRanges: kernel.FirstNonEmpty(aws.StringValue(output.AcceptRanges), "bytes")}, nil
 }
 
 func SignedS3ObjectURL(setting Settings, objectKey string, expiresAt time.Time) (string, error) {
@@ -175,7 +175,7 @@ func signedS3ObjectURL(setting Settings, objectKey string, signing objectURLSign
 	req.Handlers.Sign.Swap(awsv4.SignRequestHandler.Name, request.NamedHandler{Name: awsv4.SignRequestHandler.Name, Fn: func(r *request.Request) {
 		awsv4.SignSDKRequestWithCurrentTime(r, func() time.Time { return signedAt }, func(s *awsv4.Signer) { s.DisableURIPathEscaping = true })
 	}})
-	value, err := req.Presign(signing.ExpiresAt.Sub(signedAt))
+	value, err := req.Presign(sigV4PresignTTL(signedAt, signing.ExpiresAt))
 	if err != nil {
 		return "", fmt.Errorf("%s 下载地址签名失败：%w", s3ServiceName(setting), err)
 	}

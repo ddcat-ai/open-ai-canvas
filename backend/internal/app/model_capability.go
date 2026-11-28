@@ -161,16 +161,16 @@ type VideoScreenSpecConfig struct {
 }
 
 type VideoReferenceConfig struct {
-	PromptMaxChars   int   `json:"promptMaxChars"`
-	MinImages        int   `json:"minImages"`
-	MaxImages        int   `json:"maxImages"`
-	MaxImageBytes    int64 `json:"maxImageBytes"`
-	MaxVideos        int   `json:"maxVideos"`
-	MaxVideoBytes    int64 `json:"maxVideoBytes"`
-	MaxVideoDuration int   `json:"maxVideoDurationSeconds"`
-	MaxAudios        int   `json:"maxAudios"`
-	MaxAudioBytes    int64 `json:"maxAudioBytes"`
-	MaxAudioDuration int   `json:"maxAudioDurationSeconds"`
+	PromptMaxChars        int   `json:"promptMaxChars"`
+	MinImages             int   `json:"minImages"`
+	MaxImages             int   `json:"maxImages"`
+	MaxImageBytes         int64 `json:"maxImageBytes"`
+	MaxVideos             int   `json:"maxVideos"`
+	MaxVideoBytes         int64 `json:"maxVideoBytes"`
+	MaxTotalVideoDuration *int  `json:"maxTotalVideoDurationSeconds,omitempty"`
+	MaxAudios             int   `json:"maxAudios"`
+	MaxAudioBytes         int64 `json:"maxAudioBytes"`
+	MaxTotalAudioDuration *int  `json:"maxTotalAudioDurationSeconds,omitempty"`
 }
 
 // DefaultVideoPromptMaxChars 是普通视频模型提示词字符数的默认上限。
@@ -339,6 +339,16 @@ func NormalizeModelCapabilityConfigForModel(capability string, protocol string, 
 		}
 	}
 	resolvedVideo := *video
+	if resolvedVideo.References.MaxTotalVideoDuration == nil || resolvedVideo.References.MaxTotalAudioDuration == nil {
+		if preset := officialVideoPreset(strings.TrimSpace(protocol), modelName); preset != nil {
+			if resolvedVideo.References.MaxTotalVideoDuration == nil {
+				resolvedVideo.References.MaxTotalVideoDuration = preset.References.MaxTotalVideoDuration
+			}
+			if resolvedVideo.References.MaxTotalAudioDuration == nil {
+				resolvedVideo.References.MaxTotalAudioDuration = preset.References.MaxTotalAudioDuration
+			}
+		}
+	}
 	resolvedVideo.ModeLimits = nil
 	resolvedVideo.providerID, resolvedVideo.providerModel = protocol, modelName
 	if registry != nil {
@@ -492,14 +502,11 @@ func applyModelSpecificVideoCapability(profile *VideoCapabilityConfig, protocol 
 	value.References.MaxVideos = 3
 	value.References.MaxAudios = 3
 	value.References.MaxVideoBytes = 200 * 1024 * 1024
-	value.References.MaxVideoDuration = 15
 	value.References.MaxAudioBytes = 15 * 1024 * 1024
-	value.References.MaxAudioDuration = 15
 	if flash {
 		value.References.MaxImages = 5
 		value.References.MaxVideos = 0
 		value.References.MaxVideoBytes = 0
-		value.References.MaxVideoDuration = 0
 	}
 	value.Duration = VideoDurationConfig{Selection: "range", Min: 4, Max: 12, Step: 1, Default: 5}
 	value.Ratios = []string{"21:9", "16:9", "4:3", "1:1", "3:4", "9:16"}

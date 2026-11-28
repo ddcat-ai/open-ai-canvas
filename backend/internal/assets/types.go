@@ -10,6 +10,7 @@ type ResourceStream struct {
 	Resource      *model.Resource
 	Body          io.ReadCloser
 	StatusCode    int
+	ETag          string
 	ContentLength int64
 	ContentRange  string
 	AcceptRanges  string

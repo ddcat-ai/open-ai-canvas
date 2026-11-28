@@ -23,6 +23,7 @@
     "evolink-seed-audio",
     "system-update",
     "protocol-plugins",
+    "request-protocols",
     "official-video-protocols",
     "canvas-data-structure",
     "canvas-operations-sync"

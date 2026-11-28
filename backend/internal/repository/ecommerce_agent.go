@@ -160,31 +160,21 @@ func settleEcommerceAgentOrder(tx *gorm.DB, run *model.EcommerceAgentRun, succes
 	if chargeErr != nil || order.AmountMicrocredits != reserved {
 		return errors.New("ecommerce billing snapshot mismatch")
 	}
-	res := tx.Model(&model.CreditAccount{}).Where("user_id = ? AND reserved_microcredits >= ?", run.UserID, order.AmountMicrocredits).Updates(map[string]any{
-		"available_microcredits": gorm.Expr("available_microcredits + ?", refund),
-		"reserved_microcredits":  gorm.Expr("reserved_microcredits - ?", order.AmountMicrocredits),
-		"version":                gorm.Expr("version + 1"), "updated_at": time.Now(),
-	})
-	if res.Error != nil {
-		return res.Error
-	}
-	if res.RowsAffected != 1 {
-		return errors.New("reserved credit balance is inconsistent")
-	}
-	var account model.CreditAccount
-	if err := tx.First(&account, "user_id = ?", run.UserID).Error; err != nil {
+	settlement, err := settleOrderPools(tx, order, reserved, actual, false, "reserved credit balance is inconsistent", "reserved credit balance is inconsistent")
+	if err != nil {
 		return err
 	}
+	account := settlement.Account
 	now := time.Now()
-	if err := tx.Model(&order).Updates(map[string]any{"status": model.BillingStatusSettled, "quantity": successes, "actual_amount_microcredits": actual, "refunded_amount_microcredits": refund, "settled_at": now, "updated_at": now}).Error; err != nil {
+	if err := tx.Model(&order).Updates(map[string]any{"status": model.BillingStatusSettled, "quantity": successes, "actual_amount_microcredits": actual, "refunded_amount_microcredits": refund, "image_actual_microcredits": settlement.Actual.Image, "video_actual_microcredits": settlement.Actual.Video, "settled_at": now, "updated_at": now}).Error; err != nil {
 		return err
 	}
-	entry := model.CreditLedgerEntry{ID: newRepositoryID(), UserID: run.UserID, Type: model.CreditLedgerConsume, AmountMicrocredits: -actual, ReservedDeltaMicrocredits: -order.AmountMicrocredits, AvailableAfterMicrocredits: account.AvailableMicrocredits, ReservedAfterMicrocredits: account.ReservedMicrocredits, BillingOrderID: order.ID, Model: order.Model, ChannelID: order.ChannelID, Scene: order.Scene, Note: fmt.Sprintf("电商出图成功 %d/%d 页", successes, run.PageCount)}
+	entry := model.CreditLedgerEntry{ID: newRepositoryID(), UserID: run.UserID, Type: model.CreditLedgerConsume, AmountMicrocredits: -actual, ReservedDeltaMicrocredits: -settlement.OrderReserved.General, AvailableAfterMicrocredits: account.AvailableMicrocredits, ReservedAfterMicrocredits: account.ReservedMicrocredits, BillingOrderID: order.ID, Model: order.Model, ChannelID: order.ChannelID, Scene: order.Scene, Note: fmt.Sprintf("电商出图成功 %d/%d 页", successes, run.PageCount)}
 	if err := tx.Create(&entry).Error; err != nil {
 		return err
 	}
 	if refund > 0 {
-		entry = model.CreditLedgerEntry{ID: newRepositoryID(), UserID: run.UserID, Type: model.CreditLedgerRefund, AmountMicrocredits: refund, AvailableDeltaMicrocredits: refund, AvailableAfterMicrocredits: account.AvailableMicrocredits, ReservedAfterMicrocredits: account.ReservedMicrocredits, BillingOrderID: order.ID, Model: order.Model, ChannelID: order.ChannelID, Scene: order.Scene, Note: "电商出图未成功页面退回"}
+		entry = model.CreditLedgerEntry{ID: newRepositoryID(), UserID: run.UserID, Type: model.CreditLedgerRefund, AmountMicrocredits: refund, AvailableDeltaMicrocredits: settlement.Refund.General, AvailableAfterMicrocredits: account.AvailableMicrocredits, ReservedAfterMicrocredits: account.ReservedMicrocredits, BillingOrderID: order.ID, Model: order.Model, ChannelID: order.ChannelID, Scene: order.Scene, Note: "电商出图未成功页面退回"}
 		if err := tx.Create(&entry).Error; err != nil {
 			return err
 		}

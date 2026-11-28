@@ -113,10 +113,10 @@ export type VideoCapabilityConfig = {
         maxImageBytes: number;
         maxVideos: number;
         maxVideoBytes: number;
-        maxVideoDurationSeconds: number;
+        maxTotalVideoDurationSeconds?: number;
         maxAudios: number;
         maxAudioBytes: number;
-        maxAudioDurationSeconds: number;
+        maxTotalAudioDurationSeconds?: number;
     };
     duration: {
         selection: "range" | "enum";
@@ -508,10 +508,8 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
             maxImageBytes: 30 * 1024 * 1024,
             maxVideos: 0,
             maxVideoBytes: 0,
-            maxVideoDurationSeconds: 0,
             maxAudios: 0,
             maxAudioBytes: 0,
-            maxAudioDurationSeconds: 0,
         },
         duration: { selection: "range", min: 1, max: 15, step: 1, default: 6 },
         ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"],
@@ -539,8 +537,6 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         video.references.maxAudios = 3;
         video.references.maxVideoBytes = 200 * 1024 * 1024;
         video.references.maxAudioBytes = 15 * 1024 * 1024;
-        video.references.maxVideoDurationSeconds = 15;
-        video.references.maxAudioDurationSeconds = 15;
         video.generateAudio = { supported: true, default: true };
     }
     if (protocol === "volcengine-ark-video" || protocol === "volcengine-ark-agent-plan-video" || protocol === "newapi-channel-1") video.resolutions = ["480p", "720p", "1080p"];
@@ -562,10 +558,8 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         video.references.maxImageBytes = 30 * 1024 * 1024;
         video.references.maxVideos = 3;
         video.references.maxVideoBytes = 50 * 1024 * 1024;
-        video.references.maxVideoDurationSeconds = 15;
         video.references.maxAudios = 3;
         video.references.maxAudioBytes = 15 * 1024 * 1024;
-        video.references.maxAudioDurationSeconds = 15;
         video.duration = { selection: "enum", values: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30], default: 5 };
         video.ratios = ["adaptive", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"];
         video.resolutions = ["768P", "2K"];
@@ -587,7 +581,7 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
     }
     if (protocol === VOLCENGINE_MEDIAKIT_ENHANCE_VIDEO_PROTOCOL) {
         // 与后端默认值一致：只接收一个源视频，帧率默认保持原片。
-        video.references = { ...video.references, minImages: 0, maxImages: 0, maxImageBytes: 0, maxVideos: 1, maxVideoDurationSeconds: DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS, maxAudios: 0 };
+        video.references = { ...video.references, minImages: 0, maxImages: 0, maxImageBytes: 0, maxVideos: 1, maxAudios: 0 };
         video.duration = { selection: "range", min: 1, max: DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS, step: 1, default: 5 };
         video.ratios = [];
         video.defaultRatio = "";
@@ -600,7 +594,7 @@ export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = "
         video.processing = { fpsPolicy: "keep_source", maxSourceSeconds: DEFAULT_VIDEO_PROCESSING_MAX_SOURCE_SECONDS };
     }
     if (protocol === VOLCENGINE_MEDIAKIT_VIDEO_DEPTH_PROTOCOL) {
-        video.references = { ...video.references, minImages: 0, maxImages: 0, maxImageBytes: 0, maxVideos: 1, maxVideoDurationSeconds: MEDIAKIT_DEPTH_MAX_SOURCE_SECONDS, maxAudios: 0 };
+        video.references = { ...video.references, minImages: 0, maxImages: 0, maxImageBytes: 0, maxVideos: 1, maxAudios: 0 };
         video.duration = { selection: "range", min: 1, max: MEDIAKIT_DEPTH_MAX_SOURCE_SECONDS, step: 1, default: 5 };
         video.ratios = [];
         video.defaultRatio = "";
@@ -799,6 +793,16 @@ export function videoDurationOptions(profile: VideoCapabilityConfig) {
     const max = profile.duration.max || min;
     const step = profile.duration.step || 1;
     return Array.from({ length: Math.floor((max - min) / step) + 1 }, (_, index) => min + index * step);
+}
+
+export function referenceMediaLimitError(kind: "video" | "audio", references: VideoCapabilityConfig["references"], durationsMs: readonly (number | undefined)[]) {
+    const label = kind === "video" ? "参考视频" : "参考音频";
+    const maxClips = kind === "video" ? references.maxVideos : references.maxAudios;
+    const maxTotalSeconds = (kind === "video" ? references.maxTotalVideoDurationSeconds : references.maxTotalAudioDurationSeconds) ?? 0;
+    if (durationsMs.length > maxClips) return `${label}最多支持 ${maxClips} 段`;
+    if (maxTotalSeconds <= 0) return "";
+    const totalMs = durationsMs.reduce<number>((total, duration) => total + Math.max(0, duration || 0), 0);
+    return totalMs > maxTotalSeconds * 1000 ? `${label}总时长不能超过 ${maxTotalSeconds} 秒` : "";
 }
 
 export function videoDurationAllowed(profile: VideoCapabilityConfig, value: number) {

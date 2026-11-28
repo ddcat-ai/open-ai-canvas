@@ -1,7 +1,7 @@
-import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
+import { modelCapabilityConfigFor, referenceMediaLimitError } from "@/lib/model-capabilities";
 import { isSeedanceVideoConfig } from "@/lib/seedance-video";
 import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata, type CanvasVideoEditOperation } from "@/types/canvas";
-import { resolveModelChannel, selectableModelsByCapability, type AiConfig } from "@/stores/use-config-store";
+import { logicalModelIDForConfig, resolveModelChannel, selectableModelsByCapability, type AiConfig } from "@/stores/use-config-store";
 import { isCanvasNodeGenerating } from "./canvas-node-task-state";
 
 export function canRemakeCanvasVideo(node?: CanvasNodeData): node is CanvasNodeData & { metadata: CanvasNodeMetadata } {
@@ -47,11 +47,9 @@ export function validateVideoSegmentBatch(config: AiConfig, segments: Array<{ st
 }
 
 export function videoReferenceSegmentError(config: AiConfig, durationMs: number): string {
-    const videoProfile = modelCapabilityConfigFor(config, config.model).video;
-    const maxSeconds = videoProfile?.references.maxVideoDurationSeconds || 0;
-    if (maxSeconds > 0 && durationMs > maxSeconds * 1000) {
-        return `视频不能超过当前模型参考视频上限（${maxSeconds} 秒），请用「参考片段」选择较短的范围`;
-    }
+    const references = modelCapabilityConfigFor(config, config.model).video?.references;
+    const issue = references && !logicalModelIDForConfig(config) && referenceMediaLimitError("video", references, [durationMs]);
+    if (issue) return `${issue}，请用「参考片段」选择较短的范围`;
     if (isSeedanceVideoConfig(config) && durationMs < 2000) {
         return "Seedance 参考视频单段至少 2 秒，请扩大截取范围";
     }
@@ -64,10 +62,12 @@ export function videoRemakeInputIssue(metadata: CanvasNodeMetadata | undefined, 
     if (!imageCount) return "视频复刻缺少参考图片，请上传或连接已有图片";
     if (config && !config.model) return "请选择支持同时引用视频和图片的模型";
     if (config) {
-        for (const duration of videoDurationsMs) {
-            const issue = duration > 0 ? videoReferenceSegmentError(config, duration) : "";
-            if (issue) return issue;
+        const references = modelCapabilityConfigFor(config, config.model).video?.references;
+        if (references && !logicalModelIDForConfig(config)) {
+            const issue = referenceMediaLimitError("video", references, videoDurationsMs);
+            if (issue) return videoDurationsMs.length > references.maxVideos ? issue : `${issue}，请用「参考片段」缩短参考视频`;
         }
+        if (isSeedanceVideoConfig(config) && videoDurationsMs.some((duration) => duration > 0 && duration < 2000)) return "Seedance 参考视频单段至少 2 秒，请扩大截取范围";
     }
     return "";
 }

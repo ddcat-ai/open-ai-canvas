@@ -31,6 +31,46 @@ function videoConfig(generateAudio: { supported: boolean; default: boolean }): A
     };
 }
 
+test("视频任务在准备素材前校验参考视频段数和总时长", async () => {
+    const config = videoConfig({ supported: false, default: false });
+    const profile = config.channels[0].modelCosts![0].capabilityConfig!.video!;
+    profile.references.maxVideos = 2;
+    profile.references.maxTotalVideoDurationSeconds = 15;
+    const prepare = (durations: number[]) =>
+        prepareBackendGenerationTask({
+            mode: "video",
+            prompt: "根据参考视频生成",
+            config,
+            referenceVideos: durations.map((durationMs, index) => ({ id: String(index), name: `clip-${index}.mp4`, type: "video/mp4", url: `https://example.com/clip-${index}.mp4`, durationMs })),
+        });
+
+    await expect(prepare([7000, 8000])).resolves.toMatchObject({ input: { referenceVideos: [{ durationMs: 7000 }, { durationMs: 8000 }] } });
+    await expect(prepare([8064, 8064])).rejects.toThrow("参考视频总时长不能超过 15 秒");
+    await expect(prepare([15000])).resolves.toMatchObject({ input: { referenceVideos: [{ durationMs: 15000 }] } });
+    await expect(prepare([16021])).rejects.toThrow("参考视频总时长不能超过 15 秒");
+    await expect(prepare([3000, 3000, 3000])).rejects.toThrow("参考视频最多支持 2 段");
+    profile.references.maxTotalVideoDurationSeconds = 0;
+    await expect(prepare([8064, 8064])).resolves.toMatchObject({ input: { referenceVideos: [{ durationMs: 8064 }, { durationMs: 8064 }] } });
+});
+
+test("视频任务独立校验参考音频的段数和总时长", async () => {
+    const config = videoConfig({ supported: false, default: false });
+    const profile = config.channels[0].modelCosts![0].capabilityConfig!.video!;
+    Object.assign(profile.references, { maxVideos: 1, maxTotalVideoDurationSeconds: 15, maxAudios: 2, maxTotalAudioDurationSeconds: 15 });
+    const prepare = (durations: number[]) =>
+        prepareBackendGenerationTask({
+            mode: "video",
+            prompt: "根据参考视频和声音生成",
+            config,
+            referenceVideos: [{ id: "video", name: "video.mp4", type: "video/mp4", url: "https://example.com/video.mp4", durationMs: 15000 }],
+            referenceAudios: durations.map((durationMs, index) => ({ id: String(index), name: `audio-${index}.wav`, type: "audio/wav", url: `https://example.com/audio-${index}.wav`, durationMs })),
+        });
+
+    await expect(prepare([7000, 8000])).resolves.toMatchObject({ input: { referenceAudios: [{ durationMs: 7000 }, { durationMs: 8000 }] } });
+    await expect(prepare([8064, 8064])).rejects.toThrow("参考音频总时长不能超过 15 秒");
+    await expect(prepare([3000, 3000, 3000])).rejects.toThrow("参考音频最多支持 2 段");
+});
+
 test("创作台自动关闭不适用音轨与水印，报价、提交与重试一致省略", async () => {
     const config = videoConfig({ supported: false, default: false });
     const requestConfig = creationVideoConfig(config, config.videoModel, { ratio: "16:9", seconds: "6", videoQuality: "480" });
