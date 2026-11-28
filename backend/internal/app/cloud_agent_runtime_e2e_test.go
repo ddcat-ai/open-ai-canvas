@@ -13,6 +13,7 @@ import (
 
 	agentruntime "yingce/backend/internal/agent/runtime"
 	"yingce/backend/internal/model"
+	"yingce/backend/internal/prompts"
 )
 
 // 端到端：生产入口 CreateCloudAgentRun → 真实 Node 运行时 → /model 桥接 → 任务 worker →
@@ -28,6 +29,10 @@ func TestCloudAgentRuntimeCompletesToolRoundTrip(t *testing.T) {
 	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
 	t.Setenv("REDIS_URL", "")
 
+	policy, _, err := prompts.LoadAgentPolicies()
+	if err != nil {
+		t.Fatal(err)
+	}
 	var mu sync.Mutex
 	var bodies []map[string]any
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -41,6 +46,12 @@ func TestCloudAgentRuntimeCompletesToolRoundTrip(t *testing.T) {
 		mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		if call == 1 {
+			messages, _ := body["messages"].([]any)
+			if len(messages) == 0 {
+				t.Error("missing first model message")
+			} else if first, _ := messages[0].(map[string]any); first["role"] != "system" || !strings.HasPrefix(stringField(first, "content"), policy.Text) {
+				t.Error("first model request did not start with the frozen project Agent policy")
+			}
 			tool := firstUpstreamToolName(body)
 			if tool == "" {
 				t.Errorf("first model step exposed no tools: %v", body["tools"])

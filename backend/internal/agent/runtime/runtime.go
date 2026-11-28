@@ -126,6 +126,18 @@ func Run(ctx context.Context, request ProcessRequest, bridge Bridge) error {
 		_, err := io.Copy(stdin, bytes.NewReader(payload))
 		inputDone <- errors.Join(err, stdin.Close())
 	}()
+	exitErr := waitForOutput(ctx, cmd, stdout)
+	inputErr := <-inputDone
+	if exitErr != nil {
+		return exitErr
+	}
+	if inputErr != nil {
+		return fmt.Errorf("write Agent runtime input: %w", inputErr)
+	}
+	return nil
+}
+
+func waitForOutput(ctx context.Context, cmd *exec.Cmd, stdout io.Reader) error {
 	// StdoutPipe 的读取必须在 Wait 之前结束。Wait 会关闭管道，提前调用会把
 	// 正常退出误报为 "file already closed"。
 	lineErr := ReadOutput(stdout)
@@ -133,18 +145,17 @@ func Run(ctx context.Context, request ProcessRequest, bridge Bridge) error {
 		_ = cmd.Process.Kill()
 	}
 	waitErr := cmd.Wait()
-	inputErr := <-inputDone
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	if lineErr != nil {
+		if errors.Is(lineErr, io.ErrUnexpectedEOF) && waitErr != nil {
+			return errors.Join(lineErr, waitErr)
+		}
 		return lineErr
 	}
 	if waitErr != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
 		return fmt.Errorf("agent runtime exited: %w", waitErr)
-	}
-	if inputErr != nil {
-		return fmt.Errorf("write Agent runtime input: %w", inputErr)
 	}
 	return nil
 }
@@ -194,6 +205,7 @@ func ReadOutput(stdout io.Reader) error {
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 64*1024), lineLimit)
 	var lastError error
+	var settled bool
 	for scanner.Scan() {
 		var event struct {
 			Event   string `json:"event"`
@@ -206,11 +218,20 @@ func ReadOutput(stdout io.Reader) error {
 		if event.Event == "runtime_error" || event.Event == "bridge_error" {
 			lastError = errors.New(firstNonEmpty(event.Message, "Agent runtime failed"))
 		}
+		if event.Event == "settled" {
+			settled = true
+		}
 	}
 	if err := scanner.Err(); err != nil {
 		return fmt.Errorf("read Agent runtime output: %w", err)
 	}
-	return lastError
+	if lastError != nil {
+		return lastError
+	}
+	if !settled {
+		return fmt.Errorf("agent runtime closed before settled: %w", io.ErrUnexpectedEOF)
+	}
+	return nil
 }
 
 func BridgeCall(w http.ResponseWriter, r *http.Request, expectedToken string, handler func(context.Context, map[string]json.RawMessage) (any, error)) {
