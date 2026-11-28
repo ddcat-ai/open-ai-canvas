@@ -1,6 +1,6 @@
 import { Button } from "antd";
 import { Copy, ExternalLink, Heart, Pencil, Trash2, ArrowUpRight } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { AppModal } from "@/components/ui/product/app-modal";
@@ -153,9 +153,31 @@ export function InspirationDetailModal({
     );
 }
 
-export function InspirationCover({ image }: { image: string }) {
+export function InspirationCover({ image, defer = false }: { image: string; defer?: boolean }) {
+    const imgRef = useRef<HTMLImageElement>(null);
+    const [nearViewport, setNearViewport] = useState(false);
     const [failed, setFailed] = useState(false);
-    return failed ? <MediaPlaceholder failed /> : <img src={image} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailed(true)} />;
+    const shouldLoad = !defer || nearViewport || typeof IntersectionObserver === "undefined";
+
+    useEffect(() => {
+        const target = imgRef.current;
+        if (shouldLoad || !target) return;
+        // Assign src near the card so the browser's larger native prefetch window
+        // doesn't request distant covers before the user reaches them.
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries.some((entry) => entry.isIntersecting)) {
+                    setNearViewport(true);
+                    observer.disconnect();
+                }
+            },
+            { rootMargin: "120px 0px" },
+        );
+        observer.observe(target);
+        return () => observer.disconnect();
+    }, [shouldLoad]);
+
+    return failed ? <MediaPlaceholder failed /> : <img ref={imgRef} src={shouldLoad ? image : undefined} alt="" loading={defer ? "lazy" : "eager"} decoding="async" referrerPolicy="no-referrer" onError={() => setFailed(true)} />;
 }
 
 function PromptSection({ label, text, onCopy }: { label: string; text: string; onCopy: (text: string, label: string) => void }) {

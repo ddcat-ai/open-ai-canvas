@@ -581,7 +581,7 @@ function InspirationCard({
         <article className="inspiration-card">
             <button type="button" className="inspiration-card-open" aria-label={`查看灵感：${item.title}`} aria-haspopup="dialog" onClick={onOpen}>
                 <span className="inspiration-card-cover">
-                    <InspirationCover key={item.image} image={item.image} />
+                    <InspirationCover key={item.image} image={item.image} defer />
                     {isFreshInspiration(item, Date.now()) ? <span className="inspiration-card-new">新</span> : null}
                     {showSources ? <span className="inspiration-card-source">{inspirationSourceOf(item)?.label ?? "未标注来源"}</span> : null}
                 </span>
