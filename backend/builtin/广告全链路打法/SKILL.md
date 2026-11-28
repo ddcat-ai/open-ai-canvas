@@ -1,5 +1,5 @@
 ---
-name: "广告全链路打法"
+name: "营销与转化-源起"
 description: "从分析到投放一条龙搭起广告链路：竞品识别、战役规划、演员选角与脚本预算。当广告没章法、预算花不明白、竞品打法看不清时调用。"
 metadata:
   version: "1.0.0"
@@ -102,9 +102,3 @@ metadata:
 ## 许可与署名（逐卡）
 
 ---
-
-**完整版**：本条目为域包总纲。34 个域包的完整卡片（开源署名层 86 卡 + 书籍重铸层 673 卡）位于
-[itsWyatt-K/judian-skills](https://github.com/itsWyatt-K/judian-skills)——技能页 → 安装技能 → GitHub →
-填入仓库地址与包路径（如 `skills/ecommerce/supercmo-ad-chain`）即可安装，Agent 可按总纲名录逐卡深读。
-来源与许可见各卡 frontmatter：开源署名层逐卡标注 source/license（MIT/Apache-2.0/CC-BY-4.0/官方文档署名）；
-书籍重铸层标注 source_book + attribution（方法论自撰重写，不复制原文表达）。

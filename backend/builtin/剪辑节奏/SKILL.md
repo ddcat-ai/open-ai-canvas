@@ -62,10 +62,11 @@ metadata:
 
 ## 包内卡片名录
 
-- `cards/dm-montage-narrative.md` — 
+- `cards/dm-montage-narrative.md` —
 - `cards/gfl-continuity.md` — 当用户说"静态对话怎么剪得流畅"、"为什么要用 re-establishing 镜头"、"静默反应怎么用"时调用
 - `cards/gfl-parallel-editing.md` — 当用户说"两条故事线怎么交替叙述"、"动作与反应怎么并置剪"、"平行剪辑和交叉剪辑区别"时调用
 - `cards/gfl-transitions.md` — 当用户说"场景间怎么转场/时间过渡"、"叠化 dissolve 和淡入淡出区别"、"划变 wipe 怎么用"时调用
+- `cards/drama-assembly-acceptance.md` — 逐镜剪辑单、字幕逐字校验、响度统一、重复帧清理与成片交付验收
 
 ## 证据等级说明
 
@@ -85,9 +86,3 @@ metadata:
 官方市场技能负责生产流程（分镜表/生成/拼接）；本包负责生成前的创作方法论。任务重叠时以用户当前目标为准，接力不抢戏。
 
 ---
-
-**完整版**：本条目为域包总纲。34 个域包的完整卡片（开源署名层 86 卡 + 书籍重铸层 673 卡）位于
-[itsWyatt-K/judian-skills](https://github.com/itsWyatt-K/judian-skills)——技能页 → 安装技能 → GitHub →
-填入仓库地址与包路径（如 `skills/creative/editing-rhythm`）即可安装，Agent 可按总纲名录逐卡深读。
-来源与许可见各卡 frontmatter：开源署名层逐卡标注 source/license（MIT/Apache-2.0/CC-BY-4.0/官方文档署名）；
-书籍重铸层标注 source_book + attribution（方法论自撰重写，不复制原文表达）。

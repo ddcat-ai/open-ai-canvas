@@ -62,7 +62,7 @@ metadata:
 
 ## 包内卡片名录
 
-- `cards/dm-actor-blocking.md` — 
+- `cards/dm-actor-blocking.md` —
 - `cards/dm-audience-meaning.md` — 
 - `cards/dm-character-as-action.md` — 
 - `cards/dm-kiss-shot.md` — 
@@ -90,6 +90,7 @@ metadata:
 - `cards/shot-storyboard.md` — 当用户说"能拍的镜头序列草图"、"帮我把这场戏出成分镜 / 画个故事板 / 镜头怎么排"、"形态/机位/轴线方案"时调用
 - `cards/shot-transitions.md` — 当用户说"该硬切还是叠化"、"观众无感"、"总是在淡/拖沓"时调用
 - `cards/shot-viewpoint.md` — 当用户说"站在这角色这边"、"讨厌那个反派"、"的镜头
+- `cards/drama-shot-card-14.md` — 14 字段镜头卡、场景 GEO、群戏八方位、节拍比例、动作三镜拆分与跨镜物理后果
 
 ## 证据等级说明
 
@@ -109,9 +110,3 @@ metadata:
 官方市场技能负责生产流程（分镜表/生成/拼接）；本包负责生成前的创作方法论。任务重叠时以用户当前目标为准，接力不抢戏。
 
 ---
-
-**完整版**：本条目为域包总纲。34 个域包的完整卡片（开源署名层 86 卡 + 书籍重铸层 673 卡）位于
-[itsWyatt-K/judian-skills](https://github.com/itsWyatt-K/judian-skills)——技能页 → 安装技能 → GitHub →
-填入仓库地址与包路径（如 `skills/creative/shot-grammar`）即可安装，Agent 可按总纲名录逐卡深读。
-来源与许可见各卡 frontmatter：开源署名层逐卡标注 source/license（MIT/Apache-2.0/CC-BY-4.0/官方文档署名）；
-书籍重铸层标注 source_book + attribution（方法论自撰重写，不复制原文表达）。

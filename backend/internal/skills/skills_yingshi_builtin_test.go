@@ -1,6 +1,7 @@
 package skills
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -68,7 +69,10 @@ func TestYingshiBuiltinBundleCompatibility(t *testing.T) {
 		if !strings.HasSuffix(path, "/__init__.py") {
 			executableCount++
 		}
-		fileHash := sha256.Sum256(target.archive.Files[path])
+		// The embedded package follows the checkout's line endings. Hash the
+		// repository-canonical LF form so Windows and Linux builds agree.
+		content := bytes.ReplaceAll(target.archive.Files[path], []byte("\r\n"), []byte("\n"))
+		fileHash := sha256.Sum256(content)
 		_, _ = fmt.Fprintf(digest, "%s\t%s\n", path, hex.EncodeToString(fileHash[:]))
 	}
 	if executableCount != 31 {

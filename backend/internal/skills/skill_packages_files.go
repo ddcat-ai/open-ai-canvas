@@ -18,7 +18,7 @@ import (
 )
 
 func (s *Service) SkillPackageFiles(userID string, skillID string) ([]SkillPackageFileItem, error) {
-	snapshot, err := s.loadSkillPackageSnapshot(userID, skillID)
+	snapshot, err := s.loadSkillPackageSnapshotCompat(userID, skillID)
 	if err != nil {
 		return nil, err
 	}
@@ -30,7 +30,7 @@ func (s *Service) SkillPackageFiles(userID string, skillID string) ([]SkillPacka
 }
 
 func (s *Service) SkillPackageFile(userID string, skillID string, filePath string) (*SkillPackageFileContent, error) {
-	snapshot, err := s.loadSkillPackageSnapshot(userID, skillID)
+	snapshot, err := s.loadSkillPackageSnapshotCompat(userID, skillID)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func (s *Service) skillPackageFileContent(snapshot *skillPackageSnapshot, filePa
 }
 
 func (s *Service) SkillPackageRawFile(userID string, skillID string, filePath string) ([]byte, string, string, error) {
-	snapshot, err := s.loadSkillPackageSnapshot(userID, skillID)
+	snapshot, err := s.loadSkillPackageSnapshotCompat(userID, skillID)
 	if err != nil {
 		return nil, "", "", err
 	}
@@ -69,7 +69,7 @@ func (s *Service) skillPackageRawFile(snapshot *skillPackageSnapshot, filePath s
 }
 
 func (s *Service) SkillPackageBundle(userID string, skillID string) (*SkillPackageBundle, error) {
-	snapshot, err := s.loadSkillPackageSnapshot(userID, skillID)
+	snapshot, err := s.loadSkillPackageSnapshotCompat(userID, skillID)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (s *Service) SkillPackageBundle(userID string, skillID string) (*SkillPacka
 }
 
 func (s *Service) SearchSkillPackage(userID string, skillID string, query string) ([]SkillFileSearchResult, error) {
-	snapshot, err := s.loadSkillPackageSnapshot(userID, skillID)
+	snapshot, err := s.loadSkillPackageSnapshotCompat(userID, skillID)
 	if err != nil {
 		return nil, err
 	}
@@ -113,6 +113,25 @@ func (s *Service) SearchSkillPackage(userID string, skillID string, query string
 		}
 	}
 	return results, nil
+}
+
+// loadSkillPackageSnapshotCompat 让已退休的技能 ID 继续访问其稳定包。
+// 旧包记录仍存在时保留原权限、损坏与缺失语义，只有记录确实不存在才回退。
+func (s *Service) loadSkillPackageSnapshotCompat(userID string, skillID string) (*skillPackageSnapshot, error) {
+	snapshot, err := s.loadSkillPackageSnapshot(userID, skillID)
+	if err == nil {
+		return snapshot, nil
+	}
+	trimmedID := strings.TrimSpace(skillID)
+	targetID, isLegacy := legacySkillTargetID(trimmedID)
+	if !isLegacy {
+		return nil, err
+	}
+	_, lookupErr := s.repo.Skill(trimmedID)
+	if lookupErr == nil || !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+	return s.loadSkillPackageSnapshot(userID, targetID)
 }
 
 func (s *Service) readSkillPackageSnapshotFile(snapshot *skillPackageSnapshot, filePath string) (*model.SkillFile, []byte, error) {

@@ -22,10 +22,15 @@ func TestSkillPresetsCatalogIsValid(t *testing.T) {
 		if len(preset.SkillIDs) == 0 || len(preset.SkillIDs) > 8 {
 			t.Fatalf("%s 技能数超出 1-8", preset.PresetID)
 		}
+		seenInPreset := make(map[string]struct{}, len(preset.SkillIDs))
 		for _, skillID := range preset.SkillIDs {
 			if _, ok := seeded[skillID]; !ok {
 				t.Fatalf("%s 引用未上架技能 %s", preset.PresetID, skillID)
 			}
+			if _, ok := seenInPreset[skillID]; ok {
+				t.Fatalf("%s 重复引用技能 %s", preset.PresetID, skillID)
+			}
+			seenInPreset[skillID] = struct{}{}
 		}
 	}
 }

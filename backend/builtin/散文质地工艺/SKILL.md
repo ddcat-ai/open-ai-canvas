@@ -62,7 +62,7 @@ metadata:
 
 ## 包内卡片名录
 
-- `cards/deai-flavor-diagnosis.md` — 
+- `cards/deai-flavor-diagnosis.md` —
 - `cards/hfw-character-language-subtlety.md` — 当用户做人物设定、觉得"人物扁平/标签化"、想让角色立住而非靠'成长弧光'、或想理解"为什么有些一根筋的偏执狂反而最生动
 - `cards/hfw-dialogue-action.md` — 当用户写对白、觉得"对话太平/太直白/像在交代剧情"、想让台词带多重含义、或想避免用副词把人物"圈住"时调用
 - `cards/hfw-fid-as-lens.md` — 当用户要理解"作者声音和人物声音的关系"、解释"为什么读者既全知又偏见的体验这么迷人"、或想和 show-dont-te
@@ -119,9 +119,3 @@ metadata:
 官方市场技能负责生产流程（分镜表/生成/拼接）；本包负责生成前的创作方法论。任务重叠时以用户当前目标为准，接力不抢戏。
 
 ---
-
-**完整版**：本条目为域包总纲。34 个域包的完整卡片（开源署名层 86 卡 + 书籍重铸层 673 卡）位于
-[itsWyatt-K/judian-skills](https://github.com/itsWyatt-K/judian-skills)——技能页 → 安装技能 → GitHub →
-填入仓库地址与包路径（如 `skills/drama/prose-craft`）即可安装，Agent 可按总纲名录逐卡深读。
-来源与许可见各卡 frontmatter：开源署名层逐卡标注 source/license（MIT/Apache-2.0/CC-BY-4.0/官方文档署名）；
-书籍重铸层标注 source_book + attribution（方法论自撰重写，不复制原文表达）。

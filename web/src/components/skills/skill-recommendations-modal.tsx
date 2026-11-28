@@ -75,7 +75,8 @@ function AdminSkillRecommendationsModal({ open, onClose, onInstalled }: SkillRec
 
     const install = async (target: SkillRecommendationIndustry, skillIds: string[]) => {
         if (installing) return;
-        setInstalling(skillIds.length === 1 ? skillIds[0] : `all:${target.industryId}`);
+        const installKey = skillIds.length === 1 ? skillIds[0] : skillIds.length > 1 ? `starter:${target.industryId}` : `all:${target.industryId}`;
+        setInstalling(installKey);
         try {
             const result = await installSkillRecommendations(target.industryId, skillIds);
             setData((current) => (current ? markInstalled(current, result.installed) : current));
@@ -89,11 +90,12 @@ function AdminSkillRecommendationsModal({ open, onClose, onInstalled }: SkillRec
         }
     };
 
-    const pendingIds = industry ? industry.skills.filter((skill) => !skill.isAdded).map((skill) => skill.skillId) : [];
+    const starterIds = new Set(industry?.starterSkillIds || []);
+    const pendingStarterIds = industry ? industry.starterSkillIds.filter((skillId) => industry.skills.some((skill) => skill.skillId === skillId && !skill.isAdded)) : [];
 
     return (
         <AppModal open={open} width={760} title="按行业推荐技能" className="library-modal skill-recommendations-modal" footer={null} onCancel={onClose} mask={{ closable: !installing }}>
-            <p className="mb-4 text-sm leading-6 text-foreground/55">选一个最接近你工作的行业，装上常用技能。装好后 Agent 会在任务需要时自己查找并使用，不用每次手动选择。</p>
+            <p className="mb-4 text-sm leading-6 text-foreground/55">选一个最接近你工作的行业，先用 3 个以内的起步组合跑通一次。装好后 Agent 会在任务需要时自己查找并使用，其他技能可按需添加。</p>
             {loading && !data ? (
                 <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground" role="status">
                     <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
@@ -130,15 +132,24 @@ function AdminSkillRecommendationsModal({ open, onClose, onInstalled }: SkillRec
                     </div>
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <p className="min-w-0 flex-1 text-sm leading-6 text-foreground/65">{industry.description}</p>
-                        <Button type="primary" icon={<Plus className="size-4" />} disabled={!pendingIds.length || Boolean(installing)} loading={installing === `all:${industry.industryId}`} onClick={() => void install(industry, [])}>
-                            {pendingIds.length ? `全部安装（${pendingIds.length}）` : "已全部安装"}
+                        <Button
+                            type="primary"
+                            icon={<Plus className="size-4" />}
+                            disabled={!pendingStarterIds.length || Boolean(installing)}
+                            loading={installing === `starter:${industry.industryId}`}
+                            onClick={() => void install(industry, pendingStarterIds)}
+                        >
+                            {pendingStarterIds.length ? `安装起步组合（${pendingStarterIds.length}）` : "起步组合已安装"}
                         </Button>
                     </div>
                     <ul className="thin-scrollbar max-h-[52vh] space-y-2 overflow-y-auto pr-1" aria-label={`${industry.name}推荐技能`}>
                         {industry.skills.map((skill) => (
                             <li key={skill.skillId} className="flex min-w-0 items-start gap-3 rounded-xl border border-border px-4 py-3">
                                 <div className="min-w-0 flex-1">
-                                    <div className="text-sm font-medium [overflow-wrap:anywhere]">{skill.skillName}</div>
+                                    <div className="flex flex-wrap items-center gap-2 text-sm font-medium [overflow-wrap:anywhere]">
+                                        {skill.skillName}
+                                        {starterIds.has(skill.skillId) ? <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-normal text-foreground/60">起步</span> : null}
+                                    </div>
                                     <p className="mt-1 text-xs leading-5 text-foreground/65">{skill.reason}</p>
                                     {skill.description ? (
                                         <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground [overflow-wrap:anywhere]" title={skill.description}>

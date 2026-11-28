@@ -24,11 +24,12 @@ type skillRecommendationSeed struct {
 }
 
 type skillRecommendationIndustrySeed struct {
-	IndustryID  string                    `json:"industryId"`
-	Name        string                    `json:"name"`
-	Description string                    `json:"description"`
-	Icon        string                    `json:"icon"`
-	Skills      []skillRecommendationSeed `json:"skills"`
+	IndustryID      string                    `json:"industryId"`
+	Name            string                    `json:"name"`
+	Description     string                    `json:"description"`
+	Icon            string                    `json:"icon"`
+	StarterSkillIDs []string                  `json:"starterSkillIds"`
+	Skills          []skillRecommendationSeed `json:"skills"`
 }
 
 type skillRecommendationsFile struct {
@@ -47,12 +48,13 @@ type SkillRecommendationItem struct {
 }
 
 type SkillRecommendationIndustry struct {
-	IndustryID     string                    `json:"industryId"`
-	Name           string                    `json:"name"`
-	Description    string                    `json:"description"`
-	Icon           string                    `json:"icon"`
-	Skills         []SkillRecommendationItem `json:"skills"`
-	InstalledCount int                       `json:"installedCount"`
+	IndustryID      string                    `json:"industryId"`
+	Name            string                    `json:"name"`
+	Description     string                    `json:"description"`
+	Icon            string                    `json:"icon"`
+	StarterSkillIDs []string                  `json:"starterSkillIds"`
+	Skills          []SkillRecommendationItem `json:"skills"`
+	InstalledCount  int                       `json:"installedCount"`
 }
 
 type SkillRecommendationList struct {
@@ -71,7 +73,10 @@ type SkillRecommendationInstallResult struct {
 	Skipped    []string `json:"skipped"`
 }
 
-const skillRecommendationMaxPerIndustry = 12
+const (
+	skillRecommendationMaxPerIndustry   = 12
+	skillRecommendationMaxStarterSkills = 3
+)
 
 var skillRecommendationIcons = map[string]struct{}{
 	"shapes": {}, "film": {}, "shopping-bag": {}, "megaphone": {}, "landmark": {}, "palette": {}, "users": {}, "wrench": {},
@@ -107,6 +112,9 @@ func loadSkillRecommendations() (skillRecommendationsFile, error) {
 		if len(industry.Skills) == 0 || len(industry.Skills) > skillRecommendationMaxPerIndustry {
 			return file, fmt.Errorf("行业推荐 %s 的技能数 %d 超出 1-%d", id, len(industry.Skills), skillRecommendationMaxPerIndustry)
 		}
+		if len(industry.StarterSkillIDs) == 0 || len(industry.StarterSkillIDs) > skillRecommendationMaxStarterSkills {
+			return file, fmt.Errorf("行业推荐 %s 的起步技能数 %d 超出 1-%d", id, len(industry.StarterSkillIDs), skillRecommendationMaxStarterSkills)
+		}
 		seenSkill := map[string]struct{}{}
 		for _, skill := range industry.Skills {
 			if strings.TrimSpace(skill.SkillID) == "" {
@@ -119,6 +127,16 @@ func loadSkillRecommendations() (skillRecommendationsFile, error) {
 			if reason := strings.TrimSpace(skill.Reason); reason == "" || utf8.RuneCountInString(reason) > 60 {
 				return file, fmt.Errorf("行业推荐 %s 的技能 %s 推荐理由为空或超过 60 字", id, skill.SkillID)
 			}
+		}
+		seenStarter := map[string]struct{}{}
+		for _, skillID := range industry.StarterSkillIDs {
+			if _, ok := seenSkill[skillID]; !ok {
+				return file, fmt.Errorf("行业推荐 %s 的起步技能不在推荐目录中: %s", id, skillID)
+			}
+			if _, dup := seenStarter[skillID]; dup {
+				return file, fmt.Errorf("行业推荐 %s 的起步技能重复: %s", id, skillID)
+			}
+			seenStarter[skillID] = struct{}{}
 		}
 	}
 	return file, nil
@@ -185,7 +203,7 @@ func (s *Service) SkillRecommendations(userID string) (*SkillRecommendationList,
 	}
 	list := &SkillRecommendationList{Industries: make([]SkillRecommendationIndustry, 0, len(file.Industries)), InstalledTotal: len(installed)}
 	for _, industry := range file.Industries {
-		group := SkillRecommendationIndustry{IndustryID: industry.IndustryID, Name: industry.Name, Description: industry.Description, Icon: industry.Icon, Skills: []SkillRecommendationItem{}}
+		group := SkillRecommendationIndustry{IndustryID: industry.IndustryID, Name: industry.Name, Description: industry.Description, Icon: industry.Icon, StarterSkillIDs: append([]string(nil), industry.StarterSkillIDs...), Skills: []SkillRecommendationItem{}}
 		for _, seed := range industry.Skills {
 			index, ok := byID[seed.SkillID]
 			if !ok {

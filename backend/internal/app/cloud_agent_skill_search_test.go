@@ -2,8 +2,14 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+
+	"yingce/backend/internal/skills"
 )
 
 // skill_search 的契约测试：注册、分词打分、索引兜底、边界与空集。
@@ -131,7 +137,7 @@ func TestCloudAgentSkillSearchToleratesStraySkillIDArgument(t *testing.T) {
 	// 实测回归：step-5 首次调用时按 skill_read_file 的参数习惯顺手带上 skillId，
 	// 被 decodeCloudAgentJSONObject（DisallowUnknownFields）拒绝 → tool_failed，
 	// 检索一次都没成功。这里走完整的工具分发路径，确保解码层真的容忍该字段。
-	s, db, _, _ := creationTestService(t)
+	s, db, _, _ := creationTestServiceOnDatabase(t, newPureGoAppTestDB(t))
 	skillAdministratorFixture(t, db, "u1")
 	if sqlDB, err := db.DB(); err == nil {
 		t.Cleanup(func() { _ = sqlDB.Close() })
@@ -336,6 +342,13 @@ func TestCloudAgentSkillSearchTokensExpandHanBigrams(t *testing.T) {
 	if got := cloudAgentSkillSearchTokens("hook-paywall"); len(got) != 1 || got[0] != "hook-paywall" {
 		t.Fatalf("ASCII token 不应展开 gram，得到 %v", got)
 	}
+	// 中文句里夹英文时，只保留中中二字词；I/P 这类字母片段不能误撞英文卡名。
+	got = cloudAgentSkillSearchTokens("给第三方IP小猪佩奇做授权风险评估")
+	for _, token := range got {
+		if token == "ip" || token == "方i" || token == "p小" {
+			t.Fatalf("mixed-language gram leaked into tokens: %v", got)
+		}
+	}
 }
 
 func TestCloudAgentSkillSearchMatchesNaturalPhraseViaGrams(t *testing.T) {
@@ -352,5 +365,696 @@ func TestCloudAgentSkillSearchMatchesNaturalPhraseViaGrams(t *testing.T) {
 	}
 	if matches[0]["skillId"] != "s2" {
 		t.Fatalf("expected shortform-drama-playbook first, got %v", matches[0]["skillId"])
+	}
+}
+
+func skillSearchConsolidatedPacks() []cloudAgentSkill {
+	return []cloudAgentSkill{
+		{
+			ID: "14811816982284", Name: "consolidated-character", Description: "Consolidated package.",
+			Files: map[string]string{
+				cloudAgentSkillEntryPath:               "",
+				"cards/drama-character-asset-board.md": "",
+				"cards/character-forge-migration.md":   "",
+			},
+		},
+		{
+			ID: "16000000000094", Name: "consolidated-shot", Description: "Consolidated package.",
+			Files: map[string]string{cloudAgentSkillEntryPath: "", "cards/drama-shot-card-14.md": ""},
+		},
+		{
+			ID: "16000000000093", Name: "consolidated-prompt", Description: "Consolidated package.",
+			Files: map[string]string{cloudAgentSkillEntryPath: "", "cards/drama-four-tier-prompt.md": ""},
+		},
+		{
+			ID: "16000000000092", Name: "consolidated-seedance", Description: "Consolidated package.",
+			Files: map[string]string{
+				cloudAgentSkillEntryPath:           "",
+				"cards/drama-frame-bridge.md":      "",
+				"cards/sd25-continuity-locks.md":   "",
+				"cards/sd25-unrelated-existing.md": "",
+			},
+		},
+		{
+			ID: "16000000000088", Name: "consolidated-assembly", Description: "Consolidated package.",
+			Files: map[string]string{cloudAgentSkillEntryPath: "", "cards/drama-assembly-acceptance.md": ""},
+		},
+		{
+			ID: "14811816982028", Name: "consolidated-series-image", Description: "Consolidated package.",
+			Files: map[string]string{
+				cloudAgentSkillEntryPath:         "",
+				"cards/ec-product-image.md":      "",
+				"cards/ec-detail-page.md":        "",
+				"cards/ec-quality-scrub.md":      "",
+				"cards/ec-unrelated-existing.md": "",
+			},
+		},
+		{
+			ID: "14811816981772", Name: "consolidated-product-video", Description: "Consolidated package.",
+			Files: map[string]string{cloudAgentSkillEntryPath: "", "cards/ec-product-video.md": ""},
+		},
+		{
+			ID: "14811816983052", Name: "consolidated-story", Description: "Consolidated package.",
+			Files: map[string]string{
+				cloudAgentSkillEntryPath:                    "",
+				"cards/story-structure-engine-migration.md": "",
+				"cards/short-narrative-structure.md":        "",
+				"cards/shortfilm-5stage-structure.md":       "",
+				"cards/shortfilm-micro-drama.md":            "",
+				"cards/shortfilm-multi-shot-lock.md":        "",
+				"cards/shortfilm-template-branch.md":        "",
+				"cards/shortfilm-ip-safety.md":              "",
+			},
+		},
+		{
+			ID: "14811816982796", Name: "剧本撰写",
+			Description: "把故事蓝图写成剧本文本：场景写作、对白、动作描述，以及对现成剧本与对白的诊断修复。",
+			Files: map[string]string{
+				cloudAgentSkillEntryPath:                    "",
+				"cards/factory-script-machine-migration.md": "",
+				"cards/dialogue-workshop-migration.md":      "",
+			},
+		},
+		{
+			ID: "16000000000095", Name: "consolidated-visual-prompt", Description: "Consolidated package.",
+			Files: map[string]string{
+				cloudAgentSkillEntryPath:                         "",
+				"cards/prompt-engineering-patterns-migration.md": "",
+				"cards/freestyle-style-library-migration.md":     "",
+				"cards/video-reversal-prompt-migration.md":       "",
+				"cards/video-visual-effect-prompt-migration.md":  "",
+				"cards/video-reversal-prompt.md":                 "",
+				"cards/video-visual-effect-prompt.md":            "",
+			},
+		},
+		{
+			ID: "16000000000086", Name: "consolidated-ai-performance", Description: "Consolidated package.",
+			Files: map[string]string{
+				cloudAgentSkillEntryPath:                      "",
+				"cards/microexpression-director-migration.md": "",
+			},
+		},
+		{
+			ID: "16000000000074", Name: "喜剧 Mechanics", Description: "把平淡素材磨成好笑的段子与喜剧桥段，覆盖通用段子、情景喜剧、脱口秀开放麦和相声捧逗。",
+			Files: map[string]string{
+				cloudAgentSkillEntryPath:              "",
+				"cards/comedy-general-index.md":       "",
+				"cards/sitcom-index.md":               "",
+				"cards/standup-index.md":              "",
+				"cards/xiangsheng-index.md":           "",
+				"cards/sitcom-lab-migration.md":       "",
+				"cards/standup-craft-migration.md":    "",
+				"cards/xiangsheng-craft-migration.md": "",
+			},
+		},
+		{
+			ID: "14811816969484", Name: "珠宝设计出款", Description: "专业珠宝设计与批量出款技能，支持单款、批量出款和系列延展；纯电商上架素材（九图/详情页/短视频）请移交电商技能。",
+			Files: map[string]string{
+				cloudAgentSkillEntryPath:       "",
+				"cards/design-batch.md":        "",
+				"cards/design-evolution.md":    "",
+				"cards/design-presets.md":      "",
+				"cards/evolution-migration.md": "",
+			},
+		},
+		{
+			ID: "14811816960780", Name: "珠宝电商图文视频一站式", Description: "珠宝品类电商素材：商品主图、角度图、详情页、珠宝亚马逊九图和短视频一体交付。",
+			Files: map[string]string{cloudAgentSkillEntryPath: ""},
+		},
+		{
+			ID: "yingce-image-editing", Name: "图片编辑工作流", Description: "基于画布图片节点完成图片编辑：文字描述改图、标注点位批量修改、按主体拆分图层。",
+			Files: map[string]string{
+				cloudAgentSkillEntryPath:               "",
+				"cards/image-annotation.md":            "",
+				"cards/image-layer-split.md":           "",
+				"cards/image-annotation-migration.md":  "",
+				"cards/image-layer-split-migration.md": "",
+			},
+		},
+		{
+			ID: "16000000000105", Name: "营销与转化-源起", Description: "广告调研、战役规划、脚本与投放策略。",
+			Files: map[string]string{cloudAgentSkillEntryPath: ""},
+		},
+		{
+			ID: "16000000000107", Name: "技能选择指南", Description: "把模糊需求路由到具体技能卡。",
+			Files: map[string]string{cloudAgentSkillEntryPath: ""},
+		},
+	}
+}
+
+func TestCloudAgentSkillAliasesRoutePreciseLegacyPrompts(t *testing.T) {
+	expected := map[string]string{
+		"14811816982284|cards/drama-character-asset-board.md":           "做角色三视图",
+		"16000000000094|cards/drama-shot-card-14.md":                    "写个分镜表",
+		"16000000000093|cards/drama-four-tier-prompt.md":                "提示词总是不稳定",
+		"16000000000092|cards/drama-frame-bridge.md":                    "两段怎么接",
+		"16000000000092|cards/sd25-continuity-locks.md":                 "把视频里的人换成另一个人",
+		"16000000000088|cards/drama-assembly-acceptance.md":             "帮我出剪辑单",
+		"14811816982028|cards/ec-product-image.md":                      "做三视图",
+		"14811816982028|cards/ec-detail-page.md":                        "做详情页",
+		"14811816982028|cards/ec-quality-scrub.md":                      "画质油腻",
+		"14811816981772|cards/ec-product-video.md":                      "让产品转起来",
+		"14811816983052|cards/story-structure-engine-migration.md":      "故事结构引擎",
+		"14811816983052|cards/short-narrative-structure.md":             "短片五阶段结构",
+		"14811816983052|SKILL.md":                                       "故事开发",
+		"14811816982284|cards/character-forge-migration.md":             "角色锻造工坊",
+		"14811816982796|cards/factory-script-machine-migration.md":      "剧本工业化机器",
+		"14811816982796|cards/dialogue-workshop-migration.md":           "对白工坊",
+		"16000000000095|cards/prompt-engineering-patterns-migration.md": "提示词工程模式",
+		"16000000000095|cards/freestyle-style-library-migration.md":     "Freestyle 风格库",
+		"16000000000095|cards/video-reversal-prompt-migration.md":       "15秒极致夸张反转提示词",
+		"16000000000095|cards/video-visual-effect-prompt-migration.md":  "15秒视觉特效",
+		"16000000000086|cards/microexpression-director-migration.md":    "AI演员微表情导演",
+		"16000000000074|cards/comedy-general-index.md":                  "段子结构",
+		"16000000000074|cards/sitcom-index.md":                          "情景喜剧",
+		"16000000000074|cards/standup-index.md":                         "脱口秀",
+		"16000000000074|cards/xiangsheng-index.md":                      "相声",
+		"16000000000074|cards/sitcom-lab-migration.md":                  "情景喜剧工坊",
+		"16000000000074|cards/standup-craft-migration.md":               "脱口秀手艺",
+		"16000000000074|cards/xiangsheng-craft-migration.md":            "相声手艺",
+		"14811816969484|cards/evolution-migration.md":                   "珠宝设计进化",
+		"yingce-image-editing|cards/image-annotation-migration.md":      "图片标注编辑",
+		"yingce-image-editing|cards/image-layer-split-migration.md":     "图片图层拆分",
+		"yingce-image-editing|SKILL.md":                                 "把这张图的背景换成纯白",
+		"yingce-image-editing|cards/image-layer-split.md":               "拆成独立图层",
+		"16000000000105|SKILL.md":                                       "广告全链路打法",
+		"16000000000107|SKILL.md":                                       "选包门房",
+	}
+	if len(cloudAgentSkillAliasRules) != len(expected) {
+		t.Fatalf("alias rule count = %d, want %d", len(cloudAgentSkillAliasRules), len(expected))
+	}
+	skills := skillSearchConsolidatedPacks()
+	for _, rule := range cloudAgentSkillAliasRules {
+		key := rule.SkillID + "|" + rule.Path
+		trigger, ok := expected[key]
+		if !ok {
+			t.Errorf("unexpected alias rule %s", key)
+			continue
+		}
+		found := false
+		for _, candidate := range rule.Triggers {
+			if candidate == trigger {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("alias rule %s is missing representative trigger %q", key, trigger)
+		}
+		for _, candidate := range rule.Triggers {
+			result, err := cloudAgentSearchSkills(skills, candidate, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			matches := result["matches"].([]map[string]any)
+			if len(matches) == 0 {
+				t.Errorf("trigger %q matched nothing", candidate)
+				continue
+			}
+			if rule.Exclusive && len(matches) != 1 {
+				t.Errorf("exclusive trigger %q matched %d skills, want 1", candidate, len(matches))
+				continue
+			}
+			if matches[0]["skillId"] != rule.SkillID || matches[0]["path"] != rule.Path {
+				t.Errorf("trigger %q routed to %v/%v, want %s/%s",
+					candidate, matches[0]["skillId"], matches[0]["path"], rule.SkillID, rule.Path)
+			}
+			if matches[0]["direct"] != true {
+				t.Errorf("trigger %q did not mark its first route as direct", candidate)
+			}
+			if matches[0]["score"].(int) < cloudAgentSkillAliasScore {
+				t.Errorf("trigger %q scored %v, want at least %d",
+					candidate, matches[0]["score"], cloudAgentSkillAliasScore)
+			}
+		}
+	}
+}
+
+func TestCloudAgentSkillAliasesRouteLegacyIDs(t *testing.T) {
+	expected := map[string]string{
+		"14889899552012":           "16000000000086|cards/microexpression-director-migration.md",
+		"16000000000075":           "14811816982796|cards/dialogue-workshop-migration.md",
+		"16000000000076":           "14811816982796|cards/factory-script-machine-migration.md",
+		"16000000000084":           "14811816983052|cards/story-structure-engine-migration.md",
+		"16000000000080":           "14811816983052|cards/short-narrative-structure.md",
+		"16000000000073":           "14811816982284|cards/character-forge-migration.md",
+		"16000000000089":           "16000000000095|cards/freestyle-style-library-migration.md",
+		"16000000000103":           "16000000000095|cards/prompt-engineering-patterns-migration.md",
+		"14811816981260":           "16000000000095|cards/video-reversal-prompt-migration.md",
+		"14811816981004":           "16000000000095|cards/video-visual-effect-prompt-migration.md",
+		"16000000000082":           "16000000000074|cards/sitcom-lab-migration.md",
+		"16000000000083":           "16000000000074|cards/standup-craft-migration.md",
+		"16000000000085":           "16000000000074|cards/xiangsheng-craft-migration.md",
+		"14811816969740":           "14811816969484|cards/evolution-migration.md",
+		"yingce-image-annotation":  "yingce-image-editing|cards/image-annotation-migration.md",
+		"yingce-image-layer-split": "yingce-image-editing|cards/image-layer-split-migration.md",
+	}
+	for legacyID, target := range expected {
+		result, err := cloudAgentSearchSkills(skillSearchConsolidatedPacks(), legacyID, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		matches := result["matches"].([]map[string]any)
+		if len(matches) != 1 {
+			t.Errorf("legacy ID %s matched %d skills, want 1", legacyID, len(matches))
+			continue
+		}
+		got := matches[0]["skillId"].(string) + "|" + matches[0]["path"].(string)
+		if got != target {
+			t.Errorf("legacy ID %s routed to %s, want %s", legacyID, got, target)
+		}
+	}
+}
+
+func TestCloudAgentSkillAliasRulesCoverAllLegacyMigrations(t *testing.T) {
+	for _, migration := range skills.LegacySkillMigrations() {
+		byID := false
+		byName := false
+		for _, rule := range cloudAgentSkillAliasRules {
+			for _, trigger := range rule.Triggers {
+				if trigger == migration.LegacyID {
+					byID = true
+					if rule.SkillID != migration.TargetID {
+						t.Errorf("legacy ID %s routes to %s, want %s", migration.LegacyID, rule.SkillID, migration.TargetID)
+					}
+				}
+				if trigger == migration.LegacyName {
+					byName = true
+					if rule.SkillID != migration.TargetID {
+						t.Errorf("legacy name %s routes to %s, want %s", migration.LegacyName, rule.SkillID, migration.TargetID)
+					}
+				}
+			}
+		}
+		if !byID {
+			t.Errorf("legacy ID %s has no exact alias trigger", migration.LegacyID)
+		}
+		if !byName {
+			t.Errorf("legacy name %s has no exact alias trigger", migration.LegacyName)
+		}
+	}
+}
+
+func TestCloudAgentSkillAliasesRequireInstalledSkillAndExistingCard(t *testing.T) {
+	cases := []struct {
+		name   string
+		skills []cloudAgentSkill
+	}{
+		{
+			name: "skill not installed",
+			skills: []cloudAgentSkill{{
+				ID: "other", Name: "opaque", Description: "Opaque package.",
+				Files: map[string]string{cloudAgentSkillEntryPath: ""},
+			}},
+		},
+		{
+			name: "configured card missing",
+			skills: []cloudAgentSkill{{
+				ID: "14811816982284", Name: "opaque", Description: "Opaque package.",
+				Files: map[string]string{cloudAgentSkillEntryPath: "", "cards/character-forge-migration.md": ""},
+			}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := cloudAgentSearchSkills(tc.skills, "做角色三视图", 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if matches := result["matches"].([]map[string]any); len(matches) != 0 {
+				t.Fatalf("alias must not invent a route: %v", matches)
+			}
+		})
+	}
+}
+
+func TestCloudAgentSkillAliasesDoNotCaptureUnrelatedWork(t *testing.T) {
+	for _, keyword := range []string{
+		"给第三方IP小猪佩奇做授权风险评估",
+		"安排小虎IP的个人抖音直播运营排班",
+		"帮我把宝宝照片配一段朋友圈文案",
+		"把这段通知里的两个错别字改掉",
+	} {
+		result, err := cloudAgentSearchSkills(skillSearchConsolidatedPacks(), keyword, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if matches := result["matches"].([]map[string]any); len(matches) != 0 {
+			t.Errorf("negative trigger %q was captured: %v", keyword, matches)
+		}
+	}
+}
+
+func TestCloudAgentSkillAliasesIgnoreBackgroundMusicAndActionScript(t *testing.T) {
+	for _, keyword := range []string{
+		"帮我找一段换背景音乐",
+		"这段视频改背景音乐的节奏",
+		"这场打戏怎么写得更紧张",
+	} {
+		if alias, ok := cloudAgentSkillBestAlias(skillSearchConsolidatedPacks(), keyword); ok {
+			t.Errorf("keyword %q was captured by alias %s/%s", keyword, alias.SkillID, alias.Path)
+		}
+	}
+}
+
+func TestCloudAgentSkillAliasesRejectBroadStandaloneTriggers(t *testing.T) {
+	broad := map[string]bool{
+		"视频": true, "分镜": true, "商品图": true, "角色": true, "喜剧": true,
+		"海报": true, "主图": true, "详情页": true, "提示词": true,
+		"短片": true, "IP安全": true,
+	}
+	for _, rule := range cloudAgentSkillAliasRules {
+		for _, trigger := range rule.Triggers {
+			normalized := cloudAgentSkillAliasText(trigger)
+			if normalized == "" {
+				t.Errorf("alias rule %s has an empty trigger", rule.SkillID+"|"+rule.Path)
+			}
+			if rule.Exclusive && broad[normalized] {
+				t.Errorf("alias rule %s uses broad trigger %q", rule.SkillID+"|"+rule.Path, trigger)
+			}
+		}
+	}
+}
+
+func TestCloudAgentSkillAliasesTargetBuiltinFiles(t *testing.T) {
+	_, testFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("cannot resolve test file path")
+	}
+	root := filepath.Join(filepath.Dir(testFile), "..", "..", "builtin")
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	skillDirs := make(map[string]string, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		dir := filepath.Join(root, entry.Name())
+		body, err := os.ReadFile(filepath.Join(dir, cloudAgentSkillEntryPath))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, rule := range cloudAgentSkillAliasRules {
+			if strings.Contains(string(body), `skillId: "`+rule.SkillID+`"`) {
+				skillDirs[rule.SkillID] = dir
+			}
+		}
+	}
+	for _, rule := range cloudAgentSkillAliasRules {
+		dir, ok := skillDirs[rule.SkillID]
+		if !ok {
+			t.Errorf("alias target skill %s is missing from builtin packages", rule.SkillID)
+			continue
+		}
+		info, err := os.Stat(filepath.Join(dir, filepath.FromSlash(rule.Path)))
+		if err != nil {
+			t.Errorf("alias target %s/%s is unavailable: %v", rule.SkillID, rule.Path, err)
+			continue
+		}
+		if info.Size() == 0 {
+			t.Errorf("alias target %s/%s is empty", rule.SkillID, rule.Path)
+		}
+	}
+}
+
+func TestCloudAgentSkillAliasResponseStaysCompact(t *testing.T) {
+	for _, rule := range cloudAgentSkillAliasRules {
+		if len(rule.Triggers) == 0 {
+			t.Fatalf("alias rule %s has no trigger", rule.SkillID+"|"+rule.Path)
+		}
+		result, err := cloudAgentSearchSkills(skillSearchConsolidatedPacks(), rule.Triggers[0], 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, err := json.Marshal(result)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(encoded) > 4096 {
+			t.Errorf("alias response for %q is %d bytes, want <= 4096", rule.Triggers[0], len(encoded))
+		}
+	}
+}
+
+func TestCloudAgentSkillComedyModesDoNotCrossRoute(t *testing.T) {
+	cases := []struct {
+		keyword string
+		path    string
+	}{
+		{"写一段情景喜剧", "cards/sitcom-index.md"},
+		{"脱口秀开放麦怎么排段子", "cards/standup-index.md"},
+		{"相声捧逗怎么铺包袱", "cards/xiangsheng-index.md"},
+		{"段子结构怎么搭", "cards/comedy-general-index.md"},
+	}
+	for _, tc := range cases {
+		result, err := cloudAgentSearchSkills(skillSearchConsolidatedPacks(), tc.keyword, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		matches := result["matches"].([]map[string]any)
+		if len(matches) == 0 {
+			t.Errorf("%q matched nothing", tc.keyword)
+			continue
+		}
+		if matches[0]["skillId"] != "16000000000074" || matches[0]["path"] != tc.path {
+			t.Errorf("%q routed to %v/%v, want 16000000000074/%s",
+				tc.keyword, matches[0]["skillId"], matches[0]["path"], tc.path)
+		}
+		if matches[0]["direct"] != true {
+			t.Errorf("%q did not mark the comedy route as direct", tc.keyword)
+		}
+	}
+}
+
+// “喜剧”是题材词，不是完整工位说法。它一旦成为精确别名，会清空同句里的
+// 其他候选，把“写喜剧剧本”这类请求强行锁死在喜剧包。
+func TestCloudAgentSkillComedyGenreDoesNotSwallowScriptRequests(t *testing.T) {
+	for _, keyword := range []string{
+		"写一个喜剧短片剧本",
+		"帮我把这个喜剧写成剧本",
+	} {
+		result, err := cloudAgentSearchSkills(skillSearchConsolidatedPacks(), keyword, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		matches := result["matches"].([]map[string]any)
+		if len(matches) == 0 {
+			t.Errorf("%q matched nothing", keyword)
+			continue
+		}
+		var screenplayOffered bool
+		for _, match := range matches {
+			if match["skillId"] == "14811816982796" {
+				screenplayOffered = true
+			}
+		}
+		if !screenplayOffered {
+			t.Errorf("%q hid the screenplay skill behind the comedy genre alias: %v", keyword, matches)
+		}
+	}
+}
+
+func TestCloudAgentSkillJewelryModesDoNotCrossRoute(t *testing.T) {
+	skills := skillSearchConsolidatedPacks()
+
+	result, err := cloudAgentSearchSkills(skills, "帮我设计一款戒指", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	matches := result["matches"].([]map[string]any)
+	if len(matches) != 1 || matches[0]["skillId"] != "14811816969484" || matches[0]["path"] != cloudAgentSkillEntryPath {
+		t.Fatalf("plain jewelry design must stay on the main entry, got %v", matches)
+	}
+
+	result, err = cloudAgentSearchSkills(skills, "珠宝设计进化", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	matches = result["matches"].([]map[string]any)
+	if len(matches) != 1 || matches[0]["path"] != "cards/evolution-migration.md" {
+		t.Fatalf("legacy jewelry evolution must route to its migration card, got %v", matches)
+	}
+
+	result, err = cloudAgentSearchSkills(skills, "珠宝设计定稿后做亚马逊九图", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	matches = result["matches"].([]map[string]any)
+	if len(matches) == 0 || matches[0]["skillId"] != "14811816969484" {
+		t.Fatalf("jewelry handoff query should keep the design pack first, got %v", matches)
+	}
+	for _, match := range matches {
+		if match["path"] == "cards/evolution-migration.md" {
+			t.Fatalf("handoff query must not fall into the evolution migration card: %v", matches)
+		}
+	}
+}
+
+func TestCloudAgentSkillImageEditingModesDoNotCrossRoute(t *testing.T) {
+	skills := skillSearchConsolidatedPacks()
+	for _, keyword := range []string{
+		"把这张图的背景换成纯白",
+		"把人物和商品拆成独立图层",
+	} {
+		result, err := cloudAgentSearchSkills(skills, keyword, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		matches := result["matches"].([]map[string]any)
+		if len(matches) == 0 || matches[0]["skillId"] != "yingce-image-editing" {
+			t.Errorf("%q should stay in the image editing pack, got %v", keyword, matches)
+			continue
+		}
+		if strings.Contains(matches[0]["path"].(string), "migration") {
+			t.Errorf("%q was captured by a migration card: %v", keyword, matches)
+		}
+	}
+}
+
+func TestCloudAgentSkillAliasesKeepCollaborativeCandidates(t *testing.T) {
+	cases := []struct {
+		keyword  string
+		skillID  string
+		path     string
+		required []string
+	}{
+		{
+			keyword: "写一段相声剧本",
+			skillID: "16000000000074", path: "cards/xiangsheng-index.md",
+			required: []string{"14811816982796"},
+		},
+		{
+			keyword: "给这张商品主图换背景",
+			skillID: "14811816982028", path: "cards/ec-product-image.md",
+			required: []string{"yingce-image-editing"},
+		},
+		{
+			keyword: "做一张海报并换背景",
+			skillID: "14811816982028", path: "cards/ec-product-image.md",
+			required: []string{"yingce-image-editing"},
+		},
+	}
+	for _, tc := range cases {
+		result, err := cloudAgentSearchSkills(skillSearchConsolidatedPacks(), tc.keyword, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		matches := result["matches"].([]map[string]any)
+		if len(matches) == 0 {
+			t.Errorf("%q matched nothing", tc.keyword)
+			continue
+		}
+		first := matches[0]
+		if first["skillId"] != tc.skillID || first["path"] != tc.path {
+			t.Errorf("%q routed to %v/%v first, want %s/%s",
+				tc.keyword, first["skillId"], first["path"], tc.skillID, tc.path)
+		}
+		if first["direct"] != true {
+			t.Errorf("%q did not mark its first route as direct", tc.keyword)
+		}
+		offered := make(map[string]bool, len(matches))
+		for _, match := range matches {
+			offered[match["skillId"].(string)] = true
+		}
+		for _, skillID := range tc.required {
+			if !offered[skillID] {
+				t.Errorf("%q hid collaborative skill %s: %v", tc.keyword, skillID, matches)
+			}
+		}
+	}
+}
+
+func TestCloudAgentSkillOrdinaryAliasesHoldCombinedResponseBudget(t *testing.T) {
+	for _, keyword := range []string{
+		"写一段相声剧本",
+		"给这张商品主图换背景",
+		"做一张海报并换背景",
+	} {
+		result, err := cloudAgentSearchSkills(skillSearchConsolidatedPacks(), keyword, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, err := json.Marshal(result)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(encoded) > 4096 {
+			t.Errorf("combined response for %q is %d bytes, want <= 4096", keyword, len(encoded))
+		}
+		cardCount := 0
+		for _, match := range result["matches"].([]map[string]any) {
+			if cards, ok := match["cards"].([]string); ok {
+				cardCount += len(cards)
+			}
+		}
+		if cardCount > cloudAgentSkillSearchCardBudget {
+			t.Errorf("combined response for %q advertised %d cards, want <= %d",
+				keyword, cardCount, cloudAgentSkillSearchCardBudget)
+		}
+	}
+}
+
+func TestCloudAgentSkillOrdinaryAliasHonorsExclusion(t *testing.T) {
+	result, err := cloudAgentSearchSkills(skillSearchConsolidatedPacks(), "帮我找一段换背景音乐", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, match := range result["matches"].([]map[string]any) {
+		if match["skillId"] == "yingce-image-editing" && match["direct"] == true {
+			t.Fatalf("background music request was treated as an image-editing alias: %v", match)
+		}
+	}
+}
+
+func TestCloudAgentSkillAliasNeedsMigrationCardToFire(t *testing.T) {
+	skills := []cloudAgentSkill{{
+		ID: "16000000000074", Name: "喜剧 Mechanics", Description: "喜剧与段子方法。",
+		Files: map[string]string{
+			cloudAgentSkillEntryPath: "",
+			"cards/sitcom-index.md":  "",
+		},
+	}}
+	result, err := cloudAgentSearchSkills(skills, "情景喜剧工坊", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, match := range result["matches"].([]map[string]any) {
+		if strings.Contains(match["path"].(string), "migration") {
+			t.Fatalf("missing migration card must not be advertised: %v", result["matches"])
+		}
+	}
+}
+
+func TestCloudAgentSkillSearchResponseNeverExceedsByteBudget(t *testing.T) {
+	description := strings.Repeat("影视制作方法说明，", 300)
+	skills := make([]cloudAgentSkill, 0, 20)
+	for skillIndex := 0; skillIndex < 20; skillIndex++ {
+		files := map[string]string{cloudAgentSkillEntryPath: ""}
+		for cardIndex := 0; cardIndex < 40; cardIndex++ {
+			files[fmt.Sprintf("cards/shot-%02d-long-card-name.md", cardIndex)] = ""
+		}
+		skills = append(skills, cloudAgentSkill{
+			ID:          fmt.Sprintf("long-skill-%02d", skillIndex),
+			Name:        fmt.Sprintf("影视制作技能包%02d", skillIndex),
+			Description: description,
+			Files:       files,
+		})
+	}
+
+	result, err := cloudAgentSearchSkills(skills, "影视", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(encoded) > cloudAgentSkillSearchResponseBudget {
+		t.Fatalf("response is %d bytes, want <= %d", len(encoded), cloudAgentSkillSearchResponseBudget)
+	}
+	if result["total"] != len(skills) {
+		t.Fatalf("total = %v, want %d", result["total"], len(skills))
 	}
 }
