@@ -346,3 +346,19 @@ test("加载、错误和图片外留白拦截滚轮但不缩放，错误后换�
         await f.dispose();
     }
 });
+
+test("Esc 关闭预览并把焦点还给打开预览的控件", async () => {
+    const trigger = document.createElement("button");
+    document.body.append(trigger);
+    trigger.focus();
+    const f = await fixture();
+    try {
+        document.querySelector<HTMLButtonElement>(".canvas-image-preview-modal .ant-modal-close")!.focus();
+        await act(async () => window.dispatchEvent(new dom.KeyboardEvent("keydown", { key: "Escape", bubbles: true }) as unknown as KeyboardEvent));
+        expect(f.closed()).toBe(1);
+        expect(document.activeElement).toBe(trigger);
+    } finally {
+        await f.dispose();
+        trigger.remove();
+    }
+});

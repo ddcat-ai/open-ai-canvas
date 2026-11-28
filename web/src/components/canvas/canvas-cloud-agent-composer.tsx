@@ -38,6 +38,7 @@ import { CanvasAnchoredDropdown as Dropdown } from "./canvas-anchored-dropdown";
 import { buildSkillMentionReferences } from "@/services/skill-runtime";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textarea";
+import { CanvasImagePreview } from "./canvas-image-preview";
 import { agentAttachmentReferences, type CloudAgentChatAttachment } from "./canvas-cloud-agent-attachments";
 
 export const MIN_AGENT_PROMPT_HEIGHT = 60;
@@ -745,12 +746,5 @@ export function AgentChatComposer({
 }
 
 export function AgentImagePreview({ attachment, onClose }: { attachment: CloudAgentChatAttachment; onClose: () => void }) {
-    return (
-        <div className="fixed inset-0 z-[var(--z-dialog-popover)] grid place-items-center bg-black/80 p-6" role="dialog" aria-label={attachment.name} onClick={onClose}>
-            <img src={attachment.url} alt={attachment.name} className="max-h-[90vh] max-w-[92vw] rounded-xl object-contain shadow-2xl" onClick={(event) => event.stopPropagation()} />
-            <button type="button" className="absolute right-5 top-5 rounded-full bg-black/60 p-2 text-white" onClick={onClose} aria-label="关闭图片预览">
-                <X className="size-5" />
-            </button>
-        </div>
-    );
+    return <CanvasImagePreview src={attachment.url} alt={attachment.name} onClose={onClose} />;
 }
