@@ -3,6 +3,8 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -142,6 +144,21 @@ process.exitCode = 1;
 	}
 }
 
+func TestRunRequiresSettledBeforeEOF(t *testing.T) {
+	for _, script := range []string{
+		`for await (const chunk of process.stdin) {}`,
+		`console.log('{"event":"progress"}'); process.exitCode = 7;`,
+	} {
+		fakeRuntime(t, script)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err := Run(ctx, ProcessRequest{}, noopBridge())
+		cancel()
+		if !errors.Is(err, io.ErrUnexpectedEOF) {
+			t.Fatalf("exit without settled: got %v", err)
+		}
+	}
+}
+
 // 子进程只能拿到白名单环境变量，拿不到数据库连接等密钥。
 func TestRunDoesNotLeakBackendEnvironment(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://secret")
@@ -149,6 +166,8 @@ func TestRunDoesNotLeakBackendEnvironment(t *testing.T) {
 if (process.env.DATABASE_URL) {
   process.stdout.write(JSON.stringify({ event: "runtime_error", message: "leaked" }) + "\n");
   process.exitCode = 1;
+} else {
+  process.stdout.write(JSON.stringify({ event: "settled" }) + "\n");
 }
 `)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

@@ -35,9 +35,11 @@ func TestCloudAgentPiSessionModelApprovalPause(t *testing.T) {
 	for _, tc := range []struct {
 		name           string
 		invalidPurpose bool
+		earlyEOF       bool
 	}{
-		{"approval wait is a pause", false},
-		{"unrelated model error remains a failure", true},
+		{name: "approval wait is a pause"},
+		{name: "early EOF preserves durable approval", earlyEOF: true},
+		{name: "unrelated model error remains a failure", invalidPurpose: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, db, root := approvalPauseRoot(t)
@@ -79,7 +81,9 @@ func TestCloudAgentPiSessionModelApprovalPause(t *testing.T) {
 					_ = json.NewEncoder(w).Encode(map[string]any{"event": "runtime_error", "message": fmt.Sprint(result["error"])})
 					return
 				}
-				_, _ = fmt.Fprintln(w, `{"event":"settled"}`)
+				if !tc.earlyEOF {
+					_, _ = fmt.Fprintln(w, `{"event":"settled"}`)
+				}
 			}))
 			defer server.Close()
 			t.Setenv("YINGCE_AGENT_URL", server.URL)
