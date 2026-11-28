@@ -3,13 +3,13 @@
 package app
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
 	"strings"
 
 	"gorm.io/gorm"
+	"yingce/backend/internal/eventstream"
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/protocol"
 )
@@ -235,30 +235,12 @@ func providerResponsePayloads(responseBody []byte) []map[string]any {
 
 	// 流式文本的用量只出现在最后一个 SSE data 事件中，不能把整段响应当作 JSON。
 	result := make([]map[string]any, 0)
-	scanner := bufio.NewScanner(bytes.NewReader(responseBody))
-	scanner.Buffer(make([]byte, 64<<10), max(len(responseBody)+1, 64<<10))
-	dataLines := make([]string, 0, 1)
-	flush := func() {
-		raw := strings.TrimSpace(strings.Join(dataLines, "\n"))
-		dataLines = dataLines[:0]
-		if raw == "" || raw == "[DONE]" {
-			return
-		}
+	var decoder eventstream.Decoder
+	decoder.Feed(responseBody, func(_, raw string) {
 		if event, ok := decodeProviderResponsePayload([]byte(raw)); ok {
 			result = append(result, event)
 		}
-	}
-	for scanner.Scan() {
-		line := strings.TrimSuffix(scanner.Text(), "\r")
-		if line == "" {
-			flush()
-			continue
-		}
-		if strings.HasPrefix(line, "data:") {
-			dataLines = append(dataLines, strings.TrimPrefix(strings.TrimPrefix(line, "data:"), " "))
-		}
-	}
-	flush()
+	})
 	return result
 }
 

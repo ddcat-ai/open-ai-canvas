@@ -3,12 +3,8 @@
 package app
 
 import (
-	"bufio"
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 )
 
@@ -84,84 +80,6 @@ func validateTextPayload(payload map[string]interface{}) error {
 	return nil
 }
 
-func parseTextEventStream(data []byte, protocol string) (string, error) {
-	scanner := bufio.NewScanner(bytes.NewReader(data))
-	scanner.Buffer(make([]byte, 64<<10), len(data)+1)
-	var text strings.Builder
-	var eventName string
-	var dataLines []string
-
-	flush := func() error {
-		if len(dataLines) == 0 {
-			eventName = ""
-			return nil
-		}
-		raw := strings.TrimSpace(strings.Join(dataLines, "\n"))
-		dataLines = nil
-		if raw == "" || raw == "[DONE]" {
-			eventName = ""
-			return nil
-		}
-		var payload map[string]interface{}
-		if err := json.Unmarshal([]byte(raw), &payload); err != nil {
-			return fmt.Errorf("流式文本事件解析失败：%w", err)
-		}
-		if eventName == "error" {
-			if err := validateTextPayload(payload); err != nil {
-				return err
-			}
-			return errors.New("上游流式文本请求失败")
-		}
-		if err := validateTextPayload(payload); err != nil {
-			return err
-		}
-		if protocol == "responses" {
-			text.WriteString(stringField(payload, "delta"))
-		} else if protocol == "claude-api" {
-			delta, _ := payload["delta"].(map[string]interface{})
-			if stringField(delta, "type") == "text_delta" {
-				text.WriteString(stringField(delta, "text"))
-			}
-		} else {
-			choices, _ := payload["choices"].([]interface{})
-			for _, choice := range choices {
-				record, _ := choice.(map[string]interface{})
-				delta, _ := record["delta"].(map[string]interface{})
-				text.WriteString(streamContentText(delta["content"]))
-			}
-		}
-		eventName = ""
-		return nil
-	}
-
-	for scanner.Scan() {
-		line := strings.TrimSuffix(scanner.Text(), "\r")
-		if line == "" {
-			if err := flush(); err != nil {
-				return "", err
-			}
-			continue
-		}
-		switch {
-		case strings.HasPrefix(line, "event:"):
-			eventName = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
-		case strings.HasPrefix(line, "data:"):
-			value := strings.TrimPrefix(line, "data:")
-			dataLines = append(dataLines, strings.TrimPrefix(value, " "))
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("读取流式文本响应失败：%w", err)
-	}
-	if err := flush(); err != nil {
-		return "", err
-	}
-	if text.Len() == 0 {
-		return "", errors.New("流式文本接口没有返回内容")
-	}
-	return text.String(), nil
-}
-
 func streamContentText(value interface{}) string {
 	if text, ok := value.(string); ok {
 		return text
@@ -176,95 +94,6 @@ func streamContentText(value interface{}) string {
 		result.WriteString(stringField(record, "text"))
 	}
 	return result.String()
-}
-
-type streamingTextDeltaParser struct {
-	protocol string
-	buffer   string
-	emit     func(string)
-}
-
-func newStreamingTextDeltaParser(protocol string, emit func(string)) *streamingTextDeltaParser {
-	return &streamingTextDeltaParser{protocol: protocol, emit: emit}
-}
-
-func (p *streamingTextDeltaParser) consume(mimeType string, chunk []byte) {
-	if p == nil || p.emit == nil || !strings.Contains(strings.ToLower(mimeType), "event-stream") || len(chunk) == 0 {
-		return
-	}
-	p.buffer += string(chunk)
-	p.consumeFrames(false)
-}
-
-func (p *streamingTextDeltaParser) flush() {
-	if p == nil || p.emit == nil {
-		return
-	}
-	p.consumeFrames(true)
-}
-
-func (p *streamingTextDeltaParser) consumeFrames(flush bool) {
-	for {
-		match := sseFrameBoundaryPattern.FindStringIndex(p.buffer)
-		if match == nil {
-			break
-		}
-		p.consumeFrame(p.buffer[:match[0]])
-		p.buffer = p.buffer[match[1]:]
-	}
-	if flush && strings.TrimSpace(p.buffer) != "" {
-		p.consumeFrame(p.buffer)
-		p.buffer = ""
-	}
-}
-
-func (p *streamingTextDeltaParser) consumeFrame(frame string) {
-	var eventName string
-	var dataLines []string
-	for _, line := range strings.Split(strings.ReplaceAll(frame, "\r\n", "\n"), "\n") {
-		switch {
-		case strings.HasPrefix(line, "event:"):
-			eventName = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
-		case strings.HasPrefix(line, "data:"):
-			dataLines = append(dataLines, strings.TrimSpace(strings.TrimPrefix(line, "data:")))
-		}
-	}
-	raw := strings.TrimSpace(strings.Join(dataLines, "\n"))
-	if raw == "" || raw == "[DONE]" {
-		return
-	}
-	var payload map[string]interface{}
-	if json.Unmarshal([]byte(raw), &payload) != nil {
-		return
-	}
-	if delta := streamingTextDelta(p.protocol, eventName, payload); delta != "" {
-		p.emit(delta)
-	}
-}
-
-func streamingTextDelta(protocol string, eventName string, payload map[string]interface{}) string {
-	if protocol == "responses" {
-		eventType := firstNonEmptyString(strings.TrimSpace(eventName), stringField(payload, "type"))
-		if eventType == "response.output_text.delta" || eventType == "output_text.delta" || eventType == "" || eventType == "message" {
-			return stringField(payload, "delta")
-		}
-		return ""
-	}
-	if protocol == "claude-api" {
-		delta, _ := payload["delta"].(map[string]interface{})
-		if stringField(delta, "type") == "text_delta" {
-			return stringField(delta, "text")
-		}
-		return ""
-	}
-	choices, _ := payload["choices"].([]interface{})
-	var text strings.Builder
-	for _, choice := range choices {
-		record, _ := choice.(map[string]interface{})
-		delta, _ := record["delta"].(map[string]interface{})
-		text.WriteString(streamContentText(delta["content"]))
-	}
-	return text.String()
 }
 
 func extractResponseText(payload map[string]interface{}) string {

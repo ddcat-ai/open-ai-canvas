@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
@@ -16,8 +15,6 @@ import (
 	"yingce/backend/internal/model"
 	"yingce/backend/internal/protocol"
 )
-
-var sseFrameBoundaryPattern = regexp.MustCompile(`\r?\n\r?\n`)
 
 type canvasGenerationInput struct {
 	Mode             string                 `json:"mode"`

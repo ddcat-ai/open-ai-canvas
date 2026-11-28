@@ -328,7 +328,14 @@ func TestWriteMediaPartSanitizesFilenameAndSetsMimeType(t *testing.T) {
 	}
 }
 
-func TestParseTextEventStreamSupportsResponsesAndChat(t *testing.T) {
+func TestTextProviderStreamSupportsResponsesChatAndClaude(t *testing.T) {
+	parse := func(data []byte, protocol string) (string, error) {
+		parser := newStreamingAgentParser(protocol, nil)
+		parser.consume("text/event-stream", data)
+		parser.flush()
+		result, err := parser.result()
+		return stringField(result, "text"), err
+	}
 	responses := []byte(`event: response.output_text.delta
 data: {"delta":"{\"title\":\"分镜\""}
 
@@ -338,7 +345,7 @@ data: {"delta":"}"}
 data: [DONE]
 
 `)
-	if got, err := parseTextEventStream(responses, "responses"); err != nil || got != `{"title":"分镜"}` {
+	if got, err := parse(responses, "responses"); err != nil || got != `{"title":"分镜"}` {
 		t.Fatalf("Responses stream = %q, err = %v", got, err)
 	}
 
@@ -349,18 +356,21 @@ data: {"choices":[{"delta":{"content":"：远景"}}]}
 data: [DONE]
 
 `)
-	if got, err := parseTextEventStream(chat, "chat-completion"); err != nil || got != "第一镜：远景" {
+	if got, err := parse(chat, "chat-completion"); err != nil || got != "第一镜：远景" {
 		t.Fatalf("Chat stream = %q, err = %v", got, err)
 	}
 
 	claude := []byte(`event: content_block_delta
-data: {"delta":{"type":"text_delta","text":"第一镜"}}
+data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"第一镜"}}
 
 event: content_block_delta
-data: {"delta":{"type":"text_delta","text":"：远景"}}
+data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"：远景"}}
+
+event: message_stop
+data: {"type":"message_stop"}
 
 `)
-	if got, err := parseTextEventStream(claude, "claude-api"); err != nil || got != "第一镜：远景" {
+	if got, err := parse(claude, "claude-api"); err != nil || got != "第一镜：远景" {
 		t.Fatalf("Claude stream = %q, err = %v", got, err)
 	}
 }
