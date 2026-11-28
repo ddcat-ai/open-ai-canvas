@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"yingce/backend/internal/eventstream"
 	"yingce/backend/internal/kernel"
 	"yingce/backend/internal/outbound"
 )
@@ -253,15 +254,21 @@ func (session *libTVMCPSession) post(payload mcpRPCRequest, expectResult bool) (
 
 func parseMCPSSE(body []byte) ([]byte, error) {
 	var last []byte
-	for _, line := range strings.Split(string(body), "\n") {
-		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSuffix(line, "\r"), "data:"))
-		line = strings.TrimSpace(line)
-		if line == "" || line == "[DONE]" {
-			continue
+	body = bytes.TrimLeft(body, " \t\r\n")
+	if bytes.HasPrefix(body, []byte("{")) || bytes.HasPrefix(body, []byte("[")) {
+		// Some gateways label line-delimited JSON-RPC replies as event streams.
+		for line := range bytes.Lines(body) {
+			if json.Valid(line) {
+				last = bytes.TrimSpace(line)
+			}
 		}
-		if json.Valid([]byte(line)) {
-			last = []byte(line)
-		}
+	} else {
+		var decoder eventstream.Decoder
+		decoder.Feed(body, func(_, data string) {
+			if payload := []byte(data); json.Valid(payload) {
+				last = payload
+			}
+		})
 	}
 	if len(last) == 0 {
 		return nil, errors.New("LibTV MCP 事件流中没有有效结果")

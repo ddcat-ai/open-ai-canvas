@@ -12,6 +12,8 @@ import (
 	"math"
 	"sort"
 	"strings"
+
+	"yingce/backend/internal/eventstream"
 )
 
 func postStreamingAgent(ctx context.Context, config providerConfig, path string, body map[string]interface{}, protocol string, onDelta func(string), onReasoning ...func(string)) (map[string]interface{}, error) {
@@ -59,7 +61,7 @@ type streamingAgentToolCall struct {
 
 type streamingAgentParser struct {
 	protocol      string
-	buffer        string
+	frames        eventstream.Decoder
 	text          strings.Builder
 	reasoning     strings.Builder
 	toolCalls     map[int]*streamingAgentToolCall
@@ -81,44 +83,18 @@ func (p *streamingAgentParser) consume(mimeType string, chunk []byte) {
 	if p == nil || p.err != nil || !strings.Contains(strings.ToLower(mimeType), "event-stream") || len(chunk) == 0 {
 		return
 	}
-	p.buffer += string(chunk)
-	p.consumeFrames(false)
+	p.frames.Feed(chunk, p.consumeEvent)
 }
 
 func (p *streamingAgentParser) flush() {
-	if p == nil || p.err != nil {
+	p.frames = eventstream.Decoder{}
+}
+
+func (p *streamingAgentParser) consumeEvent(eventName, data string) {
+	if p.err != nil {
 		return
 	}
-	p.consumeFrames(true)
-}
-
-func (p *streamingAgentParser) consumeFrames(flush bool) {
-	for p.err == nil {
-		match := sseFrameBoundaryPattern.FindStringIndex(p.buffer)
-		if match == nil {
-			break
-		}
-		p.consumeFrame(p.buffer[:match[0]])
-		p.buffer = p.buffer[match[1]:]
-	}
-	if flush && p.err == nil && strings.TrimSpace(p.buffer) != "" {
-		p.consumeFrame(p.buffer)
-		p.buffer = ""
-	}
-}
-
-func (p *streamingAgentParser) consumeFrame(frame string) {
-	var eventName string
-	var dataLines []string
-	for _, line := range strings.Split(strings.ReplaceAll(frame, "\r\n", "\n"), "\n") {
-		switch {
-		case strings.HasPrefix(line, "event:"):
-			eventName = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
-		case strings.HasPrefix(line, "data:"):
-			dataLines = append(dataLines, strings.TrimPrefix(strings.TrimPrefix(line, "data:"), " "))
-		}
-	}
-	raw := strings.TrimSpace(strings.Join(dataLines, "\n"))
+	raw := strings.TrimSpace(data)
 	if raw == "" {
 		return
 	}
