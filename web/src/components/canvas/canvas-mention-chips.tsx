@@ -27,13 +27,12 @@ import {
     SlidersHorizontal,
     Sun,
     Wrench,
-    X,
     Blocks,
     Aperture,
 } from "lucide-react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { type CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
-import { createPortal } from "react-dom";
+import { CanvasImagePreview } from "./canvas-image-preview";
 import { useTranslation } from "react-i18next";
 import { CanvasNodeType } from "@/types/canvas";
 import { reportResourcePreviewFailure } from "./use-resolved-canvas-resource-references";
@@ -143,18 +142,7 @@ export function referencePreviewUrl(reference: CanvasResourceReference) {
 export function InlineReferencePreview({ reference, onClose }: { reference: CanvasResourceReference; onClose: () => void }) {
     const { t } = useTranslation();
     const url = referencePreviewUrl(reference);
-    if (!url) return null;
-    return createPortal(
-        <div className="fixed inset-0 z-[var(--z-dialog-popover)] grid place-items-center bg-black/80 p-6" role="dialog" aria-label={t("canvasB.mention.previewLabel", { label: reference.label })} onClick={onClose}>
-            <div className="relative max-h-[92vh] max-w-[92vw]" onClick={(event) => event.stopPropagation()}>
-                <img src={url} alt={reference.label} className="max-h-[88vh] max-w-[88vw] rounded-xl object-contain shadow-2xl" />
-                <button type="button" className="absolute -right-3 -top-3 rounded-full bg-black/75 p-2 text-white shadow-lg" onClick={onClose} aria-label={t("canvasB.mention.closeImagePreview")}>
-                    <X className="size-4" />
-                </button>
-            </div>
-        </div>,
-        document.body,
-    );
+    return <CanvasImagePreview src={url} alt={reference.label} title={t("canvasB.mention.previewLabel", { label: reference.label })} onClose={onClose} />;
 }
 
 // 加载失败过的缩略图地址。重绘时直接显示图标，等解析出新地址再换回图片，避免反复请求坏地址。

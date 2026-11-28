@@ -10,6 +10,7 @@ type CanvasImagePreviewProps = {
     src?: string;
     storageKey?: string;
     alt?: string;
+    title?: string;
     onClose: () => void;
 };
 
@@ -17,9 +18,10 @@ const INITIAL_ZOOM = { scale: 1, x: 0, y: 0 };
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 8;
 
-export function CanvasImagePreview({ src = "", storageKey, alt: altProp, onClose }: CanvasImagePreviewProps) {
+export function CanvasImagePreview({ src = "", storageKey, alt: altProp, title, onClose }: CanvasImagePreviewProps) {
     const { t } = useTranslation();
     const alt = altProp ?? t("canvasB.common.image");
+    const [open, setOpen] = useState(true);
     const cachedUrl = useCachedResourceUrl(storageKey);
     const [resolvedSrc, setResolvedSrc] = useState(storageKey ? "" : src);
     const [loading, setLoading] = useState(Boolean(src || storageKey));
@@ -102,7 +104,18 @@ export function CanvasImagePreview({ src = "", storageKey, alt: altProp, onClose
     if (!src && !storageKey) return null;
 
     return (
-        <AppModal open flush title={alt} footer={null} centered width="fit-content" onCancel={onClose} className="canvas-image-preview-modal" classNames={{ header: "sr-only" }}>
+        <AppModal
+            open={open}
+            flush
+            title={title || alt}
+            closable={{ "aria-label": t("canvasB.mention.closeImagePreview"), afterClose: onClose }}
+            footer={null}
+            centered
+            width="fit-content"
+            onCancel={() => setOpen(false)}
+            className="canvas-image-preview-modal"
+            classNames={{ header: "sr-only" }}
+        >
             <div ref={bindWheel} data-canvas-no-zoom className="relative grid max-w-[94vw] place-items-center overflow-visible overscroll-contain">
                 <div ref={stageRef} className="relative grid max-h-[84vh] max-w-[94vw] place-items-center">
                     {loading && !error ? (

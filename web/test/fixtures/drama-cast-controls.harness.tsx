@@ -27,7 +27,7 @@ for (const [key, value] of Object.entries({
 const { act } = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
-const { App } = await import("antd");
+const { App, ConfigProvider } = await import("antd");
 const { CastLooks } = await import("../../src/pages/projects/studio/cast-looks");
 const { CastVoicePreview } = await import("../../src/pages/projects/studio/cast-voice");
 const { ReferenceBoard } = await import("../../src/pages/projects/studio/segment-references");
@@ -271,9 +271,11 @@ async function renderReferences(onSave: (patch: DramaSegmentReferencePatch) => P
     await act(async () =>
         root.render(
             <QueryClientProvider client={client}>
-                <App>
-                    <ReferenceBoard projectId="project" segment={currentSegment} shots={[]} castById={castById} busy={false} onSave={onSave} onOpenCast={() => {}} onOpenAssets={onOpenAssets} />
-                </App>
+                <ConfigProvider theme={{ token: { motion: false } }}>
+                    <App>
+                        <ReferenceBoard projectId="project" segment={currentSegment} shots={[]} castById={castById} busy={false} onSave={onSave} onOpenCast={() => {}} onOpenAssets={onOpenAssets} />
+                    </App>
+                </ConfigProvider>
             </QueryClientProvider>,
         ),
     );
