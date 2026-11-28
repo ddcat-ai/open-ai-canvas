@@ -1,7 +1,7 @@
 import type { ModelCapabilityChoice } from "@/components/model-protocol-picker";
 import type { FormInstance } from "antd";
 import { defaultModelCapabilityConfig, normalizeLegacyImageResolutionConfig, normalizeModelCapabilityConfig, officialVideoCapabilityPreset, type ModelCapabilityConfig } from "@/lib/model-capabilities";
-import { imagePresetForRatio, imageSizePresets } from "@/lib/image-size-presets";
+import { imagePresetForRatio, imageSizePresets, imageResolutionTiers } from "@/lib/image-size-presets";
 import { definitionForRelease, modelProtocolSupportsTokenBilling, type ModelProtocolDefinition } from "@/lib/model-protocols";
 import type { ChannelModel } from "@/services/api/wallet";
 import type { ModelTag } from "@/lib/model-tags";
@@ -10,7 +10,7 @@ import { findProtocolWorkflow, resolveWorkflowVideoScreenSpec } from "@/lib/vide
 import { defaultPriceTier, legacyPriceTierToForm, normalizeUpstreamModelKey, priceTierToForm, skuSelectorFromForm, tokenRuleClockMinutes, type PriceTierFormValues, type TokenPriceRuleFormValues } from "./channel-model-price-tier-form";
 import { validImagePricingForm } from "@/lib/image-usage-pricing";
 import type { PriceCurrency } from "@/services/api/user-groups";
-import { priceSelectorIssues } from "./channel-model-templates";
+import { priceSelectorProblems } from "./channel-model-templates";
 
 export type ChannelModelFormValues = {
     modelKey: string;
@@ -214,13 +214,24 @@ export function validateChannelModelProtocol(capability: string, protocol: strin
     }
 }
 
+export class PriceTierIssue extends Error {
+    constructor(
+        readonly row: number,
+        message: string,
+    ) {
+        super(message);
+    }
+}
+
 export function validateChannelModelPrices(values: Pick<ChannelModelFormValues, "capability" | "protocol" | "priceTiers" | "capabilityConfig"> & { referenceVideoBilling?: boolean; protocols?: ModelProtocolDefinition[] }) {
     const { capability, protocol, priceTiers } = values;
     const referenceVideoBilling = capability === "video" && values.referenceVideoBilling === true;
     if (!priceTiers?.length) throw new Error("请至少配置一个价格档");
-    if (priceTiers.filter((tier) => tier.matchMode === "default").length > 1) throw new Error("只能配置一个所有规格统一价格");
-    const selectorIssues = priceSelectorIssues(values);
-    if (selectorIssues.length) throw new Error(selectorIssues.join("；"));
+    const firstDefault = priceTiers.findIndex((tier) => tier.matchMode === "default");
+    const nextDefault = priceTiers.findIndex((tier, index) => index > firstDefault && tier.matchMode === "default");
+    if (nextDefault >= 0) throw new PriceTierIssue(nextDefault, "只能配置一个所有规格统一价格");
+    const selectorIssues = priceSelectorProblems(values);
+    if (selectorIssues.length) throw new PriceTierIssue(selectorIssues[0].row, selectorIssues.map((issue) => issue.message).join("；"));
     const operations: Record<string, string[]> = {
         text: ["text_generation"],
         image: ["text_to_image", "image_to_image"],
@@ -229,8 +240,9 @@ export function validateChannelModelPrices(values: Pick<ChannelModelFormValues, 
     };
     priceTiers.forEach((tier, index) => {
         const fail = (text: string) => {
-            throw new Error(`价格档 ${index + 1}：${text}`);
+            throw new PriceTierIssue(index, `价格档 ${index + 1}：${text}`);
         };
+        if (!tier.matchMode) fail("请选择价格规则适用范围");
         if (!["fixed_request", "per_second", "token", "image_usage"].includes(tier.billingMode)) fail("请选择计费方式");
         if (tier.billingMode === "image_usage" && (capability !== "image" || !validImagePricingForm(tier.imagePricing))) fail("请配置完整有效的图片用量价格");
         if (tier.billingMode === "image_usage" && tier.costConfigured && !validImagePricingForm(tier.costImagePricing)) fail("请配置完整有效的图片用量成本价");
@@ -240,6 +252,12 @@ export function validateChannelModelPrices(values: Pick<ChannelModelFormValues, 
             if (tier.operation && tier.operation !== "*" && !operations[capability]?.includes(tier.operation)) fail("生成方式与模型能力不匹配");
             const specific = (value: string | undefined) => Boolean(value && value !== "*");
             const image = values.capabilityConfig?.image;
+            if (!tier.operation) fail("请选择生成方式");
+            if (capability === "video" && !tier.resolution) fail("请选择分辨率");
+            if (capability === "image" && image && !image.parameters) {
+                if ((image.resolution.supported || imageResolutionTiers(image).length) && !tier.imageResolution) fail("请选择上游分辨率");
+                if (image.quality.supported && !tier.quality) fail("请选择画质");
+            }
             const imageCondition =
                 Object.values(tier.imageSelector || {}).some(specific) ||
                 (image?.resolution.supported !== false && specific(tier.imageResolution)) ||
