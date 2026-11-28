@@ -5,7 +5,7 @@ export type ChannelWebsite = {
     id: string;
     name: string;
     baseUrl: string;
-    apiFormat: "openai" | "gemini";
+    apiFormat: "openai" | "gemini" | "antigravity";
     proxyUrl: string;
     headers: ChannelHeader[];
     keyCount: number;

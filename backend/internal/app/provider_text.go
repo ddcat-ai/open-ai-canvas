@@ -14,6 +14,9 @@ import (
 )
 
 func runTextTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	if input.Config.APIFormat == antigravityAPIFormat {
+		return runAntigravityTextTask(ctx, input)
+	}
 	if _, ok := declarativeProtocolAdapterForContext(ctx, input.Config.InterfaceType); ok {
 		return runDeclarativeProtocolTask(ctx, input)
 	}

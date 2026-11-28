@@ -18,6 +18,19 @@ import (
 )
 
 func runAgentToolTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {
+	if input.Config.APIFormat == antigravityAPIFormat {
+		// agy 不区分上游线格式：无论模型登记成哪种文本协议，都按 Chat Completions 形式展开会话。
+		if input.AgentRequests != nil && input.AgentRequests.Canonical != nil {
+			chatConfig := input.Config
+			chatConfig.InterfaceType = string(model.ChannelInterfaceChatCompletion)
+			requests, err := expandCanonicalAgentRequest(input.AgentRequests.Canonical, chatConfig, false)
+			if err != nil {
+				return nil, err
+			}
+			input.AgentRequests = requests
+		}
+		return runAntigravityAgentTask(ctx, input)
+	}
 	// 浏览器持久化的是协议中立请求；资源水合和模型路由完成后才展开上游协议，
 	// 防止供应商请求体反向污染任务记录，也避免切换模型时复用错误协议。
 	if input.AgentRequests != nil && input.AgentRequests.Canonical != nil {

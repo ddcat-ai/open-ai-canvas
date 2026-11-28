@@ -31,7 +31,8 @@ export { CHANNEL_MODEL_SEPARATOR, normalizeRawModelName, uniqueModelOptions } fr
 export { mergeWorkflowFieldMappings, normalizeRunningHubCapability, normalizeRunningHubWorkflowKind, normalizeWorkflowFieldMappings, type WorkflowFieldMapping } from "./config-workflow-fields";
 export { decodeChannelModel, encodeChannelModel, hasSystemModelPrice, isChannelModelValue, modelDisplayName, modelIcon, modelOptionLabel, modelOptionName, modelOptionsFromChannels, normalizeModelOptionValue } from "./config-model-options";
 
-export type ApiCallFormat = "openai" | "gemini" | "claude";
+// antigravity 只出现在管理端系统渠道：模型由服务器上的官方 agy 执行，浏览器不直连。
+export type ApiCallFormat = "openai" | "gemini" | "claude" | "antigravity";
 export type ChannelInterfaceType = ModelProtocol;
 export type ChannelHeader = { name: string; value: string };
 export type RunningHubCapability = "image" | "video" | "audio";

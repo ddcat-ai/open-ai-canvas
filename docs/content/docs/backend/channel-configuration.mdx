@@ -33,6 +33,22 @@ description: 按 API 网站管理 Key 分组，复用能力和积分模板，并
 
 文中截图使用隔离环境的示例配置。
 
+## Antigravity 渠道
+
+新增网站时把「模型目录格式」选为「Antigravity（官方 agy CLI）」，地址自动填为 `https://antigravity.google`，只用于标识服务。这类网站下的每个 Key 分组对应一个 Antigravity 账号，由服务器上的官方 Antigravity CLI（`agy`）登录和调用模型。影策不直接访问 Google 接口，也不读取 agy 保存的凭据。
+
+1. 新增 Key 时只需填写名称、代理、并发和启停。保存后，分组标题下方出现「Antigravity 连接」面板。
+2. 点击「安装 CLI」，后端按官方发行清单下载当前平台的 agy，保存在数据目录 `antigravity/runtime`。Alpine 等 musl 系统自动选用 musl 版本。「更新 CLI」检查到新版本才下载。
+3. 选择登录方式：Google 账号、Gemini Enterprise、Gemini API Key 或 Agent Platform（Vertex AI）。API Key 加密保存在渠道上，只通过环境变量交给 agy。GCP 项目和区域写入 agy 自己的设置文件。
+4. Google 账号与 Gemini Enterprise 点击「登录 Google」。在浏览器打开登录链接，完成后把 Antigravity 页面显示的授权码粘贴回面板。服务器上不需要浏览器，链接 5 分钟内有效。
+5. 登录成功后自动读取模型目录，按原有流程勾选导入。导入的模型名称取自 agy，能力预设为文本。协议、参数和价格仍在「编辑参数」中设置，再启用。Antigravity 渠道的所有文本协议都交给 agy 执行，建议统一选择 Chat Completions。agy 不向影策回报 Token 用量，价格请按次设置。
+
+每个分组使用独立的 agy 资料目录（数据目录 `antigravity/profiles/<分组 ID>`）。「退出登录」通过 agy 清除该分组的 Google 登录。删除分组时，资料目录随渠道密钥一并清除。
+
+画布 Agent 和文本任务都可以使用这些模型。每次调用启动一个一次性的 agy 会话，对话历史按文本转写进提示词。画布工具通过只在本次调用存在的本机 MCP 端点交给 agy。agy 一发起工具调用，影策就结束本轮，再由画布 Agent 照常执行工具（包括审批）；agy 自带的文件、命令和网页工具一律拒绝授权。调用结束后，agy 为该会话写下的对话库和工作记录随即删除。
+
+使用个人 Google 账号（含 Pro/Ultra 订阅）前请阅读 [Antigravity 常见问题](https://antigravity.google/docs/faq/) 和[服务条款](https://antigravity.google/terms)。官方说明在消费级套餐下把 agy 接入第三方应用不受支持，并可能限制账号。官方推荐第三方应用使用 Gemini Enterprise 或 Gemini API Key。
+
 ## 能力与积分模板
 
 模型编辑页的「能力与参数」和积分配置处提供模板选择、应用、新增、编辑和保存当前配置。能力模板支持文本、图片和视频，积分模板按模型类型区分。自建模板保存在当前浏览器的当前账号下，不会自动同步到其他浏览器或账号。

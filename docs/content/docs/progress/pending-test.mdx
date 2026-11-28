@@ -5,6 +5,15 @@ description: 当前项目已实现功能的手工验证清单与未确认边界
 
 # 待测试
 
+## Antigravity 渠道
+
+- 已在 macOS arm64 开发环境用真实 agy 1.5.18 验证：通过后台接口安装 CLI；未登录时检查连接在 3 秒内返回未登录；点击登录得到官方 Google 登录链接；提交错误授权码时，agy 向 Google 换取令牌并返回 `invalid_grant`，面板显示失败原因。
+- 以下用模拟 agy 验证，它按 ACP 协议应答，initialize 字段照抄真实 agy：贴码登录成功后检查连接、读取并导入模型、后台「测试模型」、画布 Agent 流式回复，以及经 MCP 工具桥调用 `plan_update`。该次调用经授权、截获、交回画布执行，下一步模型读到工具结果后完成运行。会话结束后无残留 agy 进程和会话文件。
+- [ ] 真实 Google 账号登录后的模型目录、模型切换、文本节点和画布 Agent 调用；真实模型是否只经 `yingce` MCP 工具操作画布。
+- [ ] Gemini Enterprise、Gemini API Key、Agent Platform 三种方式的真实登录与调用。
+- [ ] 生产镜像（Alpine，arm64 与 amd64）内安装 musl 版 agy 并调用；容器内代理设置。
+- [ ] 带参考图片的文本任务与 Agent 看图。
+
 ## 画布绘图画笔
 
 - Excalidraw 在弹窗展开后测量绘图区，恢复场景后启用画笔并显示「已加载」。

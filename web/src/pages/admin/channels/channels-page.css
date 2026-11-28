@@ -728,3 +728,54 @@
     flex: 1 1 auto;
     flex-direction: column;
 }
+
+/* Antigravity Key 分组：官方 agy 安装、登录方式与 Google 登录。 */
+.admin-antigravity-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0 16px 8px;
+    padding: 12px;
+    border: 1px solid var(--admin-divider);
+    border-radius: var(--admin-radius);
+}
+
+.admin-antigravity-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 8px;
+    min-width: 0;
+}
+
+.admin-antigravity-row:first-child {
+    align-items: center;
+}
+
+.admin-antigravity-meta {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+.admin-antigravity-error {
+    margin: 0;
+    color: var(--admin-status-error);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+.admin-antigravity-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 220px;
+    max-width: 100%;
+    color: var(--admin-text-secondary);
+    font-size: 12px;
+}
+
+.admin-antigravity-code.ant-input {
+    width: 320px;
+    max-width: 100%;
+}

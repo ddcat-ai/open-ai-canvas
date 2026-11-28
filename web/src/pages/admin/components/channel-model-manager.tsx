@@ -51,6 +51,7 @@ export function ChannelModelManager({
     onAutoFetchConsumed,
     groupHeading,
     groupActions,
+    groupPanel,
     filters,
 }: {
     channel: ModelChannel;
@@ -62,6 +63,8 @@ export function ChannelModelManager({
     onAutoFetchConsumed?: () => void;
     groupHeading?: ReactNode;
     groupActions?: (openSort: () => void) => ReactNode;
+    /** 分组标题行下方的分组专属内容，例如 Antigravity 连接面板。 */
+    groupPanel?: ReactNode;
     filters?: ChannelModelFilters;
 }) {
     const { message, modal } = App.useApp();
@@ -455,6 +458,7 @@ export function ChannelModelManager({
                     />
                 </Space>
             </div>
+            {groupPanel}
             {loadError ? (
                 <div className="admin-channel-load-error" role="alert">
                     <span>{loadError}</span>

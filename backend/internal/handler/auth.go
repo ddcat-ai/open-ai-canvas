@@ -347,6 +347,11 @@ func proxySystemRequestPath(c *gin.Context, svc *service.Service, user *model.Us
 		failService(c, err)
 		return
 	}
+	// Antigravity 渠道没有 HTTP 上游，模型只能由后台任务经 agy 调用。
+	if channel.APIFormat == model.AntigravityAPIFormat {
+		fail(c, http.StatusBadRequest, errors.New("Antigravity 渠道只能通过画布后台任务调用"))
+		return
+	}
 	policy, available := loadRuntimePolicy(c, svc)
 	if !available || !enforceRateLimit(c, "system-proxy:"+user.ID, policy.Request.SystemRelayPerMinute, time.Minute) {
 		return

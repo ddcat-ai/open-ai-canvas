@@ -33,7 +33,7 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 	if err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(channel.BaseURL) == "" || strings.TrimSpace(channel.APIKey) == "" {
+	if strings.TrimSpace(channel.BaseURL) == "" || (channel.APIFormat != antigravityAPIFormat && strings.TrimSpace(channel.APIKey) == "") {
 		return nil, BadAuthRequest("请先在渠道中配置 Base URL 和 API Key")
 	}
 	if _, err := ValidateOutboundURLWithProxy(channel.BaseURL, channel.ProxyURL); err != nil {
@@ -72,6 +72,10 @@ func (s *Service) TestAdminChannelModel(ctx context.Context, actor *model.User, 
 			AudioSpeed:         "1",
 		},
 		Metadata: map[string]interface{}{},
+	}
+	if channel.APIFormat == antigravityAPIFormat {
+		input.Config.antigravity = s.antigravityManager()
+		input.Config.antigravityProfile = antigravityProfile(*channel)
 	}
 	var videoSeconds int
 	switch capability {
